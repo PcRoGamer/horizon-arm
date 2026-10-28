@@ -394,15 +394,26 @@ impl Options {
         })
     }
     fn read() -> Result<Option<Self>> {
+        // An Android activity has no program of its own: `current_exe` is the
+        // zygote's `/system/bin/app_process`, nothing sits next to it, and its
+        // argv belongs to the platform. There the environment (set by
+        // `crates/horizon-android`) is the only way in.
+        #[cfg(not(target_os = "android"))]
         let sibling = std::env::current_exe()?
             .parent()
             .ok_or("missing executable directory")?
             .join("resources");
+        #[cfg(target_os = "android")]
+        let sibling = PathBuf::new();
         let mut o = Self {
-            resources: if sibling.join("horizon-resources.json").exists() {
-                sibling
-            } else {
-                std::path::Path::new(".local/horizon-client").join(horizon_core::VANILLA_VERSION)
+            // `HORIZON_RESOURCES` first: a platform that cannot pass command-line
+            // arguments (Android's activity) or a launcher that installs the game
+            // files elsewhere points here.
+            resources: match std::env::var_os("HORIZON_RESOURCES").filter(|v| !v.is_empty()) {
+                Some(dir) => PathBuf::from(dir),
+                None if sibling.join("horizon-resources.json").exists() => sibling,
+                None => std::path::Path::new(".local/horizon-client")
+                    .join(horizon_core::VANILLA_VERSION),
             },
             distance: 12,
             distance_override: None,
@@ -414,7 +425,18 @@ impl Options {
             screenshot_after: None,
             timeout: Duration::from_secs(120),
             report: None,
-            world: None,
+            world: {
+                // Android has no command line; a launcher or `crates/horizon-android`
+                // names the world to open the same way `--world` would.
+                #[cfg(target_os = "android")]
+                {
+                    std::env::var("HORIZON_WORLD")
+                        .ok()
+                        .filter(|w| !w.is_empty())
+                }
+                #[cfg(not(target_os = "android"))]
+                None
+            },
             look: None,
             time: None,
             weather: None,
@@ -443,7 +465,12 @@ impl Options {
             execution_role: execution_role::ExecutionRole::Client,
         };
         let mut session_file = std::env::var("HORIZON_SESSION_FILE").ok();
+        // The activity's argv is the platform's, not the game's: an unknown
+        // option there must not end the start.
+        #[cfg(not(target_os = "android"))]
         let mut args = std::env::args().skip(1);
+        #[cfg(target_os = "android")]
+        let mut args = std::iter::empty::<String>();
         while let Some(arg) = args.next() {
             match arg.as_str() {
                 "--help" | "-h" => {
@@ -15900,8 +15927,23 @@ fn leave_fullscreen_after(
     }
 }
 
+/// The event loop. Android builds it from the activity the system started this
+/// process with (`crates/horizon-android` hands it over before anything runs);
+/// everywhere else winit creates its own.
+fn event_loop() -> Result<EventLoop<()>> {
+    #[cfg(target_os = "android")]
+    {
+        use winit::platform::android::EventLoopBuilderExtAndroid;
+        let app = horizon_client::android::app()
+            .ok_or("the Android activity was not handed over (crates/horizon-android)")?;
+        return Ok(EventLoop::builder().with_android_app(app).build()?);
+    }
+    #[cfg(not(target_os = "android"))]
+    Ok(EventLoop::new()?)
+}
+
 fn run_event_loop(mut game: Game<'_>) -> Result<()> {
-    let result = EventLoop::new()?.run_app(&mut game);
+    let result = event_loop()?.run_app(&mut game);
     leave_fullscreen_after(&result, &mut game.settings);
     result?;
     horizon_client::discord_presence::stop();
@@ -16286,7 +16328,7 @@ fn run_loading(
         error: None,
     };
     let mut app = App::Loading(Box::new(loading));
-    let result = EventLoop::new()?.run_app(&mut app);
+    let result = event_loop()?.run_app(&mut app);
     match &mut app {
         App::Ready(game) => leave_fullscreen_after(&result, &mut game.settings),
         App::Loading(loading) => leave_fullscreen_after(&result, &mut loading.settings),
