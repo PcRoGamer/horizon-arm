@@ -1516,6 +1516,11 @@ struct Game<'a> {
     fullscreen: horizon_client::window::FullscreenState,
     /// MouseHandler's accumulated look and wheel state.
     mouse: MouseLook,
+    /// The touchscreen finger the Android build tracks ([`Game::touch`]): a
+    /// phone has no mouse, so a finger is mapped to the cursor, the press and
+    /// the relative motion of one.
+    #[cfg(target_os = "android")]
+    touch: Option<(u64, (f64, f64))>,
     /// An agent moved the mouse (`mouse-move`) since the pointer was last
     /// grabbed or released: its motion turns the view like a grabbed pointer.
     agent_pointer: bool,
@@ -12721,6 +12726,13 @@ impl ApplicationHandler for Game<'_> {
         if self.window.as_ref().is_none_or(|w| w.id() != id) {
             return;
         }
+        // A phone's touchscreen is its pointing device: the finger becomes the
+        // mouse the rest of this handler expects ([`Game::touch`]).
+        #[cfg(target_os = "android")]
+        if let WindowEvent::Touch(touch) = &event {
+            self.touch(event_loop, id, touch);
+            return;
+        }
         if let WindowEvent::KeyboardInput { event, .. } = &event
             && let PhysicalKey::Code(key) = event.physical_key
         {
@@ -13747,6 +13759,54 @@ fn load_forcefield(root: &std::path::Path) -> (u32, u32, Vec<u8>) {
         .filter(|(w, h, _)| w == h && w.is_power_of_two())
         .unwrap_or((1, 1, vec![0; 4]))
 }
+/// The touchscreen as a pointing device (Android): see [`Game::touch`].
+#[cfg(target_os = "android")]
+impl<'a> Game<'a> {
+    /// The touchscreen as a mouse (Android): a tap moves the cursor and presses
+    /// the left button; a drag moves the cursor and, when the pointer is
+    /// grabbed, turns the view through relative motion, as a mouse's does. Only
+    /// the finger that began the touch is followed; a second one is ignored.
+    #[cfg(target_os = "android")]
+    fn touch(&mut self, event_loop: &ActiveEventLoop, window: WindowId, touch: &winit::event::Touch) {
+        use winit::event::TouchPhase;
+        let (x, y) = (touch.location.x, touch.location.y);
+        let device_id = touch.device_id;
+        let position = touch.location;
+        let press = |state| WindowEvent::MouseInput { device_id, state, button: MouseButton::Left };
+        let last = match (touch.phase, self.touch) {
+            (TouchPhase::Started, _) => {
+                self.touch = Some((touch.id, (x, y)));
+                self.window_event(event_loop, window, WindowEvent::CursorMoved { device_id, position });
+                self.window_event(event_loop, window, press(ElementState::Pressed));
+                return;
+            }
+            (TouchPhase::Cancelled, _) => {
+                self.touch = None;
+                self.window_event(event_loop, window, press(ElementState::Released));
+                return;
+            }
+            (TouchPhase::Moved | TouchPhase::Ended, Some((finger, last))) if finger == touch.id => {
+                Some(last)
+            }
+            _ => None,
+        };
+        if let Some((last_x, last_y)) = last {
+            self.window_event(event_loop, window, WindowEvent::CursorMoved { device_id, position });
+            if touch.phase == TouchPhase::Ended {
+                self.touch = None;
+                self.window_event(event_loop, window, press(ElementState::Released));
+            } else {
+                self.touch = Some((touch.id, (x, y)));
+                self.device_event(
+                    event_loop,
+                    device_id,
+                    DeviceEvent::MouseMotion { delta: (x - last_x, y - last_y) },
+                );
+            }
+        }
+    }
+}
+
 impl<'a> Game<'a> {
     /// A game with no world open, over the loaded resources: the window's,
     /// or an integrated server's on its own thread.
@@ -13857,6 +13917,8 @@ impl<'a> Game<'a> {
             modifiers: winit::keyboard::ModifiersState::empty(),
             fullscreen: horizon_client::window::FullscreenState::new(false),
             mouse: MouseLook::default(),
+            #[cfg(target_os = "android")]
+            touch: None,
             agent_pointer: false,
             smooth_camera: false,
             toggles: Default::default(),
