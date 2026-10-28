@@ -1,9 +1,16 @@
 //! Horizon native client: resources, world streaming, rendering and the
 //! bindings between the validated simulation pieces and the game loop.
 #![forbid(unsafe_code)]
+// The game loop moved into this crate so a platform that loads a library
+// instead of starting a program (Android's `NativeActivity`, in
+// `crates/horizon-android`) can run it. `game` used to reach the rest of the
+// crate as `horizon_client::…`; that name still resolves inside it.
+extern crate self as horizon_client;
 pub mod advancements;
 pub mod ambience;
 pub mod animate_tick;
+#[cfg(target_os = "android")]
+pub mod android;
 pub mod arrows;
 pub mod assets;
 pub mod atlas_sources;
@@ -70,6 +77,10 @@ pub mod fog;
 pub mod font;
 pub mod friends_screen;
 pub mod furnace;
+/// The game loop: the window, the tick, the frame. `main.rs` runs it on a
+/// desktop; Android's wrapper calls [`game::run`] from a library
+/// (`crates/horizon-android`).
+pub mod game;
 pub mod game_mode_switcher;
 pub mod game_rules_screen;
 pub mod gfx;
