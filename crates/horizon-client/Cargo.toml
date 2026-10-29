@@ -71,6 +71,11 @@ unicode-bidi = "0.3.18"
 # The server thread's CPU time per tick (`HORIZON_SPIKES`, spans.rs).
 rustix = { version = "1", default-features = false, features = ["std", "time"] }
 
+[target.'cfg(target_os = "android")'.dependencies]
+# NativeActivity is recreated after selecting another instance so Android can
+# restart the one winit EventLoop with the new game folder without a launcher.
+jni = "0.22"
+
 [target.'cfg(windows)'.dependencies]
 # Use the registered URI handler without routing links through Explorer/cmd.
 open = { version = "5.4.5", features = ["shellexecute-on-windows"] }
