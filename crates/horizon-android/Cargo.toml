@@ -16,6 +16,8 @@ crate-type = ["cdylib", "rlib"]
 [target.'cfg(target_os = "android")'.dependencies]
 horizon-client = { path = "../horizon-client", default-features = false }
 horizon-core = { path = "../horizon-core" }
+ndk = "0.9"
+raw-window-handle = "0.6"
 winit = { version = "0.30.13", features = ["android-native-activity"] }
 android-activity = { version = "0.6", default-features = false, features = ["native-activity"] }
 wgpu = { version = "30.0.1", default-features = false, features = ["vulkan", "gles"] }

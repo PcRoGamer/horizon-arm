@@ -1352,7 +1352,9 @@ dependencies = [
  "horizon-client",
  "horizon-core",
  "log",
+ "ndk",
  "pollster",
+ "raw-window-handle",
  "wgpu",
  "winit",
 ]
