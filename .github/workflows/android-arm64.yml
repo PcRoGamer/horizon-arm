@@ -20,16 +20,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare Android toolchain location
-        run: |
-          mkdir -p ../horizon-android/.toolchain
-
       - name: Install host packages
         run: |
           sudo apt-get update
           sudo apt-get install -y curl unzip zip patch
 
       - name: Fetch Android toolchain
+        env:
+          ANDROID_HOME: ${{ github.workspace }}/android-port/.toolchain/android-sdk
+          ANDROID_SDK_ROOT: ${{ github.workspace }}/android-port/.toolchain/android-sdk
         run: android-port/tools/fetch-toolchain.sh
 
       - name: Fetch Rust dependencies
