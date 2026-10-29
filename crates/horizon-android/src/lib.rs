@@ -1,18 +1,13 @@
 //! Horizon on Android.
 //!
-//! Android starts `libhorizon_android.so` from `android.app.NativeActivity`
-//! (no Java code in the APK: `AndroidManifest.xml` names the framework's own
-//! activity and the library through `android.app.lib_name`). `android_main`
-//! below is the whole entry point: it points the game at the app's own folders,
-//! hands the activity to `horizon_client::android` for winit, and runs the game.
-//!
-//! Without prepared resources (`horizon-prepare` on a desktop, then pushed to
-//! the device) the game cannot draw a title screen, so this falls back to a
-//! smoke screen: a window, a wgpu adapter, a cleared frame, and in logcat what
-//! the device offers. That is what a port is proved with before any Mojang data
-//! is on the phone.
+//! Android starts `libhorizon_android.so` from `android.app.NativeActivity`.
+//! The first launch can assemble Horizon's resources on-device: the APK carries
+//! only Horizon-computed facts, while Minecraft's pinned jars are downloaded
+//! directly from Mojang and checked before use. No Java runtime or login is
+//! needed for that bootstrap.
 #![cfg(target_os = "android")]
 
+mod bootstrap;
 mod bundled;
 mod loading;
 mod smoke;
@@ -23,8 +18,6 @@ use android_activity::AndroidApp;
 
 /// The activity: called by `android-activity`'s `ANativeActivity_onCreate`,
 /// on the process's main thread, before any other Horizon thread exists.
-// `AndroidApp` is a handle to the activity the platform owns; `android-activity`
-// defines this ABI (same signature, same symbol name) and calls it.
 #[allow(improper_ctypes_definitions)]
 #[unsafe(no_mangle)]
 pub extern "C" fn android_main(app: AndroidApp) {
@@ -35,16 +28,21 @@ pub extern "C" fn android_main(app: AndroidApp) {
     let external = app.external_data_path().map(PathBuf::from);
     say(&format!("Horizon: data folder {}", home.display()));
 
-    // An APK can carry the data itself (`tools/build.sh` packs it): unpack it
-    // before the lookup below. A folder already on the device wins.
+    // A development/full APK may still carry a complete prepared folder.
     unpack_bundled(&app, &home);
+
+    // A normal distributable APK carries only Horizon's computed facts. If no
+    // resource folder exists yet, download the pinned Mojang jars and assemble
+    // one now. App updates then reuse this folder.
+    let mut resources = find_resources(&home, external.as_deref());
+    if resources.is_none() {
+        bootstrap_resources(&app, &home);
+        resources = find_resources(&home, external.as_deref());
+    }
 
     // Before anything reads them: the game's folders, its log, and where the
     // prepared resources are. `set_var` is unsound once another thread reads the
     // environment, and this runs before the first Horizon thread starts.
-    let resources = find_resources(&home, external.as_deref());
-    // A `horizon-world` file next to the log is the way in without a command
-    // line: its name opens that world (created on first run), as `--world` does.
     let world = std::fs::read_to_string(home.join("horizon-world"))
         .ok()
         .map(|name| name.trim().to_owned())
@@ -90,8 +88,7 @@ pub extern "C" fn android_main(app: AndroidApp) {
             }
         }
         None => {
-            say("Horizon: no prepared resources found; running the smoke screen");
-            say("Horizon: push a prepared 26.3 folder to the paths above to play");
+            say("Horizon: first-run bootstrap failed; running the diagnostic screen");
             if let Err(e) = smoke::run(app) {
                 log::error!("Horizon smoke: {e}");
                 say(&format!("Horizon smoke: {e}"));
@@ -101,9 +98,43 @@ pub extern "C" fn android_main(app: AndroidApp) {
     horizon_client::logging::flush();
 }
 
-/// Unpacks the APK's data, with a loading screen while it runs. The worker
-/// thread does the reading; this thread draws until it is done, then the game's
-/// own event loop — the process's only one — takes over.
+/// Downloads and assembles the first playable resource set in a worker while
+/// the raw loading surface remains responsive. The game's winit event loop is
+/// not created until this function returns.
+fn bootstrap_resources(app: &AndroidApp, home: &Path) {
+    if bootstrap::prepared(home) {
+        return;
+    }
+    say("Horizon: first launch; downloading Minecraft 26.3 from Mojang");
+    let progress = std::sync::Arc::new(bundled::Progress::default());
+    let worker = {
+        let progress = progress.clone();
+        let app = app.clone();
+        let home = home.to_path_buf();
+        std::thread::spawn(move || {
+            match bootstrap::run(&app, &home, progress.clone()) {
+                Ok(dir) => say(&format!("Horizon: first-run resources ready at {}", dir.display())),
+                Err(e) => {
+                    say(&format!("Horizon bootstrap: {e}"));
+                    if let Ok(mut slot) = progress.failed.lock() {
+                        *slot = Some(e);
+                    }
+                }
+            }
+            progress
+                .done
+                .store(true, std::sync::atomic::Ordering::Release);
+        })
+    };
+    if let Err(e) = loading::run(app, progress.clone()) {
+        say(&format!("Horizon: no bootstrap loading screen: {e}"));
+    }
+    if worker.join().is_err() {
+        say("Horizon bootstrap: worker panicked");
+    }
+}
+
+/// Unpacks a full prepared folder when a development APK carries one.
 fn unpack_bundled(app: &AndroidApp, home: &Path) {
     let manager = app.asset_manager();
     let version = horizon_core::VANILLA_VERSION;
@@ -132,12 +163,14 @@ fn unpack_bundled(app: &AndroidApp, home: &Path) {
                     if let Ok(mut slot) = progress.failed.lock() {
                         *slot = Some(e.to_string());
                     }
-                    // A failure ends the screen too: the game falls back to
-                    // the smoke screen and says why in logcat.
-                    progress.done.store(true, std::sync::atomic::Ordering::Release);
+                    progress
+                        .done
+                        .store(true, std::sync::atomic::Ordering::Release);
                 }
             }
-            progress.done.store(true, std::sync::atomic::Ordering::Release);
+            progress
+                .done
+                .store(true, std::sync::atomic::Ordering::Release);
         })
     };
     if let Err(e) = loading::run(app, progress.clone()) {
@@ -148,7 +181,6 @@ fn unpack_bundled(app: &AndroidApp, home: &Path) {
 
 /// Where the prepared resources are: `HORIZON_RESOURCES`, then the app's own
 /// folders, then the shared external one an `adb push` can reach without root.
-/// A prepared folder carries `horizon-resources.json` (`horizon-prepare`).
 fn find_resources(home: &Path, external: Option<&Path>) -> Option<PathBuf> {
     let version = horizon_core::VANILLA_VERSION;
     let mut candidates: Vec<PathBuf> = Vec::new();
@@ -166,9 +198,7 @@ fn find_resources(home: &Path, external: Option<&Path>) -> Option<PathBuf> {
 }
 
 /// logcat: an app's standard output goes to `/dev/null` on Android, so a
-/// message here is written to liblog as well as printed. Before the game's own
-/// log file opens, and for anyone watching `adb logcat`, this is the record of
-/// what the port found on the device.
+/// message here is written to liblog as well as printed.
 fn say(message: &str) {
     println!("{message}");
     logcat(message);
@@ -182,7 +212,6 @@ fn logcat(message: &str) {
     }
     let Ok(text) = CString::new(message) else { return };
     let tag = c"Horizon";
-    // Safety: both are NUL-terminated strings that outlive the call.
     unsafe {
         __android_log_write(4, tag.as_ptr(), text.as_ptr());
     }
