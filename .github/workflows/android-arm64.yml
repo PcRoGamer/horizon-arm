@@ -12,8 +12,6 @@ on:
       - 'Cargo.lock'
       - '.github/workflows/android-arm64.yml'
   workflow_dispatch:
-  issues:
-    types: [opened]
 
 jobs:
   build-arm64:
@@ -29,10 +27,13 @@ jobs:
       - name: Install host packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl unzip zip
+          sudo apt-get install -y curl unzip zip patch
 
       - name: Fetch Android toolchain
         run: android-port/tools/fetch-toolchain.sh
+
+      - name: Fetch Rust dependencies
+        run: cargo fetch --locked
 
       - name: Build thin ARM64 APK
         env:
