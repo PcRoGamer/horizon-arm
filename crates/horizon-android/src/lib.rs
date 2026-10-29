@@ -16,6 +16,7 @@ mod bootstrap;
 mod bundled;
 mod instances;
 mod loading;
+mod shaders;
 mod smoke;
 
 use std::path::{Path, PathBuf};
@@ -70,6 +71,15 @@ pub extern "C" fn android_main(app: AndroidApp) {
         instance.id,
         game_home.display()
     ));
+
+    // Golden Hour is Horizon's first-party native shader pack. Keep it as a
+    // normal per-instance pack on disk so the existing picker and hot reload
+    // work unchanged. The one-time migration chooses it only when no other pack
+    // is selected; later player choices are preserved.
+    match shaders::ensure_golden_hour(&game_home) {
+        Ok(()) => say("Horizon shaders: Golden Hour available"),
+        Err(e) => say(&format!("Horizon shaders: could not install Golden Hour: {e}")),
+    }
 
     // Before anything reads them: the selected instance's game folder, its log,
     // and the shared prepared resources. `set_var` is unsound once another
