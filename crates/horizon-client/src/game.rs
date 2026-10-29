@@ -133,6 +133,8 @@ mod options;
 mod packs;
 mod pad;
 mod pad_menu;
+#[cfg(target_os = "android")]
+mod touch;
 mod paintings;
 mod pandas;
 mod passengers;
@@ -279,8 +281,10 @@ use winit::{
     event::{DeviceEvent, DeviceId, ElementState, MouseButton, MouseScrollDelta, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     keyboard::{KeyCode, PhysicalKey},
-    window::{CursorGrabMode, Window, WindowId},
+    window::{Window, WindowId},
 };
+#[cfg(not(target_os = "android"))]
+use winit::window::CursorGrabMode;
 
 #[derive(Clone)]
 struct Options {
@@ -1521,6 +1525,10 @@ struct Game<'a> {
     /// the relative motion of one.
     #[cfg(target_os = "android")]
     touch: Option<(u64, (f64, f64))>,
+    /// The on-screen controls (Android): the stick, the look area and the
+    /// buttons the touch handler drives (`game/touch.rs`).
+    #[cfg(target_os = "android")]
+    touch_ui: touch::Touch,
     /// An agent moved the mouse (`mouse-move`) since the pointer was last
     /// grabbed or released: its motion turns the view like a grabbed pointer.
     agent_pointer: bool,
@@ -5186,6 +5194,9 @@ impl Game<'_> {
         self.tick_server_mods();
         let camera_eye = self.camera_eye_height();
         let stick = self.pad_move();
+        // A phone's own stick (`game/touch.rs`) drives the same analog move.
+        #[cfg(target_os = "android")]
+        let stick = self.touch_stick().or(stick);
         if self.riding.is_some() && self.player.is_some() {
             let playing = self.screen == Screen::Playing;
             let held = |k| playing && self.keys.contains(&k);
@@ -5792,13 +5803,26 @@ impl Game<'_> {
             || window.inner_size().into(),
             |r| [r.config.width, r.config.height],
         );
+        #[cfg(not(target_os = "android"))]
         let centre =
             winit::dpi::PhysicalPosition::new(f64::from(size[0]) / 2.0, f64::from(size[1]) / 2.0);
+        #[cfg(not(target_os = "android"))]
         let warp = |window: &Window| {
             let _ = window.set_cursor_position(centre);
         };
         let scale = HudBatch::new(size).scale;
         let was_grabbed = self.captured;
+        // A touchscreen is not a pointer to grab or warp (Android): `captured`
+        // only says whether a finger on the world turns the view, and the
+        // touch handler (game/touch.rs) owns the cursor.
+        #[cfg(target_os = "android")]
+        {
+            if capture {
+                self.mouse.set_ignore_first_move();
+            }
+            self.captured = capture;
+        }
+        #[cfg(not(target_os = "android"))]
         if capture {
             self.mouse.set_ignore_first_move();
             // macOS warps by re-associating the mouse with the pointer,
@@ -6318,6 +6342,11 @@ impl Game<'_> {
             self.remote_hud(&mut batch);
             self.draw_sign_editor(&mut batch);
             self.draw_book(&mut batch);
+        }
+        // A phone's controls belong to the world, not to the menus.
+        #[cfg(target_os = "android")]
+        if self.screen == Screen::Playing && self.title.is_none() && !self.ui.hide_gui {
+            self.draw_touch_controls(&mut batch);
         }
         batch
     }
@@ -7436,6 +7465,22 @@ impl Game<'_> {
             false,
         );
         if outside {
+            // A phone has no Escape in reach while a screen is open: a tap on
+            // the empty space around the window closes it, as `Menu` does in
+            // the world. Only an empty hand, so the tap still cannot throw a
+            // carried stack.
+            #[cfg(target_os = "android")]
+            if !right
+                && self.carried.is_none()
+                && matches!(self.screen, Screen::Inventory | Screen::Creative)
+            {
+                self.inv_clicks.skip_release();
+                self.close_container();
+                self.screen = Screen::Playing;
+                self.pause_menu = true;
+                self.capture(true);
+                return;
+            }
             // AbstractRecipeBookScreen.mouseClicked: the book takes the click
             // before the outside test, and its tabs sit left of the strip
             // hasClickedOutside counts as the book.
@@ -13765,53 +13810,8 @@ fn load_forcefield(root: &std::path::Path) -> (u32, u32, Vec<u8>) {
         .filter(|(w, h, _)| w == h && w.is_power_of_two())
         .unwrap_or((1, 1, vec![0; 4]))
 }
-/// The touchscreen as a pointing device (Android): see [`Game::touch`].
-#[cfg(target_os = "android")]
-impl<'a> Game<'a> {
-    /// The touchscreen as a mouse (Android): a tap moves the cursor and presses
-    /// the left button; a drag moves the cursor and, when the pointer is
-    /// grabbed, turns the view through relative motion, as a mouse's does. Only
-    /// the finger that began the touch is followed; a second one is ignored.
-    #[cfg(target_os = "android")]
-    fn touch(&mut self, event_loop: &ActiveEventLoop, window: WindowId, touch: &winit::event::Touch) {
-        use winit::event::TouchPhase;
-        let (x, y) = (touch.location.x, touch.location.y);
-        let device_id = touch.device_id;
-        let position = touch.location;
-        let press = |state| WindowEvent::MouseInput { device_id, state, button: MouseButton::Left };
-        let last = match (touch.phase, self.touch) {
-            (TouchPhase::Started, _) => {
-                self.touch = Some((touch.id, (x, y)));
-                self.window_event(event_loop, window, WindowEvent::CursorMoved { device_id, position });
-                self.window_event(event_loop, window, press(ElementState::Pressed));
-                return;
-            }
-            (TouchPhase::Cancelled, _) => {
-                self.touch = None;
-                self.window_event(event_loop, window, press(ElementState::Released));
-                return;
-            }
-            (TouchPhase::Moved | TouchPhase::Ended, Some((finger, last))) if finger == touch.id => {
-                Some(last)
-            }
-            _ => None,
-        };
-        if let Some((last_x, last_y)) = last {
-            self.window_event(event_loop, window, WindowEvent::CursorMoved { device_id, position });
-            if touch.phase == TouchPhase::Ended {
-                self.touch = None;
-                self.window_event(event_loop, window, press(ElementState::Released));
-            } else {
-                self.touch = Some((touch.id, (x, y)));
-                self.device_event(
-                    event_loop,
-                    device_id,
-                    DeviceEvent::MouseMotion { delta: (x - last_x, y - last_y) },
-                );
-            }
-        }
-    }
-}
+/// The touchscreen as a pointing device (Android): [`Game::touch`], in
+/// `game/touch.rs`, with the on-screen controls.
 
 impl<'a> Game<'a> {
     /// A game with no world open, over the loaded resources: the window's,
@@ -13925,6 +13925,8 @@ impl<'a> Game<'a> {
             mouse: MouseLook::default(),
             #[cfg(target_os = "android")]
             touch: None,
+            #[cfg(target_os = "android")]
+            touch_ui: touch::Touch::default(),
             agent_pointer: false,
             smooth_camera: false,
             toggles: Default::default(),
