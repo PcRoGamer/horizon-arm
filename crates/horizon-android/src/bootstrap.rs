@@ -7,20 +7,19 @@
 //! runtime is involved in this path.
 
 use std::{
-    collections::BTreeMap,
     ffi::CString,
     fs::{self, File},
     io::{Read, Write},
     path::{Component, Path, PathBuf},
     sync::{
         Arc,
-        atomic::{AtomicU64, AtomicUsize, Ordering},
+        atomic::Ordering,
     },
 };
 
 use android_activity::AndroidApp;
 use serde_json::{Map, Value};
-use sha1::Digest as _;
+use sha1::Digest;
 
 use crate::bundled::Progress;
 
