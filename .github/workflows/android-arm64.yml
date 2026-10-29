@@ -20,6 +20,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Prepare Android toolchain symlink target
+        run: mkdir -p ../horizon-android/.toolchain
+
       - name: Install host packages
         run: |
           sudo apt-get update
