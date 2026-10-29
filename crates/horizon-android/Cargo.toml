@@ -4,7 +4,7 @@ version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 rust-version = "1.90"
-description = "Horizon on Android: the NativeActivity entry point, and the smoke screen that proves a device draws"
+description = "Horizon on Android: NativeActivity entry point, first-run Mojang bootstrap, and touch controls"
 
 [lib]
 name = "horizon_android"
@@ -23,6 +23,11 @@ android-activity = { version = "0.6", default-features = false, features = ["nat
 wgpu = { version = "30.0.1", default-features = false, features = ["vulkan", "gles"] }
 pollster = "0.4"
 log = "0.4"
+ureq = { version = "2", features = ["tls"], default-features = false }
+serde_json = "1"
+sha1 = "0.10"
+sha2 = "0.10"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [lints]
 workspace = true
