@@ -27,6 +27,9 @@ pub(super) struct Pads {
     /// The real controllers and the DualSense's output.
     #[cfg(feature = "controllers")]
     devices: hardware::Devices,
+    /// A phone's controller: the patched winit backend's device events.
+    #[cfg(target_os = "android")]
+    android: android::AndroidPad,
     /// The virtual pad of `horizon-ctl pad`.
     injected: PadState,
     /// The virtual pad was in use at the last poll.
@@ -54,6 +57,11 @@ pub(super) struct Pads {
 
 #[cfg(feature = "controllers")]
 mod hardware;
+
+/// Controllers on Android arrive as winit device events (the patched Android
+/// backend), not through gilrs.
+#[cfg(target_os = "android")]
+mod android;
 
 /// A build without the `controllers` feature (the server build, which must not need libudev): no
 /// hardware pads, only `horizon-ctl pad`'s virtual one.
@@ -86,6 +94,15 @@ impl Pads {
     pub(super) fn player_replaced(&mut self) {
         self.health.forget();
     }
+
+    /// Every controller but the virtual pad: gilrs' pads on the desktop, the
+    /// device events winit's patched Android backend hands over on a phone.
+    fn read_all(&mut self) -> PadState {
+        let hardware = self.read();
+        #[cfg(target_os = "android")]
+        let hardware = hardware.merge(&self.android.state);
+        hardware
+    }
 }
 
 impl Game<'_> {
@@ -102,7 +119,7 @@ impl Game<'_> {
             }
             return;
         }
-        let hardware = self.pad.read();
+        let hardware = self.pad.read_all();
         self.ui.options.pad_style = self.settings.controller.glyphs.resolve(self.pad.style);
         let state = hardware.merge(&self.pad.injected);
         self.pad.virtual_input = self.pad.injected != PadState::default();

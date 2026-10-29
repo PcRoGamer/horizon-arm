@@ -14339,6 +14339,12 @@ impl ApplicationHandler for Game<'_> {
         }
     }
     fn device_event(&mut self, _: &ActiveEventLoop, _: DeviceId, event: DeviceEvent) {
+        // A controller on Android arrives as raw device events (the patched
+        // winit backend, tools/patch-winit.sh): game/pad/android.rs.
+        #[cfg(target_os = "android")]
+        if self.pad_device_event(&event) {
+            return;
+        }
         if self.pending_save.is_none()
             && self.captured
             && self.focused
