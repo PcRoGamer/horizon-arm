@@ -7466,19 +7466,16 @@ impl Game<'_> {
         );
         if outside {
             // A phone has no Escape in reach while a screen is open: a tap on
-            // the empty space around the window closes it, as `Menu` does in
-            // the world. Only an empty hand, so the tap still cannot throw a
-            // carried stack.
+            // the empty space around the window closes it, exactly as Escape
+            // (and so Android's Back) does. Only an empty hand, so the tap
+            // still cannot throw a carried stack.
             #[cfg(target_os = "android")]
             if !right
                 && self.carried.is_none()
                 && matches!(self.screen, Screen::Inventory | Screen::Creative)
             {
                 self.inv_clicks.skip_release();
-                self.close_container();
-                self.screen = Screen::Playing;
-                self.pause_menu = true;
-                self.capture(true);
+                let _ = self.key_pressed(KeyCode::Escape);
                 return;
             }
             // AbstractRecipeBookScreen.mouseClicked: the book takes the click
