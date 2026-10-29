@@ -7,6 +7,7 @@
 use std::sync::Mutex;
 use winit::platform::android::activity::AndroidApp;
 
+pub mod content;
 pub mod instances;
 
 static APP: Mutex<Option<AndroidApp>> = Mutex::new(None);
