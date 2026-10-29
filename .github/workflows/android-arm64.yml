@@ -12,6 +12,8 @@ on:
       - 'Cargo.lock'
       - '.github/workflows/android-arm64.yml'
   workflow_dispatch:
+  issues:
+    types: [opened]
 
 jobs:
   build-arm64:
