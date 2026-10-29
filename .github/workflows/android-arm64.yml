@@ -8,6 +8,8 @@ on:
       - 'crates/horizon-android/**'
       - 'crates/horizon-client/**'
       - 'crates/horizon-client-input/**'
+      - 'crates/horizon-prepare/**'
+      - 'research-lock.json'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/android-arm64.yml'
@@ -16,9 +18,15 @@ on:
 jobs:
   build-arm64:
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Java 25 for one-time fact generation
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
 
       - name: Prepare Android toolchain symlink target
         run: mkdir -p ../horizon-android/.toolchain
@@ -35,11 +43,32 @@ jobs:
         run: android-port/tools/fetch-toolchain.sh
 
       - name: Fetch Rust dependencies
-        run: cargo fetch --locked
+        run: cargo fetch
 
-      - name: Build thin ARM64 APK
+      - name: Fetch pinned Minecraft inputs for CI only
+        run: python3 android-port/tools/ci-fetch-minecraft.py
+
+      - name: Compute Horizon 26.3 facts
+        run: |
+          cargo run --release -p horizon-prepare -- \
+            --prepare \
+            --minecraft-dir android-port/build/ci-minecraft \
+            --server-jar android-port/build/ci-minecraft/server.jar \
+            --root .
+
+      - name: Package Horizon-only fact bundle
+        run: |
+          python3 android-port/tools/ci-pack-facts.py
+          unzip -l android-port/build/horizon-facts-26.3.zip | head -80
+          if unzip -l android-port/build/horizon-facts-26.3.zip | grep -E '(^|/)(assets|data)/|pack.png|client.jar|server.jar'; then
+            echo 'fact bundle contains a Minecraft file' >&2
+            exit 1
+          fi
+
+      - name: Build self-bootstrapping ARM64 APK
         env:
           HORIZON_NO_ASSETS: '1'
+          HORIZON_FACTS_ZIP: ${{ github.workspace }}/android-port/build/horizon-facts-26.3.zip
           HORIZON_JOBS: '4'
         run: android-port/tools/build.sh arm64 fast
 
@@ -48,11 +77,12 @@ jobs:
           test -f android-port/build/horizon-android-arm64.apk
           ls -lh android-port/build/horizon-android-arm64.apk
           unzip -l android-port/build/horizon-android-arm64.apk | grep 'lib/arm64-v8a/libhorizon_android.so'
+          unzip -l android-port/build/horizon-android-arm64.apk | grep 'assets/horizon-facts-26.3.zip'
           sha256sum android-port/build/horizon-android-arm64.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: horizon-android-arm64-thin
+          name: horizon-android-arm64-playable-bootstrap
           path: android-port/build/horizon-android-arm64.apk
           if-no-files-found: error
