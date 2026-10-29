@@ -13,6 +13,8 @@
 //! is on the phone.
 #![cfg(target_os = "android")]
 
+mod bundled;
+mod loading;
 mod smoke;
 
 use std::path::{Path, PathBuf};
@@ -32,6 +34,10 @@ pub extern "C" fn android_main(app: AndroidApp) {
         .unwrap_or_else(|| PathBuf::from("/data/local/tmp/horizon"));
     let external = app.external_data_path().map(PathBuf::from);
     say(&format!("Horizon: data folder {}", home.display()));
+
+    // An APK can carry the data itself (`tools/build.sh` packs it): unpack it
+    // before the lookup below. A folder already on the device wins.
+    unpack_bundled(&app, &home);
 
     // Before anything reads them: the game's folders, its log, and where the
     // prepared resources are. `set_var` is unsound once another thread reads the
@@ -93,6 +99,51 @@ pub extern "C" fn android_main(app: AndroidApp) {
         }
     }
     horizon_client::logging::flush();
+}
+
+/// Unpacks the APK's data, with a loading screen while it runs. The worker
+/// thread does the reading; this thread draws until it is done, then the game's
+/// own event loop — the process's only one — takes over.
+fn unpack_bundled(app: &AndroidApp, home: &Path) {
+    let manager = app.asset_manager();
+    let version = horizon_core::VANILLA_VERSION;
+    if !bundled::pending(&manager, home, version) {
+        return;
+    }
+    say("Horizon: unpacking the data in the APK");
+    let progress = std::sync::Arc::new(bundled::Progress::default());
+    let worker = {
+        let progress = progress.clone();
+        let home = home.to_path_buf();
+        std::thread::spawn(move || {
+            let result = bundled::unpack(&manager, &home, version, &progress);
+            match result {
+                Ok(Some(done)) => say(&format!(
+                    "Horizon: unpacked {} files ({} MiB) into {} in {:.1}s, {} not in the APK",
+                    done.files,
+                    done.bytes >> 20,
+                    done.dir.display(),
+                    done.secs,
+                    done.missing
+                )),
+                Ok(None) => {}
+                Err(e) => {
+                    say(&format!("Horizon: cannot unpack the data in the APK: {e}"));
+                    if let Ok(mut slot) = progress.failed.lock() {
+                        *slot = Some(e.to_string());
+                    }
+                    // A failure ends the screen too: the game falls back to
+                    // the smoke screen and says why in logcat.
+                    progress.done.store(true, std::sync::atomic::Ordering::Release);
+                }
+            }
+            progress.done.store(true, std::sync::atomic::Ordering::Release);
+        })
+    };
+    if let Err(e) = loading::run(app, progress.clone()) {
+        say(&format!("Horizon: no loading screen: {e}"));
+    }
+    let _ = worker.join();
 }
 
 /// Where the prepared resources are: `HORIZON_RESOURCES`, then the app's own
