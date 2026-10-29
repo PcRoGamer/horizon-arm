@@ -4140,6 +4140,9 @@ impl Game<'_> {
             self.capture_loaded_world();
         }
         let stick = self.pad_move();
+        // A phone's own stick (`game/touch.rs`) drives the same analog move.
+        #[cfg(target_os = "android")]
+        let stick = self.touch_stick().or(stick);
         if self.player.is_none() {
             return Ok(());
         }
