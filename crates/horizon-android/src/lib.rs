@@ -5,10 +5,16 @@
 //! only Horizon-computed facts, while Minecraft's pinned jars are downloaded
 //! directly from Mojang and checked before use. No Java runtime or login is
 //! needed for that bootstrap.
+//!
+//! The Android shell is launcherless: after bootstrap it goes straight into the
+//! last selected Horizon instance.  The original game folder remains the
+//! default instance; additional instances have separate worlds, mods, packs and
+//! options but share the one prepared Horizon runtime.
 #![cfg(target_os = "android")]
 
 mod bootstrap;
 mod bundled;
+mod instances;
 mod loading;
 mod smoke;
 
@@ -21,34 +27,62 @@ use android_activity::AndroidApp;
 #[allow(improper_ctypes_definitions)]
 #[unsafe(no_mangle)]
 pub extern "C" fn android_main(app: AndroidApp) {
-    let home = app
+    // `root` owns shared runtime/bootstrap data and the instance registry.  It
+    // is deliberately not changed when a non-default instance is selected.
+    let root = app
         .internal_data_path()
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/data/local/tmp/horizon"));
     let external = app.external_data_path().map(PathBuf::from);
-    say(&format!("Horizon: data folder {}", home.display()));
+    say(&format!("Horizon: data folder {}", root.display()));
+
+    if let Err(e) = std::fs::create_dir_all(&root) {
+        say(&format!("Horizon: cannot create {}: {e}", root.display()));
+    }
 
     // A development/full APK may still carry a complete prepared folder.
-    unpack_bundled(&app, &home);
+    unpack_bundled(&app, &root);
 
     // A normal distributable APK carries only Horizon's computed facts. If no
     // resource folder exists yet, download the pinned Mojang jars and assemble
-    // one now. App updates then reuse this folder.
-    let mut resources = find_resources(&home, external.as_deref());
+    // one now. App updates then reuse this shared folder.
+    let mut resources = find_resources(&root, external.as_deref());
     if resources.is_none() {
-        bootstrap_resources(&app, &home);
-        resources = find_resources(&home, external.as_deref());
+        bootstrap_resources(&app, &root);
+        resources = find_resources(&root, external.as_deref());
     }
 
-    // Before anything reads them: the game's folders, its log, and where the
-    // prepared resources are. `set_var` is unsound once another thread reads the
-    // environment, and this runs before the first Horizon thread starts.
-    let world = std::fs::read_to_string(home.join("horizon-world"))
+    // Preserve the desktop launcher's instance invariant: existing players are
+    // already the default instance; nothing gets moved just because instances
+    // become available.
+    if let Err(e) = instances::ensure(&root) {
+        say(&format!("Horizon instances: {e}"));
+    }
+    let instance = instances::selected(&root);
+    instances::follow_player(&root, &instance);
+    let game_home = instance.home.clone();
+    if let Err(e) = std::fs::create_dir_all(&game_home) {
+        say(&format!("Horizon: cannot create {}: {e}", game_home.display()));
+    }
+    say(&format!(
+        "Horizon: instance {} ({}) at {}",
+        instance.name,
+        instance.id,
+        game_home.display()
+    ));
+
+    // Before anything reads them: the selected instance's game folder, its log,
+    // and the shared prepared resources. `set_var` is unsound once another
+    // thread reads the environment, and this runs before Horizon starts one.
+    let world = std::fs::read_to_string(game_home.join("horizon-world"))
         .ok()
         .map(|name| name.trim().to_owned())
         .filter(|name| !name.is_empty());
     unsafe {
-        std::env::set_var("HORIZON_HOME", &home);
+        std::env::set_var("HORIZON_HOME", &game_home);
+        std::env::set_var("HORIZON_ANDROID_ROOT", &root);
+        std::env::set_var("HORIZON_INSTANCE_ID", &instance.id);
+        std::env::set_var("HORIZON_INSTANCE_NAME", &instance.name);
         if let Some(dir) = &resources {
             std::env::set_var("HORIZON_RESOURCES", dir);
         }
@@ -59,22 +93,25 @@ pub extern "C" fn android_main(app: AndroidApp) {
         // retrying a socket that cannot exist.
         std::env::set_var("HORIZON_NO_DISCORD", "1");
     }
-    if let Err(e) = std::fs::create_dir_all(&home) {
-        say(&format!("Horizon: cannot create {}: {e}", home.display()));
-    }
-    if let Err(e) = std::env::set_current_dir(&home) {
-        say(&format!("Horizon: cannot enter {}: {e}", home.display()));
+    if let Err(e) = std::env::set_current_dir(&game_home) {
+        say(&format!("Horizon: cannot enter {}: {e}", game_home.display()));
     }
 
-    horizon_client::logging::init(&home, "Render thread");
+    horizon_client::logging::init(&game_home, "Render thread");
     log::info!("Horizon {} (android)", horizon_client::crash::version());
-    horizon_client::crash::install(home.clone(), "client");
+    log::info!(
+        "Android instance: {} ({})",
+        instance.name,
+        instance.id
+    );
+    horizon_client::crash::install(game_home.clone(), "client");
 
     if !horizon_client::android::set_app(app.clone()) {
         say("Horizon: the activity was already handed over");
         return;
     }
 
+    let played_from = std::time::Instant::now();
     match &resources {
         Some(dir) => {
             say(&format!("Horizon: resources {}", dir.display()));
@@ -83,7 +120,7 @@ pub extern "C" fn android_main(app: AndroidApp) {
                 Err(e) => {
                     log::error!("Horizon: {e}");
                     say(&format!("Horizon: {e}"));
-                    horizon_client::crash::report_error(&home, "client", &*e);
+                    horizon_client::crash::report_error(&game_home, "client", &*e);
                 }
             }
         }
@@ -94,6 +131,9 @@ pub extern "C" fn android_main(app: AndroidApp) {
                 say(&format!("Horizon smoke: {e}"));
             }
         }
+    }
+    if let Err(e) = instances::record_play(&root, &instance.id, played_from.elapsed()) {
+        log::warn!("Horizon: could not record instance play time: {e}");
     }
     horizon_client::logging::flush();
 }
@@ -113,7 +153,10 @@ fn bootstrap_resources(app: &AndroidApp, home: &Path) {
         let home = home.to_path_buf();
         std::thread::spawn(move || {
             match bootstrap::run(&app, &home, progress.clone()) {
-                Ok(dir) => say(&format!("Horizon: first-run resources ready at {}", dir.display())),
+                Ok(dir) => say(&format!(
+                    "Horizon: first-run resources ready at {}",
+                    dir.display()
+                )),
                 Err(e) => {
                     say(&format!("Horizon bootstrap: {e}"));
                     if let Ok(mut slot) = progress.failed.lock() {
@@ -210,7 +253,9 @@ fn logcat(message: &str) {
     unsafe extern "C" {
         fn __android_log_write(prio: c_int, tag: *const c_char, text: *const c_char) -> c_int;
     }
-    let Ok(text) = CString::new(message) else { return };
+    let Ok(text) = CString::new(message) else {
+        return;
+    };
     let tag = c"Horizon";
     unsafe {
         __android_log_write(4, tag.as_ptr(), text.as_ptr());
