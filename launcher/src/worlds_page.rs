@@ -239,8 +239,9 @@ impl Launcher {
         } else {
             let (backup, copy, folder) = (w.clone(), w.clone(), w.path.clone());
             let (delete, play) = (w.folder.clone(), w.folder.clone());
+            let running = self.client.is_some() || self.starting_client.is_some();
             let play_button = act("world-play", "Play", Kind::Secondary);
-            let play_button = if !self.can_start_selected() {
+            let play_button = if running {
                 disabled(play_button)
             } else {
                 play_button

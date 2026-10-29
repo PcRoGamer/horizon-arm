@@ -82,7 +82,7 @@ pub(super) struct ServerPackState {
     queue: Option<download::Queue>,
     pub(super) prompt: Option<PackPrompt>,
     /// The server list entry the setting is saved to (none: a direct join).
-    pub(super) address: Option<String>,
+    address: Option<String>,
     /// The account the downloads are made for (the download headers).
     user: (String, u128),
     /// The packs loaded on top of the player's own, bottom first.
@@ -197,7 +197,7 @@ fn human_readable(bytes: u64) -> String {
     format!("{} {prefix}B", java_text::format_fixed(value, 1))
 }
 
-pub(super) fn saves() -> PathBuf {
+fn saves() -> PathBuf {
     std::env::current_dir().unwrap_or_default().join("saves")
 }
 

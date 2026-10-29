@@ -28,30 +28,10 @@ const NAME: &str = "Native mods";
 const PREFIX: &str = "native-";
 /// horizon-mixins, for bundles that don't name the revision they were tested with.
 const MIXINS_GIT: &str = "https://github.com/horizon-rust/horizon-mixins";
-pub const MIXINS_REV: &str = "0d6b103c70633d8fd9443d8d0acd3aadaacedb06";
+pub const MIXINS_REV: &str = "0500ff24aa5933fca95a877ef41125353c4b4fe3";
 /// The profile and features of the release's own game (game-build.yml).
 const PROFILE: &str = "release";
 const FEATURES: &str = "horizon-client/mods";
-
-/// Whether Native mods are on after an install into a game folder whose list is `installed`:
-/// installing a native mod turns them on, so the player only has to build. A player who never
-/// installs one keeps them off; one already on stays on.
-pub fn turns_on(on: bool, installed: &[crate::browser::installed::Entry]) -> bool {
-    on || installed.iter().any(|e| {
-        e.file
-            .strip_prefix(INSTALLED)
-            .is_some_and(|rest| rest.starts_with('/'))
-    })
-}
-
-/// Whether installing a native mod shows its notice first (what the first build takes): once,
-/// for a player whose Native mods are still off.
-pub fn needs_notice(on: bool, noticed: bool) -> bool {
-    !on && !noticed
-}
-
-/// The notice before the first native mod is installed.
-pub const NOTICE: &str = "Native mods compile into a game of their own. Installing one turns Native mods on: you then build the game with it in Settings > Native mods. The first build downloads Rust and can take 20 to 30 minutes; later builds are faster.";
 
 /// Whether an installed version is a native-mods build.
 pub fn is_native(version: &str) -> bool {
@@ -512,16 +492,6 @@ fn tool(rust: &Toolchain, rev: &str) -> Result<PathBuf, String> {
     Ok(bin)
 }
 
-/// `horizon-mixins apply`: the mods in `mods` applied to `source`, into `out`. It runs
-/// `cargo metadata`, so it gets the launcher's toolchain like a build does: on a computer with no
-/// Rust of its own, a plain command found no cargo (E_METADATA).
-fn apply(rust: &Toolchain, tool: &Path, source: &Path, mods: &Path, out: &Path) -> Command {
-    let mut cmd = rust.command(tool);
-    cmd.arg("apply").arg("--workspace").arg(source);
-    cmd.arg("--mods").arg(mods).arg("--out").arg(out);
-    cmd
-}
-
 /// Horizon's source at commit `revision`: GitHub's archive of it, unpacked once, with the commit in
 /// `.horizon-revision` (bundles pin it). A Nightly's commit stays downloadable after the Nightly
 /// is gone: its `nightly-source/…` tag keeps it (docs/release-flow.md). Links are left out:
@@ -644,11 +614,10 @@ pub fn build(
         let real = plain(root().canonicalize().map_err(|e| e.to_string())?);
         let fresh = real.join("stage.new");
         let _ = fs::remove_dir_all(&fresh);
-        run(
-            apply(&rust, &tool, &source, &incoming, &fresh),
-            "horizon-mixins",
-            |_| {},
-        )?;
+        let mut apply = Command::new(&tool);
+        apply.arg("apply").arg("--workspace").arg(&source);
+        apply.arg("--mods").arg(&incoming).arg("--out").arg(&fresh);
+        run(apply, "horizon-mixins", |_| {})?;
         let stage = root().join("stage");
         sync(&fresh, &stage)?;
         let _ = fs::remove_dir_all(&fresh);
@@ -682,12 +651,7 @@ pub fn build(
     }
     match instance.filter(|i| i.kind != instances::Kind::Default) {
         Some(own) => instances::edit(&own.id, |meta| meta.version = Some(version.clone()))?,
-        None => {
-            let native = instance_on(&version)?;
-            let ids: Vec<&str> = mods.iter().map(|m| m.id.as_str()).collect();
-            carry_settings(&backend::game_home(), &native.home, &ids)?;
-            native
-        }
+        None => instance_on(&version)?,
     };
     prune(&version);
     let _ = fs::remove_dir_all(&incoming);
@@ -744,42 +708,6 @@ fn instance_on(version: &str) -> Result<Instance, String> {
     instances::edit(INSTANCE, |meta| meta.version = Some(version.to_owned()))
 }
 
-/// The mods' settings from the game's own home `from` (where their WebAssembly versions kept
-/// them) into the Native mods instance's `to`, for each mod `to` has none of yet: its storage
-/// folder (`horizon-mods/.horizon-mod-data/<id>/`) and its keys (`key.<id>.<name>:…` lines of
-/// `horizon-mods.txt`). Nothing is overwritten.
-fn carry_settings(from: &Path, to: &Path, ids: &[&str]) -> Result<(), String> {
-    const DATA: &str = "horizon-mods/.horizon-mod-data";
-    const LIST: &str = "horizon-mods.txt";
-    let read = |home: &Path| fs::read_to_string(home.join(LIST)).unwrap_or_default();
-    let (theirs, mut ours) = (read(from), read(to));
-    let before = ours.len();
-    for id in ids {
-        let data = from.join(DATA).join(id);
-        let target = to.join(DATA).join(id);
-        if data.is_dir() && !target.exists() {
-            backend::copy_dir(&data, &target).map_err(|e| format!("{}: {e}", data.display()))?;
-        }
-        let prefix = format!("key.{id}.");
-        let has_keys = ours.lines().any(|l| l.starts_with(&prefix));
-        for line in theirs
-            .lines()
-            .filter(|l| l.starts_with(&prefix) && !has_keys)
-        {
-            if !ours.is_empty() && !ours.ends_with('\n') {
-                ours.push('\n');
-            }
-            ours += line;
-            ours.push('\n');
-        }
-    }
-    if ours.len() != before {
-        fs::create_dir_all(to).map_err(|e| e.to_string())?;
-        fs::write(to.join(LIST), ours).map_err(|e| format!("{LIST}: {e}"))?;
-    }
-    Ok(())
-}
-
 /// Removes the native builds other than `keep` that no instance plays. The compiled crates
 /// (`native/target`) stay, so the next build only compiles what changed.
 pub fn prune(keep: &str) {
@@ -798,87 +726,11 @@ pub fn prune(keep: &str) {
 mod tests {
     use super::*;
 
-    /// Ludovic's decision (2026-10-29): installing a native mod turns Native mods on, after a
-    /// notice shown once; players who never install one keep them off.
-    #[test]
-    fn installing_a_native_mod_turns_native_mods_on() {
-        let entry = |file: &str| {
-            serde_json::from_value::<crate::browser::installed::Entry>(serde_json::json!({
-                "source": "horizon", "project": "p", "slug": "p", "title": "P", "kind": "mod",
-                "version": "1", "number": "1", "file": file, "checksum": "", "page": ""
-            }))
-            .unwrap()
-        };
-        let plain = [
-            entry("horizon-mods/zoom.hmod"),
-            entry("resourcepacks/x.zip"),
-        ];
-        assert!(!turns_on(false, &[]));
-        assert!(!turns_on(false, &plain), "no native mod: they stay off");
-        assert!(!turns_on(
-            false,
-            &[entry("horizon-native-mods-old/x.hnmod")]
-        ));
-        let native = [
-            plain[0].clone(),
-            entry("horizon-native-mods/veinminer.hnmod"),
-        ];
-        assert!(turns_on(false, &native));
-        assert!(turns_on(true, &plain), "on stays on");
-        // The notice: before the first one only.
-        assert!(needs_notice(false, false));
-        assert!(!needs_notice(false, true));
-        assert!(!needs_notice(true, false));
-        // Settings without the fields read as off and not noticed.
-        let s: backend::Settings = serde_json::from_str("{}").unwrap();
-        assert!(!s.native_mods && !s.native_mods_noticed);
-    }
-
     fn dir(name: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("horizon-native-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&d);
         fs::create_dir_all(&d).unwrap();
         d
-    }
-
-    #[test]
-    fn the_native_mods_instance_gets_the_mods_settings_once() {
-        let (from, to) = (dir("carry-from"), dir("carry-to"));
-        let data = from.join("horizon-mods/.horizon-mod-data");
-        fs::create_dir_all(data.join("zoom")).unwrap();
-        fs::write(data.join("zoom/level"), "8").unwrap();
-        fs::create_dir_all(data.join("other")).unwrap();
-        fs::write(
-            from.join("horizon-mods.txt"),
-            "mod.zoom:true\nkey.zoom.zoom:key.keyboard.c\nkey.other.x:key.keyboard.x\n",
-        )
-        .unwrap();
-        fs::write(
-            to.join("horizon-mods.txt"),
-            "key.minimap.map:key.keyboard.m",
-        )
-        .unwrap();
-        carry_settings(&from, &to, &["zoom", "minimap"]).unwrap();
-        let ours = to.join("horizon-mods/.horizon-mod-data");
-        assert_eq!(fs::read_to_string(ours.join("zoom/level")).unwrap(), "8");
-        assert!(!ours.join("other").exists());
-        assert_eq!(
-            fs::read_to_string(to.join("horizon-mods.txt")).unwrap(),
-            "key.minimap.map:key.keyboard.m\nkey.zoom.zoom:key.keyboard.c\n"
-        );
-        // Changed in the instance since: kept.
-        fs::write(ours.join("zoom/level"), "4").unwrap();
-        fs::write(
-            from.join("horizon-mods.txt"),
-            "key.zoom.zoom:key.keyboard.v\n",
-        )
-        .unwrap();
-        carry_settings(&from, &to, &["zoom"]).unwrap();
-        assert_eq!(fs::read_to_string(ours.join("zoom/level")).unwrap(), "4");
-        assert!(fs::read_to_string(to.join("horizon-mods.txt"))
-            .unwrap()
-            .contains("key.zoom.zoom:key.keyboard.c"));
-        let _ = (fs::remove_dir_all(&from), fs::remove_dir_all(&to));
     }
 
     fn write_bundle(at: &Path, id: &str, helper: &str) {
@@ -903,41 +755,6 @@ mod tests {
         assert_eq!(
             plain("/home/me/.local/share/horizon-launcher/native"),
             PathBuf::from("/home/me/.local/share/horizon-launcher/native")
-        );
-    }
-
-    #[test]
-    fn horizon_mixins_finds_the_launchers_cargo() {
-        let rust = Toolchain {
-            dir: PathBuf::from("/rust/1.99.1-x"),
-        };
-        let cmd = apply(
-            &rust,
-            Path::new("/tools/horizon-mixins"),
-            Path::new("/src"),
-            Path::new("/mods"),
-            Path::new("/out"),
-        );
-        let path = cmd
-            .get_envs()
-            .find(|(k, _)| *k == "PATH")
-            .and_then(|(_, v)| v)
-            .unwrap();
-        assert_eq!(
-            std::env::split_paths(path).next(),
-            Some(rust.dir.join("bin"))
-        );
-        assert_eq!(
-            cmd.get_args().collect::<Vec<_>>(),
-            [
-                "apply",
-                "--workspace",
-                "/src",
-                "--mods",
-                "/mods",
-                "--out",
-                "/out"
-            ]
         );
     }
 

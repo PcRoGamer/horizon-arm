@@ -375,9 +375,7 @@ impl Game<'_> {
         let ctx = self.server_ctx();
         // TeleportTransition.PLAY_PORTAL_SOUND.
         host.hub.change_level(i, at, yaw, None, true, &ctx);
-        self.as_guest(host, conn, |g| {
-            g.trigger_dimension(source, target, [from.x, from.y, from.z])
-        });
+        self.as_guest(host, conn, |g| g.trigger_dimension(source, target));
         self.server_trips.push(Trip {
             conn,
             dim: target,
@@ -667,13 +665,12 @@ impl Game<'_> {
             }
             let g = &mut host.hub.guests[i];
             let [yaw, pitch] = t.rotation.unwrap_or([g.yaw, g.pitch]);
-            let origin = g.position;
             // A new body there: no fall distance or motion carried over.
             g.motion = None;
             let ctx = self.server_ctx();
             host.hub
                 .change_level(i, t.at, yaw, Some(pitch), false, &ctx);
-            self.as_guest(host, t.conn, |g| g.trigger_dimension(source, t.dim, origin));
+            self.as_guest(host, t.conn, |g| g.trigger_dimension(source, t.dim));
             self.server_trips.retain(|trip| !trip.is(t.conn));
             self.server_trips.push(Trip {
                 conn: t.conn,

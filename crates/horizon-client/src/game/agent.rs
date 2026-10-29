@@ -536,9 +536,7 @@ impl Game<'_> {
             title
                 .recent_worlds()
                 .iter()
-                .map(
-                    |w| json!({ "folder": w.folder, "name": w.name, "creative": w.game_mode == 1 }),
-                )
+                .map(|w| json!({ "folder": w.folder, "name": w.name, "creative": w.creative }))
                 .collect::<Vec<_>>()
         };
         match &title.mode {
@@ -548,7 +546,7 @@ impl Game<'_> {
                 selected,
             } => json!({
                 "mode": "select-world",
-                "worlds": list.iter().map(|w| json!({ "folder": w.folder, "name": w.name, "creative": w.game_mode == 1 })).collect::<Vec<_>>(),
+                "worlds": list.iter().map(|w| json!({ "folder": w.folder, "name": w.name, "creative": w.creative })).collect::<Vec<_>>(),
                 "selected": selected,
             }),
             Mode::Create {
@@ -598,9 +596,6 @@ impl Game<'_> {
             }
             Mode::Delete { world } => {
                 json!({ "mode": "delete-world", "folder": world.folder, "name": world.name })
-            }
-            Mode::BackupBeforeUpgrade { world } => {
-                json!({ "mode": "backup-before-upgrade", "folder": world.folder, "name": world.name })
             }
             Mode::Error { message, .. } => {
                 json!({ "mode": "world-operation-error", "message": message })

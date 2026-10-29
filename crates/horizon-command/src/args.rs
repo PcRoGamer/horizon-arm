@@ -798,9 +798,7 @@ fn java_split(s: &str) -> Vec<&str> {
     parts
 }
 /// SharedSuggestionProvider.suggestCoordinates / suggest2DCoordinates: the
-/// candidates `ty` parses completely. `relevant` arguments (block and column
-/// positions) offer the targeted block (`getRelevantCoordinates`), the others
-/// (`Vec3`, `Vec2`) the exact hit point (`getAbsoluteCoordinates`).
+/// candidates `ty` parses completely.
 fn suggest_coordinates(
     builder: &mut SuggestionsBuilder,
     reg: &Registries,
@@ -813,8 +811,6 @@ fn suggest_coordinates(
         ["^".into(), "^".into(), "^".into()]
     } else if let (true, Some(t)) = (relevant, reg.target_block) {
         [t[0].to_string(), t[1].to_string(), t[2].to_string()]
-    } else if let (false, Some(p)) = (relevant, &reg.target_point) {
-        p.clone()
     } else {
         ["~".into(), "~".into(), "~".into()]
     };

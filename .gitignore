@@ -34,3 +34,8 @@
 
 # Release-only compiled original exporter bundle.
 /exporters/
+
+# Android port: the SDK/NDK/JDK the tools fetch, and the APKs they build
+android-port/.toolchain/
+android-port/.toolchain-fetch.log
+android-port/build/

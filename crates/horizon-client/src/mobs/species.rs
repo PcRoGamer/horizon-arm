@@ -1470,17 +1470,15 @@ impl Def {
                         | S::Zoglin
                         | S::Wither
                 ),
-            // The `burn_in_daylight` entity type tag.
             burns_in_day: matches!(
                 s,
                 S::Zombie
-                    | S::ZombieHorse
                     | S::Drowned
                     | S::ZombieVillager
                     | S::Skeleton
                     | S::Stray
                     | S::Bogged
-                    | S::WitherSkeleton
+                    | S::Parched
                     | S::Phantom
                     | S::ZombieNautilus
             ),

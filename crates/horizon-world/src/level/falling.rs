@@ -20,12 +20,7 @@ pub enum Landing {
 
 impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     /// `FallingBlockEntity.fall`.
-    pub(crate) fn falling_block_fall(
-        &mut self,
-        pos: BlockPos,
-        state: BlockStateId,
-        hurt_per_distance: Option<f32>,
-    ) {
+    pub(crate) fn falling_block_fall(&mut self, pos: BlockPos, state: BlockStateId) {
         let b = self.b;
         let carried = b
             .table
@@ -36,13 +31,12 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         self.emit(LevelEvent::FallingBlock {
             pos,
             state: carried,
-            hurt_per_distance,
         });
     }
     /// `FallingBlock.tick` (and `SpeleothemBlock`'s falling stalactites).
     pub(crate) fn falling_block_tick(&mut self, pos: BlockPos, state: BlockStateId) {
         if self.is_free(self.below_state(pos)) && pos.y >= self.level.min_y() {
-            self.falling_block_fall(pos, state, None);
+            self.falling_block_fall(pos, state);
         }
     }
     /// `SpeleothemBlock.spawnFallingStalactite`.
@@ -57,11 +51,9 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         let mut fall_pos = pos;
         let mut fall_state = state;
         while is_stalactite(fall_state) {
+            self.falling_block_fall(fall_pos, fall_state);
             let thickness = b.table.text(fall_state, p.thickness);
-            let tip = thickness == "tip" || thickness == "tip_merge";
-            let damage = tip.then_some((1 + pos.y - fall_pos.y).max(6) as f32);
-            self.falling_block_fall(fall_pos, fall_state, damage);
-            if tip {
+            if thickness == "tip" || thickness == "tip_merge" {
                 break;
             }
             fall_pos = below(fall_pos);

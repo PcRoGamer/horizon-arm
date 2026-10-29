@@ -8,9 +8,9 @@ use horizon_client::{
     containers::BlockEntity,
     mobs::{
         Mob, Who,
-        spawner::{SpawnDataExt, Spawner, SpawnerAdded, SpawnerEvent, SpawnerExt, SpawnerSpawn},
+        spawner::{Spawner, SpawnerAdded, SpawnerEvent, SpawnerSpawn},
         spawning,
-        trial_spawner::{TrialSpawnerExt, TrialState},
+        trial_spawner::TrialState,
     },
     particles::{ParticleOptions, ParticleType},
 };

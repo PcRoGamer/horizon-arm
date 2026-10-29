@@ -1,7 +1,7 @@
 //! Paintings: `HangingEntityItem.useOn` placement with `Painting.create`'s
 //! variant choice, `HangingEntity.survives` checks every 100 ticks,
 //! breaking by attack (`dropItem`), saving, and `PaintingRenderer` quads.
-use super::{Game, Hit};
+use super::{Game, Hit, view_vector};
 use horizon_client::{entities::Painting, items::ItemStack, mesher::Vertex};
 use horizon_core::{
     geometry::{Aabb, Vec3},
@@ -171,7 +171,8 @@ impl Game<'_> {
     }
     /// The painting under the crosshair within reach and its distance.
     pub(super) fn painting_hit(&self) -> Option<(usize, f64)> {
-        let (eye, dir) = self.aim()?;
+        let eye = self.eye_position()?;
+        let dir = view_vector(self.yaw, self.pitch);
         let reach: f64 = if self.creative { 5.0 } else { 3.0 };
         let mut best: Option<(usize, f64)> = None;
         for (i, p) in self.paintings.iter().enumerate() {

@@ -11,7 +11,7 @@ use horizon_client::{
         spawner::SpawnerSpawn,
         trial_spawner::{
             Omen, TRIAL_OMEN_TICKS_PER_LEVEL, TrialEvent, TrialPlayer, TrialSpawner,
-            TrialSpawnerExt, TrialSpawnerLevel, TrialState, Uuid,
+            TrialSpawnerLevel, TrialState, Uuid,
         },
     },
 };

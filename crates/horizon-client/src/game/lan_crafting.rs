@@ -242,9 +242,6 @@ impl Game<'_> {
             _ => None,
         };
         if host.hub.guests[gi].spectator() {
-            // handleContainerClick: nothing changes, and sendAllDataToRemote
-            // takes back what the client predicted.
-            host.hub.resend_menu(conn, p.container, &self.world);
             return true;
         }
         let mut menu = host

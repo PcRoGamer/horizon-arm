@@ -78,13 +78,7 @@ impl Game<'_> {
             f64::from(base[1]) + 0.05,
             f64::from(base[2]) + 0.5,
         ];
-        let id = self.create_triggered(kind, at, 0.0);
-        // CarvedPumpkinBlock.trySpawnGolem: setPlayerCreated(true) on the iron golem.
-        if kind == "minecraft:iron_golem"
-            && let Some(m) = id.and_then(|id| self.mobs.iter_mut().find(|m| m.id == id))
-        {
-            m.extra.player_created = true;
-        }
+        self.create_triggered(kind, at, 0.0);
         self.update_pattern_blocks(&blocks)
     }
     /// Whether placing a golem head at `head` completes a golem.

@@ -8,16 +8,9 @@ fn scratch(name: &str) -> PathBuf {
 }
 
 fn fake_home(home: &Path, version: &str) -> PathBuf {
-    // A Windows home has both: the runtime search looks for java.exe, the game starts javaw.exe.
-    let programs: &[&str] = if cfg!(windows) {
-        &["java.exe", "javaw.exe"]
-    } else {
-        &["java"]
-    };
+    let java = if cfg!(windows) { "javaw.exe" } else { "java" };
     fs::create_dir_all(home.join("bin")).unwrap();
-    for program in programs {
-        fs::write(home.join("bin").join(program), b"").unwrap();
-    }
+    fs::write(home.join("bin").join(java), b"").unwrap();
     fs::write(
         home.join("release"),
         format!("IMPLEMENTOR=\"Fake\"\nJAVA_VERSION=\"{version}\"\nOS_NAME=\"Darwin\"\n"),
@@ -73,7 +66,7 @@ fn the_release_file_gives_the_version_java_8_included() {
 #[test]
 fn mojangs_runtimes_are_found_in_their_layout() {
     let dir = scratch("mojang");
-    let platform = mojang::java_platform().unwrap_or("linux");
+    let platform = "mac-os-arm64";
     let delta = fake_home(
         &dir.join(format!("java-runtime-delta/{platform}/java-runtime-delta")),
         "21.0.5",

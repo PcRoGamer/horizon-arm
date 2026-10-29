@@ -1345,6 +1345,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "horizon-android"
+version = "0.1.0"
+dependencies = [
+ "android-activity",
+ "horizon-client",
+ "horizon-core",
+ "log",
+ "ndk",
+ "pollster",
+ "raw-window-handle",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
 name = "horizon-assets"
 version = "0.1.0"
 dependencies = [
@@ -1378,6 +1393,7 @@ dependencies = [
  "ab_glyph",
  "bytemuck",
  "chrono",
+ "cpal",
  "flate2",
  "gilrs",
  "glam",
@@ -1385,7 +1401,6 @@ dependencies = [
  "horizon-bench",
  "horizon-client-core",
  "horizon-client-input",
- "horizon-client-render",
  "horizon-command",
  "horizon-core",
  "horizon-dualsense",
@@ -1412,6 +1427,7 @@ dependencies = [
  "serde_json",
  "sha1",
  "sha2",
+ "symphonia",
  "unicode-bidi",
  "ureq",
  "wgpu",
@@ -1438,48 +1454,6 @@ dependencies = [
  "horizon-theme",
  "png",
  "winit",
-]
-
-[[package]]
-name = "horizon-client-render"
-version = "0.1.0"
-dependencies = [
- "ab_glyph",
- "bytemuck",
- "chrono",
- "cpal",
- "flate2",
- "glam",
- "horizon-assets",
- "horizon-bench",
- "horizon-client-core",
- "horizon-client-input",
- "horizon-command",
- "horizon-core",
- "horizon-hdr",
- "horizon-items",
- "horizon-protocol",
- "horizon-shader-api",
- "horizon-shaders",
- "horizon-telemetry",
- "horizon-theme",
- "horizon-threads",
- "horizon-world",
- "log",
- "miniz_oxide 0.8.9",
- "naga",
- "png",
- "pollster",
- "rustix 1.1.5",
- "serde",
- "serde_json",
- "sha2",
- "symphonia",
- "unicode-bidi",
- "ureq",
- "wgpu",
- "winit",
- "zip",
 ]
 
 [[package]]

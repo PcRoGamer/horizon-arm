@@ -1,6 +1,5 @@
 //! The multiplayer server list, stored like vanilla's ServerList in an
-//! uncompressed `servers.dat`: `{servers: [{name, ip, icon?, acceptTextures?,
-//! acceptedCodeOfConduct?}]}`.
+//! uncompressed `servers.dat`: `{servers: [{name, ip, icon?, acceptTextures?}]}`.
 use horizon_world::nbt::{self, JavaString, NamedTag, Tag};
 use std::path::Path;
 
@@ -12,9 +11,6 @@ pub struct ServerEntry {
     pub icon: Option<String>,
     /// ServerPackStatus: None = prompt, Some(true) enabled, Some(false) disabled.
     pub accept_textures: Option<bool>,
-    /// `String.hashCode` of the Code of Conduct accepted for good (ServerData's
-    /// `acceptedCodeOfConduct`); 0 for none.
-    pub accepted_code_of_conduct: i32,
 }
 impl ServerEntry {
     pub fn new(name: &str, ip: &str) -> Self {
@@ -23,7 +19,6 @@ impl ServerEntry {
             ip: ip.to_owned(),
             icon: None,
             accept_textures: None,
-            accepted_code_of_conduct: 0,
         }
     }
     fn to_tag(&self) -> Tag {
@@ -36,12 +31,6 @@ impl ServerEntry {
         }
         if let Some(accept) = self.accept_textures {
             entries.push(("acceptTextures", Tag::Byte(i8::from(accept))));
-        }
-        if self.accepted_code_of_conduct != 0 {
-            entries.push((
-                "acceptedCodeOfConduct",
-                Tag::Int(self.accepted_code_of_conduct),
-            ));
         }
         Tag::compound(entries)
     }
@@ -57,10 +46,6 @@ impl ServerEntry {
             accept_textures: match tag.get("acceptTextures") {
                 Some(Tag::Byte(b)) => Some(*b != 0),
                 _ => None,
-            },
-            accepted_code_of_conduct: match tag.get("acceptedCodeOfConduct") {
-                Some(Tag::Int(hash)) => *hash,
-                _ => 0,
             },
         })
     }

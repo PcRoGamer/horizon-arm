@@ -1,7 +1,6 @@
-//! The launcher's languages: English (the strings in the code), French, Russian, German and
-//! Spanish, the languages Horizon's own game menus have. A table per language
-//! (`launcher/lang/<code>.json`) maps each English string to its translation; a string the
-//! table lacks shows in English.
+//! The launcher's languages: English (the strings in the code), French and Russian, the
+//! languages Horizon's own game menus have. A table per language (`launcher/lang/<code>.json`)
+//! maps each English string to its translation; a string the table lacks shows in English.
 //!
 //! The language follows the system's unless the player picks one in Settings
 //! (`Settings::language`). Translations are Horizon's own, written for this launcher.
@@ -19,20 +18,10 @@ pub enum Language {
     French,
     #[serde(rename = "ru")]
     Russian,
-    #[serde(rename = "de")]
-    German,
-    #[serde(rename = "es")]
-    Spanish,
 }
 
 impl Language {
-    pub const ALL: [Language; 5] = [
-        Self::English,
-        Self::French,
-        Self::Russian,
-        Self::German,
-        Self::Spanish,
-    ];
+    pub const ALL: [Language; 3] = [Self::English, Self::French, Self::Russian];
 
     /// Its code in `settings.json` and on the command line.
     pub fn code(self) -> &'static str {
@@ -40,8 +29,6 @@ impl Language {
             Self::English => "en",
             Self::French => "fr",
             Self::Russian => "ru",
-            Self::German => "de",
-            Self::Spanish => "es",
         }
     }
 
@@ -51,8 +38,6 @@ impl Language {
             Self::English => "English",
             Self::French => "Français",
             Self::Russian => "Русский",
-            Self::German => "Deutsch",
-            Self::Spanish => "Español",
         }
     }
 
@@ -83,8 +68,6 @@ impl Language {
             Self::English => "{}",
             Self::French => include_str!("../lang/fr.json"),
             Self::Russian => include_str!("../lang/ru.json"),
-            Self::German => include_str!("../lang/de.json"),
-            Self::Spanish => include_str!("../lang/es.json"),
         }
     }
 }
