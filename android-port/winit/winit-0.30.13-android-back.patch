@@ -1,0 +1,22 @@
+--- a/src/platform_impl/android/keycodes.rs
++++ b/src/platform_impl/android/keycodes.rs
+@@ -152,6 +152,9 @@
+         Keycode::Power => KeyCode::Power,
+         Keycode::Sleep => KeyCode::Sleep, // what about SoftSleep?
+         Keycode::Wakeup => KeyCode::WakeUp,
++        // Horizon: Android's Back button is the screen-closing key, so it
++        // arrives as Escape, which every screen and the world already read.
++        Keycode::Back => KeyCode::Escape,
+ 
+         keycode => return PhysicalKey::Unidentified(NativeKeyCode::Android(keycode.into())),
+     })
+@@ -233,7 +236,8 @@
+             // Using `BrowserHome` instead of `GoHome` according to
+             // https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key/Key_Values
+             Home => Key::Named(NamedKey::BrowserHome),
+-            Back => Key::Named(NamedKey::BrowserBack),
++            // Horizon: Back closes a screen like Escape (see to_physical_key).
++            Back => Key::Named(NamedKey::Escape),
+             Call => Key::Named(NamedKey::Call),
+             Endcall => Key::Named(NamedKey::EndCall),
+ 
