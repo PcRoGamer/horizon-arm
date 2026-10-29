@@ -1,171 +1,210 @@
-<p align="center">
-  <img src="docs/media/banner.webp" alt="Horizon: Minecraft: Java Edition 26.3, rewritten in Rust and checked against vanilla by 281 differential harnesses" width="100%">
-</p>
+# Horizon for Android
 
-<p align="center">
-  <a href="https://github.com/horizon-rust/horizon/actions/workflows/ci.yml"><img src="https://github.com/horizon-rust/horizon/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
-  <img src="https://img.shields.io/badge/Minecraft-Java%2026.3-5D9C3F" alt="Minecraft Java 26.3">
-  <img src="https://img.shields.io/badge/Rust-stable-B7410E?logo=rust&logoColor=white" alt="Rust">
-  <img src="https://img.shields.io/badge/vanilla%20parity-100%25-F0795A" alt="Vanilla parity 100%">
-  <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-2A2470" alt="Linux, macOS and Windows">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-3B2F7E" alt="MIT license"></a>
-</p>
+**Minecraft: Java Edition 26.3, running natively on Android.**
 
-<p align="center">
-  <a href="https://playhorizon.dev"><b>Website</b></a> ·
-  <a href="#download"><b>Download</b></a> ·
-  <a href="https://playhorizon.dev/docs/"><b>Documentation</b></a> ·
-  <a href="https://github.com/horizon-rust/horizon/releases"><b>Release notes</b></a> ·
-  <a href="ROADMAP.md"><b>Roadmap</b></a> ·
-  <a href="#project-status"><b>Project status</b></a> ·
-  <a href="#contributing"><b>Contributing</b></a>
-</p>
+[Horizon](https://github.com/horizon-rust/horizon) is Minecraft rewritten in Rust — the same world
+generation, the same simulation, the same rules, rendered with `wgpu` instead of Java and OpenGL.
+This branch is the port that makes it run on a phone: **no emulator layer, no Java, no translation**.
+The game's own Rust code, compiled for `aarch64-linux-android`, loaded by Android's `NativeActivity`.
 
-# Horizon
-
-Horizon is Minecraft: Java Edition 26.3 rewritten in Rust: a native game that reads the same worlds, follows the same rules and generates the same terrain as the Java game, and is checked against it by 281 differential harnesses. You play it through a small launcher, on the files from your own copy of Minecraft. It is free, open source and unofficial.
-
-> Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft. Horizon contains no Minecraft code, assets or data: you need your own legally obtained copy of Minecraft: Java Edition 26.3.
-
-## Download
-
-Horizon is installed through **the Horizon launcher**. Get it from [playhorizon.dev](https://playhorizon.dev) (the Download button picks your system) or from [the launcher releases](https://github.com/horizon-rust/horizon/releases?q=launcher-v&expanded=true), for Linux x86-64, macOS on Apple Silicon or Windows x64. The launcher installs and updates the game, prepares its files from your copy of Minecraft (your own install, or downloaded from Mojang for your account), and updates itself.
-
-**You need** a Microsoft account that owns Minecraft: Java Edition (the launcher signs in with it, as other launchers do; see [Microsoft account](docs/microsoft-account.md)) and a GPU with Vulkan on Linux and Windows, or any Apple Silicon Mac. Nothing else: with no Minecraft on your computer, Play downloads 26.3 and the Java it needs from Mojang for your account, as the official launcher does, then prepares it once. An install you already have (the official launcher, Prism, MultiMC and other launchers all work) is used instead. Step by step, with macOS's first-open prompt and the first launch: [Install and first launch](https://playhorizon.dev/docs/install).
-
-<table>
-  <tr>
-    <td width="50%"><img src="docs/media/launcher-play.webp" alt="The launcher's Play page: a version ready to play, its summary, Client and Server, the version picker and Play"></td>
-    <td width="50%"><img src="docs/media/launcher-patch-notes.webp" alt="The launcher's Patch notes page"></td>
-  </tr>
-</table>
-
-## What works today
-
-The [documentation](https://playhorizon.dev/docs/) covers each of these.
-
-- **The game:** singleplayer with vanilla's world generation, mobs, villagers, raids, redstone, every command, the HUD and the recipe book, on saves in vanilla's format. Worlds from 1.8 to 26.2 are upgraded as vanilla does. [Status table](#project-status).
-- **Horizon's own extras:** new menus (vanilla's are one setting away), graphics presets, distant terrain up to 1024 chunks, controller support, optional zoom, minimap and more, all off by default where they would change the vanilla look. See [Settings](https://playhorizon.dev/docs/settings).
-- **Resource packs and data packs:** resource packs work, and data packs load functions, predicates and item modifiers.
-- **Playing with others:** invite friends from the pause menu's Friends button with a code, Open to LAN, and joining servers, online-mode ones with the Microsoft account the launcher signs in with. See [Multiplayer](https://playhorizon.dev/docs/multiplayer).
-- **Mods:** Horizon has its own mod system (Rust compiled to WebAssembly). Java mod jars do not run. See [Mods and data packs](https://playhorizon.dev/docs/mods).
-
-Screenshots, captured in the Rust client itself with vanilla assets and no mods or shaders:
-
-<table>
-  <tr>
-    <td colspan="2"><img src="docs/media/sunset.webp" alt="Sunset over a savanna river valley and a plains village"></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/media/survival.webp" alt="Survival at dusk: a zombie walks up, with the hotbar, health, hunger and experience"></td>
-    <td width="50%"><img src="docs/media/settings.webp" alt="Vanilla's Video Settings screen with Horizon's own buttons at the top: Horizon Graphics and Advanced Graphics"></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/media/village.webp" alt="A plains village among savanna hills, with farms, villagers and an iron golem"></td>
-    <td width="50%"><img src="docs/media/nether.webp" alt="A crimson forest in the Nether with a zombified piglin"></td>
-  </tr>
-</table>
-
-## Host a server
-
-The launcher's **Servers** page creates, starts, backs up and updates a Horizon server with buttons, and invites friends over Tailscale. On a VPS, `horizon-server` installs with one command and runs without Java. Guide: [Host a server](https://playhorizon.dev/docs/hosting) ([reference](docs/hosting.md)).
-
-## Modpacks
-
-The launcher's **Modpacks** page imports a Modrinth or CurseForge pack, shows which of its mods Horizon can carry over, and plays the ones it can as their own profile. Today that means content mods made of data and assets; mods with Java code are not ported yet. See [Modpacks](https://playhorizon.dev/docs/modpacks).
-
-## Agent control
-
-AI agents and scripts can play Horizon. `horizon-ctl`, shipped beside the game in every release folder, is a command line that reads the game as JSON and acts like a player; `horizon-ctl mcp` serves the same commands as an MCP server (one tool per command, screenshots returned as images).
-
-```sh
-horizon-ctl launch --world Survival --seed 5 --wait   # finds the version the launcher installed
-horizon-ctl state                                       # position, health, food, target, screen...
-horizon-ctl find-block birch_log                        # the nearest logs
-horizon-ctl goto -0.5 65 -2.5 --near 2.5                # walks there along a path
-horizon-ctl break -1 65 -3                              # mines it; replies with the drops
-horizon-ctl open-inventory && horizon-ctl click-slot 0  # menus: slots, buttons by label, text fields
+```
+   ┌──────────────────────────────────────────────────────────┐
+   │  Horizon (upstream, Rust)                                │
+   │    worldgen · simulation · physics · mobs · inventory    │
+   │    rendering: wgpu → Vulkan / GLES                       │
+   └───────────────────────────┬──────────────────────────────┘
+                               │  eight commits, one new crate
+   ┌───────────────────────────▼──────────────────────────────┐
+   │  this branch: the Android port                           │
+   │    NativeActivity · touch controls · pads · the APK      │
+   └──────────────────────────────────────────────────────────┘
 ```
 
-Commands block until the action is done and reply with what happened; errors are JSON with distinct exit codes, `horizon-ctl help` lists every command and `horizon-ctl COMMAND --help` explains one with examples. It talks to the game over a Unix socket on Linux and macOS and over a token-protected localhost port on Windows. See [Agent control in the native client guide](docs/native-client.md#agent-control-horizon-ctl-and-mcp).
+> Not affiliated with Mojang or Microsoft. This repository ships no Minecraft files: the game's data
+> is built from *your* copy of Minecraft and packed into the APK you build for yourself.
 
-## Build from source
+---
 
-For developers. Requirements: Rust 1.90 or newer, Python 3.10 or newer, JDK 25, and on Linux the ALSA and udev development headers (`libasound2-dev libudev-dev` on Debian and Ubuntu). Development and the vanilla harnesses run on Linux.
+## What works
 
-Horizon contains no game files, and `horizon-prepare` never downloads them (the launcher downloads them from Mojang only for a signed-in account that owns the game). It builds its resources from **your own copy** of Minecraft: Java Edition 26.3, verified against the checksums in `research-lock.json`:
+| | |
+|---|---|
+| **Title screen, world generation, saving** | ✅ playable end to end |
+| **Touch controls** | ✅ analog stick, look area, Jump/Sneak/Hit/Use/Items/Chat/Menu, hotbar |
+| **Android Back button** | ✅ closes the open screen, like Escape |
+| **Hardware keyboard** (Bluetooth/USB) | ✅ movement, chat, F1/F3 debug screens |
+| **Controller** (Bluetooth/USB pad) | ✅ buttons, both sticks, D-pad, triggers — untested on real hardware |
+| **Single-player** | ✅ on the integrated server thread, as upstream |
+| **Multiplayer / LAN** | ✅ the same network code as the desktop |
+| **Audio** | ❌ not built in (one Cargo feature away) |
+| **Code mods (WASM)** | ❌ off (a JIT and a quarter of the build time) |
+| **Soft keyboard for chat** | ❌ winit delivers no IME commits; needs a JNI bridge |
+| **Launcher / resource import UI** | ❌ the data is baked into the APK instead |
 
-1. **Client:** install Java Edition with the official launcher and play 26.3 once. Horizon reads `versions/26.3/`, `libraries/` and `assets/` from the launcher's game directory (`~/.minecraft` on Linux). If yours lives elsewhere, pass `--minecraft-dir` or set `HORIZON_MINECRAFT_DIR`.
-2. **Server jar:** the 26.3 server jar, from the `downloads.server.url` in your launcher's `versions/26.3/26.3.json` (or [minecraft.net/download/server](https://www.minecraft.net/en-us/download/server) while 26.3 is the current release). Pass it with `--server-jar` or set `HORIZON_SERVER_JAR`. It is only needed the first time.
+The interesting part is that almost none of this is Android-specific code in the game. Touch, pads
+and keys all feed **the same key presses and mouse buttons a desktop keyboard would**, so key
+rebinds, menus and every screen work unchanged.
+
+---
+
+## Install
+
+A phone, one file:
 
 ```sh
-git clone https://github.com/horizon-rust/horizon.git
-cd horizon
-cargo run --release -p horizon-prepare -- --prepare --server-jar ~/Downloads/server.jar   # needs JDK 25
-cargo run --release -p horizon-prepare -- sounds   # optional: sounds from your launcher install
-cargo run --release -p horizon-client
+adb install -r android-port/build/horizon-android-arm64.apk
 ```
 
-Everything prepared lands in the gitignored `.local/`. It is derived from the game: never commit it or share it.
+The APK carries the game's data (~320 MB, packed to ~62 MB), so there is nothing else to push. The
+first launch unpacks it into the app's own folder behind a loading screen — a few seconds — and every
+launch after that goes straight to the title screen.
 
-The client starts on the title screen. Command-line options (`--world`, `--seed`, `--creative`, `--render-distance`, `--dedicated`), controls, scripting through `horizon-ctl` and the architecture are described in [the native client guide](docs/native-client.md). The rest of the developer documentation is indexed in [docs/README.md](docs/README.md), including [the parity workflow](docs/parity-workflow.md).
+Saved worlds and `options.txt` live in the app's files folder, so they survive updates.
 
-## Roadmap
+### Controls
 
-What is being done now, what comes next and where you can help, in plain words and in technical detail: [ROADMAP.md](ROADMAP.md). [playhorizon.dev/hub](https://playhorizon.dev/hub) shows it with the work board, the journal of what shipped and how to help.
+**In the world**
 
-## Contributing
+| Where | What |
+|---|---|
+| bottom-left stick | move (analog: push past the deadzone to sprint) |
+| anywhere else | turn the view |
+| tap without dragging | hit what the crosshair is on |
+| **Jump**, **Sneak** | bottom right |
+| **Hit**, **Use** | right side |
+| **Items**, **Chat**, **Menu** | top right |
+| hotbar | tap a slot to select it |
 
-Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) for how we work (vanilla first, small pull requests, labels), or [the contributing guide](https://playhorizon.dev/docs/contributing) on the site. Questions and ideas: [Discord](https://discord.gg/HcTeMZxe5E). Before opening a pull request, run the self-check and paste the block it prints:
+**In menus** the finger is a plain pointer. A tap on the empty space around a container closes it,
+and Android's **Back** does the same as Escape.
+
+**With a keyboard or a pad** nothing changes from the desktop: WASD, chat, the debug screens, and a
+controller's sticks and buttons all work as they do on a PC.
+
+---
+
+## Build
+
+Needs Linux x86-64, ~6 GB of disk, and network on the first run.
 
 ```sh
-git config core.hooksPath .githooks
-python3 tools/pr_ready.py
+android-port/tools/fetch-toolchain.sh     # rustup targets, JDK 21, SDK 34, NDK r27 (~3 GB, once)
+android-port/tools/build.sh arm64 fast    # → android-port/build/horizon-android-arm64.apk  (phone)
+android-port/tools/build.sh x86_64 fast   # → android-port/build/horizon-android-x86_64.apk (emulators)
+android-port/tools/build.sh both fast     # → one APK with both ABIs
 ```
 
-It runs rustfmt, clippy with warnings denied, the tests of the crates you touched, the Python tests, the public-tree check, and the vanilla harnesses your change can affect. CI runs the same checks on GitHub's Linux runners; the vanilla harnesses need the game, which Horizon never downloads, so they run on a maintainer's computer holding their own copy. Never commit game files, decompiled source or prepared resources: `tools/check_public_tree.py` rejects them, and tracked Java is allowed only under the project's own `dev/horizonlab` namespace.
+`fast` is the iteration profile (optimised, quick to link); `release` is the shipping one. The APK is
+built with `aapt2`, `zipalign` and `apksigner` directly — no Gradle, and no Java code in it.
 
-## Project status
+The build needs the game's data first (see [Resources](#resources)); `HORIZON_NO_ASSETS=1` produces a
+thin APK that expects the data to be pushed separately.
 
-The table below is the project's own audit of each subsystem. Every subsystem now matches vanilla in every harness that compares it. 100% means 100% of what the harnesses compare, not proof that nothing else differs. The remaining known differences are listed below.
+### Try it without a phone
 
-### Java parity: 100%
+```sh
+android-port/tools/emulator.sh --window   # Android 14, x86_64, KVM, a window you can play in
+android-port/tools/run.sh                 # installs, starts, prints logcat and the game's log
+```
 
-Each subsystem scores 0 (absent), 0.25 (started, not playable), 0.5 (playable,
-major vanilla features missing), 0.75 (playable, mostly complete) or 1 (complete
-and verified against vanilla by differential tests). The percentage is the
-average; `tests/test_parity.py` keeps it in sync with this table. Last audited
-2026-10-13 against the harness results: all 281 harnesses pass on Linux, each
-rerun whenever one of its inputs changed, and the Mac mini now runs every one of
-them too (Rust uses Java's own float maths on each platform).
+`--software` uses SwiftShader instead of the host GPU, which exercises the GLES fallback.
 
-| Subsystem | Score | Main gaps |
-| --- | ---: | --- |
-| Window, input and game loop | 1 | None: the game loop, options, camera, auto-jump, toggle sprint/sneak, local input and the frame limiter match vanilla |
-| Assets and resources | 1 | None: item models match vanilla over 196,290 stacks and the client draws every item through them; the resource pack screen matches vanilla's drawing over 3,000 sessions of clicks, scrolling and searching, its incompatibility confirmation included |
-| Network protocol and multiplayer | 1 | None: joins vanilla servers; the dedicated server (`--dedicated`) matches vanilla's files, status ping, login, configuration, play, chunks, chat, recipes, advancements and command tree, a client built from vanilla's packet code joins it, Horizon joins a vanilla server, and LAN discovery matches over 462 cases (offline mode only) |
-| Chunk storage and palettes | 1 | None: client and saves share paletted containers, identical to vanilla over 266 scenarios |
-| Section meshing | 1 | None: 112 scenes and over a million quads identical to vanilla |
-| Rendering | 1 | None: entity models, block entity renderers (407 cases, End portals, gateways and the loom's banner preview included) and their animations (296 cases, End gateway beams included), the HUD overlays (2,200 states), the recipe book (600 states), the player list, subtitles and the world border match vanilla |
-| Lighting | 1 | None: saved and relit light matches vanilla, slabs and stairs included |
-| World generation | 1 | None: 2,352 whole chunks over 225 structure sites, in all three dimensions, identical to vanilla |
-| Region files and saves | 1 | None: saves round-trip with vanilla, and worlds from 1.8 to 26.2 upgrade as vanilla's DataFixers do, superflat worlds included; old options.txt and hotbar.nbt files are upgraded too |
-| Entities and physics | 1 | None: attributes, dimensions, death loot, spawn rules, natural spawning (15,500 cases), raids and patrols (1,900 cases), spawned mobs' gear, enchantments and state (`finalizeSpawn`, 24,000 cases) and mob AI (92 scenarios: villager breeding and gossip, the warden, ghastlings and copper golems included) match vanilla |
-| Interaction and inventory | 1 | None: menu clicks match over 8,000 click sequences, the loom and the crafter included; recipe book placement (6,000 cases), its buttons (1,200), the saved book (1,500) and the loom and crafter screens (1,600) match vanilla |
-| Menus, HUD and chat | 1 | None: every command runs as vanilla (758 commands over 39,685 parsed inputs), scoreboards and teams match (81,000 operations), the player list matches over 872,000 draw calls with heads drawn from players' skins (authlib's textures, SkinManager's lookup, legacy skin conversion), and the chat matches focused and scrolled; the resource pack screen (selection over 4,000 cases, drawing and its incompatibility confirmation over 3,000 sessions) and the chat input with its command suggestions, usage lines, Tab completion and history (3,000 sessions on vanilla's client command tree) match vanilla |
-| Audio | 1 | None: the sound engine, sound events, music, situational music, ambience and subtitles match vanilla |
-| Block behaviours and ticking | 1 | None: block updates, random ticks, redstone, dispensers (6,000 cases), crafters (4,000 crafts), block entity removal (containers spill, 4,000 cases), copper golem chest sorting and the sculk family (435 scenarios: shrieker warnings and warden summoning included) match vanilla |
+---
 
-### Known issues
+## How the port is built
 
-Skins served over https show the default skin unless already cached; pack icons show the unknown-pack texture in game; the creative hotbar keys (C/X) aren't wired to the hotbar loader; item tooltips lack attribute lines.
+**The upstream source stays upstream.** The port is eight commits on top of a pinned Horizon commit,
+plus one new crate — not a fork of 600k lines with Android calls sprinkled through it.
 
-## Licence
+```
+android-port/            everything the port adds outside the game
+├── AndroidManifest.xml  NativeActivity, no Java, no Gradle
+├── tools/               build, emulator, run, patch, fetch
+├── winit/               two patches to the pinned winit
+├── docs/port.md         every change, and why it is there
+└── LICENSE
+crates/horizon-android/  the new crate: android_main, the loading screen, the smoke screen
+```
 
-[MIT](LICENSE), for the project's original work only. Dependencies keep their own licences. Minecraft is a trademark of Mojang Synergies AB; Minecraft code and assets belong to Mojang and Microsoft and are covered by the [Minecraft EULA](https://www.minecraft.net/en-us/eula). Decompiled game source and prepared resources stay on your machine and are never published.
+`docs/port.md` in `android-port/` is the full list. In short:
 
-Third-party credits and licenses: [Third-party notices](THIRD_PARTY_NOTICES.md).
+| # | What | Why |
+|---|---|---|
+| 1 | The game loop moves from the binary into the library | Android starts a **library**, not a program: `NativeActivity` loads `libhorizon_android.so` and calls `android_main`. The loop lived in the bin, unreachable from a library. |
+| 2 | The event loop is built from the activity | winit needs the `AndroidApp` the system hands to `android_main`; the game builds its loop deep inside `run()`, so the wrapper stores it. |
+| 3 | `arboard` is kept off Android | It has no Android backend. Copy/paste inside the game still works. |
+| 4 | The `horizon-android` crate | The entry point: the app's folders, the bundled data, the log, the game — or a smoke screen when there is no data. |
+| 5 | The touchscreen is a mouse | A tap moves the cursor and clicks, a drag turns the view. Menus work with no Android code of their own. |
+| 6 | Android controllers as device events | winit has no gamepad API, and its Android backend drops the keys it has no `KeyCode` for. |
+| 7 | The phone's own controls | The stick, the look area and the buttons, feeding the same keys and mouse buttons the keyboard does. |
+| 8 | A tap outside a container closes it | A phone has no Escape in reach while a screen is open. |
+| 9 | The data travels in the APK, behind a loading screen | One file to install. |
 
-## Author
+**Two patches to winit** (`android-port/tools/patch-winit.sh`, applied to the cargo registry copy —
+winit is not forked):
 
-Made by [Ludovic Marie](https://lu4ovic.com) ([@ludovic111](https://github.com/ludovic111)).
+* a controller's buttons and sticks arrive as `DeviceEvent`s instead of phantom touches;
+* Android's **Back** arrives as `Escape`, so it closes the screen that is open.
+
+### The parts that were interesting
+
+* **Two event loops, one process.** winit's Android backend owns the process's one event loop, and
+  the loading screen has to draw *before* the game builds it. So the loading screen uses a raw
+  `ANativeWindow` surface with its own wgpu device and no event loop at all — draw, present, repeat.
+* **`AAssetDir` lists files, never subdirectories.** The APK's data is unpacked from a flat list of
+  paths that `tools/build.sh` writes at build time, into a temporary sibling folder that is renamed
+  into place only when every file is in: an interrupted unpack leaves nothing that looks complete.
+* **No command line in an APK.** A packaged process has no argv of its own (it is the zygote's), so
+  options come from the environment: `HORIZON_RESOURCES`, `HORIZON_WORLD`.
+* **The library is stripped.** `rustc` leaves the symbol table in, and it is a fifth of the file:
+  59 MB → 47 MB of code, 21 MB → 19 MB of thin APK.
+
+---
+
+## Resources
+
+Horizon ships no Minecraft files, and neither does this repository. `horizon-prepare` builds the data
+on a **desktop** from your own Minecraft: Java Edition 26.3 files (the pinned jars are checked
+against upstream's `research-lock.json`), and `tools/build.sh` packs the result into the APK.
+
+```sh
+cargo run --release -p horizon-prepare -- --prepare --server-jar <server.jar> --root .
+```
+
+To keep the data out of the APK instead — for a device that already has it, or to iterate on code
+without repacking 320 MB:
+
+```sh
+HORIZON_NO_ASSETS=1 android-port/tools/build.sh arm64 fast
+adb push .local/horizon-client/26.3 \
+  /sdcard/Android/data/dev.horizon.android/files/.local/horizon-client/26.3
+```
+
+The port looks in, in order: `HORIZON_RESOURCES`, then `<app files>/.local/horizon-client/26.3`,
+then the external folder above, then a couple of older names. A folder that holds
+`horizon-resources.json` is a prepared one, and anything already on the device wins over the APK's
+copy.
+
+---
+
+## Status
+
+Playable, and the interesting parts are done: it renders, generates, saves, takes touch and pads, and
+installs as one file. What is left is the long tail of a phone being a different computer:
+
+* **soft keyboard** — chat needs `InputMethodManager` over JNI (or a small Java overlay);
+* **audio** — `cpal` has an NDK backend; untested here, and left out of the first build;
+* **battery and thermals** — the frame limiter is still the desktop one;
+* **real-device testing** — everything above was proven on an Android 14 x86_64 emulator. A phone
+  with an Adreno/Mali GPU and a real Bluetooth pad is the next thing to try.
+
+## Credits
+
+* [Horizon](https://github.com/horizon-rust/horizon) — the game itself, MIT, by Ludovic Marie and
+  the Horizon contributors. This port would be nothing without it.
+* [winit](https://github.com/rust-windowing/winit) and [wgpu](https://wgpu.rs) — the window and the
+  renderer, both of which do the hard Android work.
+* Minecraft is Mojang's. This project contains none of their files.
+
+Licensed MIT, like upstream — see [LICENSE](LICENSE). Upstream's own README is
+[README.upstream.md](README.upstream.md).

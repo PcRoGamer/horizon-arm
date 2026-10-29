@@ -1,0 +1,2 @@
+# The winit the game pins (horizon/Cargo.lock) and tools/patch-winit.sh patches.
+version: 0.30.13
