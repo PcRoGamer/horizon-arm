@@ -24,6 +24,9 @@ mkdir -p "$OUT"
 # winit's Android backend needs the controller patch before anything compiles
 # (idempotent; it also drops the crate's artifacts the first time).
 "$REPO/tools/patch-winit.sh"
+# Keep Android's launcherless manager as a small set of explicit game hooks
+# instead of carrying a divergent copy of Horizon's large game loop files.
+bash "$REPO/tools/patch-horizon-mobile.sh"
 
 case "$ABI_ARG" in
   x86_64) ABIS=(x86_64) ;;
