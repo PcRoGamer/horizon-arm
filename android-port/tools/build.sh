@@ -41,15 +41,10 @@ rm -rf "$STAGE"; mkdir -p "$STAGE/lib"
 for abi in "${ABIS[@]}"; do
   target="$(target_for "$abi")"
   echo "=== building $target ($PROFILE)"
-  # Capped: a few of these crates are big, and rustc at every core next to a
-  # running emulator (4 GB) is how a 16 GB machine runs out.
   ( cd "$HORIZON_SRC" && cargo build -j "${HORIZON_JOBS:-4}" --target "$target" --profile "$PROFILE" -p horizon-android )
   so="$HORIZON_SRC/target/$target/$PROFILE/libhorizon_android.so"
   [ -f "$so" ] || { echo "missing $so" >&2; exit 1; }
   mkdir -p "$STAGE/lib/$(abi_dir "$abi")"
-  # The symbol table is worthless in an APK and is a fifth of the library:
-  # rustc leaves the symbols in, the NDK's strip takes them out (a stripped
-  # `fast` build is 41 MB instead of 58 MB, 18 MB packed instead of 20).
   out="$STAGE/lib/$(abi_dir "$abi")/libhorizon_android.so"
   cp "$so" "$out"
   "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip" \
@@ -63,30 +58,42 @@ ZIPALIGN="$ANDROID_HOME/build-tools/34.0.0/zipalign"
 APKSIGNER="$ANDROID_HOME/build-tools/34.0.0/apksigner"
 JAR="$ANDROID_HOME/platforms/android-34/android.jar"
 
-# The game's data goes inside the APK unless HORIZON_NO_ASSETS is set: a phone
-# installs one file, and `crates/horizon-android/src/bundled.rs` unpacks it on
-# the first run. The files are hard links, so staging costs no disk.
-# `HORIZON_PREPARED` points at a prepared folder other than this checkout's.
-ASSETS=()
+# One aapt asset directory holds either a development full resource tree, the
+# redistributable Horizon-only facts used by first-run bootstrap, or both.
+ASSET_DIR="$OUT/assets"
+rm -rf "$ASSET_DIR"; mkdir -p "$ASSET_DIR"
+HAS_ASSETS=0
+
+# A full APK is still useful for local development with player-supplied data.
 if [ -z "${HORIZON_NO_ASSETS:-}" ]; then
   PREPARED="${HORIZON_PREPARED:-$HORIZON_SRC/.local/horizon-client/26.3}"
   [ -f "$PREPARED/horizon-resources.json" ] || {
     echo "no prepared resources at $PREPARED" >&2
-    echo "run horizon-prepare first, or set HORIZON_NO_ASSETS=1 for a thin APK" >&2
+    echo "run horizon-prepare first, or set HORIZON_NO_ASSETS=1 for bootstrap/thin APK" >&2
     exit 1
   }
   VERSION_DIR="$(basename "$PREPARED")"
-  ASSET_DIR="$OUT/assets"
-  rm -rf "$ASSET_DIR"; mkdir -p "$ASSET_DIR/resources"
+  mkdir -p "$ASSET_DIR/resources"
   echo "=== resources: $VERSION_DIR ($(du -sh "$PREPARED" | cut -f1))"
   cp -al "$PREPARED" "$ASSET_DIR/resources/$VERSION_DIR" 2>/dev/null ||
     cp -r "$PREPARED" "$ASSET_DIR/resources/$VERSION_DIR"
-  # `AAssetDir` lists files only, so the unpacker is given the list (sorted,
-  # so an unchanged pack produces an unchanged APK). `aapt2` drops hidden
-  # files (`assets/.mcassetsroot` and its like, which the game never reads),
-  # so they are left out of the list too.
   ( cd "$ASSET_DIR" && find "resources/$VERSION_DIR" -type f ! -name ".*" | LC_ALL=C sort > resources.list )
   echo "    $(wc -l < "$ASSET_DIR/resources.list") files"
+  HAS_ASSETS=1
+fi
+
+# The distributable Android build carries no Mojang files. It can instead carry
+# a small archive of Horizon-computed tables; the phone downloads the pinned
+# client/server jars directly from Mojang and combines them on first launch.
+if [ -n "${HORIZON_FACTS_ZIP:-}" ]; then
+  [ -f "$HORIZON_FACTS_ZIP" ] || { echo "missing HORIZON_FACTS_ZIP=$HORIZON_FACTS_ZIP" >&2; exit 1; }
+  cp "$HORIZON_FACTS_ZIP" "$ASSET_DIR/horizon-facts-26.3.zip"
+  echo "=== bootstrap facts: $(du -h "$HORIZON_FACTS_ZIP" | cut -f1)"
+  HAS_ASSETS=1
+fi
+
+ASSETS=()
+if [ "$HAS_ASSETS" -eq 1 ]; then
   ASSETS=(-A "$ASSET_DIR")
 fi
 
