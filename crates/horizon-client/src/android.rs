@@ -1,4 +1,4 @@
-//! The Android activity this process runs in.
+//! The Android activity this process runs in and Android-only game services.
 //!
 //! winit builds its event loop from the `AndroidApp` that `NativeActivity`
 //! handed to `android_main` (`crates/horizon-android`). That wrapper runs on
@@ -6,6 +6,8 @@
 //! asks for it when it builds its event loop.
 use std::sync::OnceLock;
 use winit::platform::android::activity::AndroidApp;
+
+pub mod instances;
 
 static APP: OnceLock<AndroidApp> = OnceLock::new();
 
