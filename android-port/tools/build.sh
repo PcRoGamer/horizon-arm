@@ -27,6 +27,9 @@ mkdir -p "$OUT"
 # Keep Android's launcherless manager as a small set of explicit game hooks
 # instead of carrying a divergent copy of Horizon's large game loop files.
 bash "$REPO/tools/patch-horizon-mobile.sh"
+# Bedrock/Pocket presentation is Android-only: preserve upstream Java HUD parity
+# in Git and move only the APK's anchors/crosshair/hotbar presentation.
+python3 "$REPO/tools/patch-bedrock-hud.py" "$HORIZON_SRC"
 
 case "$ABI_ARG" in
   x86_64) ABIS=(x86_64) ;;
