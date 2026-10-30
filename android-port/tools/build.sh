@@ -24,6 +24,24 @@ mkdir -p "$OUT"
 # winit's Android backend needs the controller patch before anything compiles
 # (idempotent; it also drops the crate's artifacts the first time).
 "$REPO/tools/patch-winit.sh"
+
+# The current touch source already owns its icon HUD.  Older Android hook code
+# recognises a standalone import marker, so normalize the grouped import before
+# running that idempotent patcher.  This changes only the CI/build worktree.
+TOUCH_RS="$HORIZON_SRC/crates/horizon-client/src/game/touch.rs"
+python3 - "$TOUCH_RS" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text()
+text = text.replace(
+    'use super::{Game, Screen, touch_icons};',
+    'use super::{Game, Screen};\nuse super::touch_icons;',
+    1,
+)
+path.write_text(text)
+PY
+
 # Keep Android's launcherless manager as a small set of explicit game hooks
 # instead of carrying a divergent copy of Horizon's large game loop files.
 bash "$REPO/tools/patch-horizon-mobile.sh"
