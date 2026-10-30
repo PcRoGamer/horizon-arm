@@ -54,6 +54,15 @@ def replace_once(path: Path, old: str, new: str, label: str) -> None:
         raise SystemExit(f"prepare-upstream-overlay: {label}: anchor not found in {path}")
     path.write_text(text.replace(old, new, 1))
 
+
+def insert_before_in_scope(text: str, scope_start: int, scope_end: int, needle: str, addition: str, label: str) -> str:
+    at = text.find(needle, scope_start, scope_end)
+    if at < 0:
+        raise SystemExit(f"prepare-upstream-overlay: {label}")
+    line = text.rfind("\n", scope_start, at) + 1
+    return text[:line] + addition + text[line:]
+
+
 # Add only the Android wrapper crate to the workspace. Everything else remains
 # the exact upstream workspace at this SHA.
 workspace = root / "Cargo.toml"
@@ -87,8 +96,8 @@ if "target_os = \"android\"" not in text:
     text = text.replace(anchor, block + anchor, 1)
 manifest.write_text(text)
 
-# The normal desktop binary still owns game.rs. Android also exposes that same
-# current-upstream game module through the library so NativeActivity can run it.
+# Android exposes the current upstream game module through the library so the
+# NativeActivity wrapper can run exactly the same game loop as desktop.
 lib = root / "crates/horizon-client/src/lib.rs"
 text = lib.read_text()
 marker = 'pub mod android; // horizon-android overlay'
@@ -123,11 +132,9 @@ mod mobile_ui; // Horizon Android launcherless manager
         raise SystemExit("prepare-upstream-overlay: game module anchor missing")
     text = text.replace(anchor, addition + anchor, 1)
 
-# Fresh upstream has no mobile touch dispatcher. Inject the smallest possible
-# hook into Game::window_event. Scope the search to Game's ApplicationHandler
-# implementation and insert immediately before its follow_keymap call. This
-# survives harmless formatting/guard refactors while still failing loudly if
-# upstream removes or fundamentally restructures the Game event path.
+# Fresh upstream has no mobile touch dispatcher. Scope to Game's handler but do
+# not depend on formatting/indentation of window_event: the only semantic anchor
+# we require is follow_keymap inside Game::window_event.
 if 'self.android_manager_key(event)' not in text:
     impl_marker = "impl ApplicationHandler for Game<'_> {"
     impl_start = text.find(impl_marker)
@@ -135,28 +142,28 @@ if 'self.android_manager_key(event)' not in text:
         raise SystemExit("prepare-upstream-overlay: Game ApplicationHandler missing")
     next_impl = text.find("\nimpl ApplicationHandler", impl_start + len(impl_marker))
     impl_end = len(text) if next_impl < 0 else next_impl
-    game_impl = text[impl_start:impl_end]
-    event_start = game_impl.find("fn window_event")
+    event_start = text.find("fn window_event", impl_start, impl_end)
     if event_start < 0:
         raise SystemExit("prepare-upstream-overlay: Game::window_event missing")
-    follow = "        follow_keymap(&mut event);\n"
-    follow_at = game_impl.find(follow, event_start)
+    follow_at = text.find("follow_keymap(&mut event);", event_start, impl_end)
     if follow_at < 0:
         raise SystemExit("prepare-upstream-overlay: Game::window_event follow_keymap hook changed")
-    hook = '''        #[cfg(target_os = "android")]
-        if let WindowEvent::KeyboardInput { event, .. } = &event
-            && self.android_manager_key(event)
-        {
-            return;
-        }
-        #[cfg(target_os = "android")]
-        if let WindowEvent::Touch(touch) = &event {
-            self.touch(event_loop, id, touch);
-            return;
-        }
-'''
-    absolute = impl_start + follow_at
-    text = text[:absolute] + hook + text[absolute:]
+    line = text.rfind("\n", event_start, follow_at) + 1
+    indent = text[line:follow_at]
+    hook = (
+        f'{indent}#[cfg(target_os = "android")]\n'
+        f'{indent}if let WindowEvent::KeyboardInput {{ event, .. }} = &event\n'
+        f'{indent}    && self.android_manager_key(event)\n'
+        f'{indent}{{\n'
+        f'{indent}    return;\n'
+        f'{indent}}}\n'
+        f'{indent}#[cfg(target_os = "android")]\n'
+        f'{indent}if let WindowEvent::Touch(touch) = &event {{\n'
+        f'{indent}    self.touch(event_loop, id, touch);\n'
+        f'{indent}    return;\n'
+        f'{indent}}}\n'
+    )
+    text = text[:line] + hook + text[line:]
 
 # NativeActivity has no meaningful process command line. Preserve upstream's
 # parser unchanged on every non-Android target.
@@ -168,9 +175,10 @@ new = '''let args = if cfg!(target_os = "android") {
         };
         let Some(mut o) = Self::parse(args)
             .map_err(|e| launch_api::UsageError(e.to_string()))?'''
-if old not in text:
+if old in text:
+    text = text.replace(old, new, 1)
+elif new not in text:
     raise SystemExit("prepare-upstream-overlay: Options::read argv anchor changed")
-text = text.replace(old, new, 1)
 
 # Android has no sibling executable resource directory. Prefer the explicit
 # prepared-resource path supplied by the NativeActivity wrapper.
@@ -201,17 +209,20 @@ new = '''#[cfg(not(target_os = "android"))]
                         std::path::Path::new(".local/horizon-client").join(horizon_core::VANILLA_VERSION)
                     }
                 }),'''
-if old not in text:
+if old in text:
+    text = text.replace(old, new, 1)
+elif 'std::env::var_os("HORIZON_RESOURCES")' not in text:
     raise SystemExit("prepare-upstream-overlay: resource path anchor changed")
-text = text.replace(old, new, 1)
 
 # The wrapper persists the selected world in the instance folder.
-needle = '        Ok(Some(o))\n    }\n    /// The command line alone:'
-if needle not in text:
-    raise SystemExit("prepare-upstream-overlay: Options::read return anchor changed")
-text = text.replace(
-    needle,
-    '''        #[cfg(target_os = "android")]
+world_marker = 'std::env::var("HORIZON_WORLD")'
+if world_marker not in text:
+    needle = '        Ok(Some(o))\n    }\n    /// The command line alone:'
+    if needle not in text:
+        raise SystemExit("prepare-upstream-overlay: Options::read return anchor changed")
+    text = text.replace(
+        needle,
+        '''        #[cfg(target_os = "android")]
         if let Ok(world) = std::env::var("HORIZON_WORLD")
             && !world.trim().is_empty()
         {
@@ -220,13 +231,13 @@ text = text.replace(
         Ok(Some(o))
     }
     /// The command line alone:''',
-    1,
-)
+        1,
+    )
 
 # Build winit's event loop from AndroidApp only on Android; desktop continues to
 # call the same upstream EventLoop constructor through this tiny adapter.
 if 'fn horizon_event_loop()' not in text:
-    anchor = 'fn run_event_loop(mut game: Game<\'_>) -> Result<()> {'
+    anchor = "fn run_event_loop(mut game: Game<'_>) -> Result<()> {"
     if anchor not in text:
         raise SystemExit("prepare-upstream-overlay: run_event_loop anchor changed")
     helper = '''#[cfg(target_os = "android")]
@@ -245,7 +256,81 @@ fn horizon_event_loop() -> Result<EventLoop<()>> {
     text = text.replace(anchor, helper + anchor, 1)
 text = text.replace('EventLoop::new()?.run_app(&mut game)', 'horizon_event_loop()?.run_app(&mut game)')
 text = text.replace('EventLoop::new()?.run_app(&mut app)', 'horizon_event_loop()?.run_app(&mut app)')
+
+# Continuous movement is separate from button presses. Feed the phone stick into
+# the same analog movement slot as a controller, preferring touch while held.
+move_marker = 'let stick = self.touch_stick().or(stick);'
+if move_marker not in text:
+    anchor = '        let stick = self.pad_move();\n'
+    if anchor not in text:
+        raise SystemExit("prepare-upstream-overlay: pad movement anchor changed")
+    text = text.replace(
+        anchor,
+        anchor + '        #[cfg(target_os = "android")]\n        let stick = self.touch_stick().or(stick);\n',
+        1,
+    )
+
+# Android cannot rely on a desktop pointer grab. A live camera-touch gesture is
+# itself a logical grab/focus source so MouseLook's accumulated deltas are
+# actually consumed by the frame.
+look_marker = 'let touch_pointer = self.touch_camera_active();'
+if look_marker not in text:
+    old = '''        let pointer = self.captured || self.agent_pointer;
+        let grabbed = pointer && self.screen == Screen::Playing && self.player.is_some();
+        let active = self.focused || self.agent_pointer;
+'''
+    new = '''        #[cfg(target_os = "android")]
+        let touch_pointer = self.touch_camera_active();
+        #[cfg(not(target_os = "android"))]
+        let touch_pointer = false;
+        let pointer = self.captured || self.agent_pointer || touch_pointer;
+        let grabbed = pointer && self.screen == Screen::Playing && self.player.is_some();
+        let active = self.focused || self.agent_pointer || touch_pointer;
+'''
+    if old not in text:
+        raise SystemExit("prepare-upstream-overlay: mouse look gating anchor changed")
+    text = text.replace(old, new, 1)
+
+# The mobile controls must be rendered as part of the final HUD. Keep this at
+# the end of HUD composition so controls sit above normal world HUD elements.
+hud_marker = 'self.draw_touch_controls(&mut batch); // horizon-android overlay'
+if hud_marker not in text:
+    anchor = '        self.draw_pad_cursor(&mut batch);\n'
+    if anchor not in text:
+        raise SystemExit("prepare-upstream-overlay: HUD tail anchor changed")
+    addition = '''        #[cfg(target_os = "android")]
+        if self.screen == Screen::Playing && self.title.is_none() && !self.ui.hide_gui {
+            self.draw_touch_controls(&mut batch); // horizon-android overlay
+        }
+'''
+    text = text.replace(anchor, addition + anchor, 1)
+
 game.write_text(text)
+
+# Extend the additive touch module with the logical camera-grab query and make
+# its hotbar hit target match the enlarged/elevated Android presentation.
+touch = root / "crates/horizon-client/src/game/touch.rs"
+t = touch.read_text()
+t = t.replace('const HOTBAR_WIDTH: f32 = 182.0;', 'const HOTBAR_WIDTH: f32 = 228.0;')
+t = t.replace('const HOTBAR_SLOT: f32 = 20.0;', 'const HOTBAR_SLOT: f32 = 25.0;')
+t = t.replace('let y0 = f64::from(h - 25.0);', 'let y0 = f64::from(h - 58.0);')
+if 'pub(super) fn touch_camera_active(&self)' not in t:
+    anchor = '''    pub(super) fn touch_stick(&self) -> Option<[f32; 2]> {
+        (self.touch_ui.stick != [0.0, 0.0]).then_some(self.touch_ui.stick)
+    }
+'''
+    addition = anchor + '''
+    pub(super) fn touch_camera_active(&self) -> bool {
+        self.touch_ui
+            .fingers
+            .values()
+            .any(|gesture| matches!(gesture, Gesture::Look { .. }))
+    }
+'''
+    if anchor not in t:
+        raise SystemExit("prepare-upstream-overlay: touch_stick method anchor changed")
+    t = t.replace(anchor, addition, 1)
+touch.write_text(t)
 
 (root / ".horizon-upstream-sha").write_text(upstream_sha + "\n")
 PY
