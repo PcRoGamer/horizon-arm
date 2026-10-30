@@ -21,6 +21,11 @@ VERSION_NAME="${VERSION_NAME:-0.1.0}"
 OUT="$REPO/build"
 mkdir -p "$OUT"
 
+# patch-winit operates on Cargo's unpacked registry source. Make the build
+# self-contained: CI workflows, local builds and fresh machines must not depend
+# on a separate `cargo fetch` having happened beforehand.
+( cd "$HORIZON_SRC" && cargo fetch --locked )
+
 # winit's Android backend needs the controller patch before anything compiles
 # (idempotent; it also drops the crate's artifacts the first time).
 "$REPO/tools/patch-winit.sh"
