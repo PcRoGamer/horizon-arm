@@ -7,11 +7,11 @@
   "compared_source_files": 3147,
   "modified_existing_files": 41,
   "branch": "android",
-  "merged_upstream_commit": "fca2169de",
-  "merged_upstream_commits": 5286,
+  "merged_upstream_commit": "ab6851d5a",
+  "merged_upstream_commits": 5356,
   "last_reviewed_date": "2026-10-30",
-  "last_update_commits": 406,
-  "latest_fetched_commit": "fca2169de",
-  "review": "Integrated stable upstream main through fca2169de. Preserved Android argument construction, touch targeting, GPU batching and compatibility features while adopting adapter retry, resource-reload workers, renderer splits and gameplay fixes. ARM64 cargo check passed; final device verification and Android mod integration remain in progress. Upstream deployment workflows remain inactive.",
+  "last_update_commits": 70,
+  "latest_fetched_commit": "ab6851d5a",
+  "review": "Reviewed stable upstream main through ab6851d5a: region-cache bounds, resource metadata parsing, item and mob fixes, display culling and SMP native hooks. Preserved sandbox hmod command dispatch ahead of native command dispatch. Android validation of this update is pending owner build/testing. Upstream deployment workflows remain inactive.",
   "pending_review_commits": 0
 }

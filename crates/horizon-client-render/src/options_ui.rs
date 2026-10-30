@@ -2918,6 +2918,7 @@ impl OptionsUi {
                         shown,
                         hover || dragging,
                         true,
+                        dragging,
                     );
                 }
                 WKind::Text {

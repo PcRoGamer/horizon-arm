@@ -166,9 +166,11 @@ mod music;
 mod names;
 mod native_hooks;
 mod native_lifecycle;
+mod native_menus;
 mod native_panel;
 mod native_panel_recipes;
 mod native_recipes;
+mod native_server;
 mod native_shaders;
 mod native_world_read;
 mod natural_spawning;
@@ -9017,6 +9019,15 @@ impl Game<'_> {
                 horizon_client::shadows::shadow(
                     &self.world,
                     self.res.facts(),
+                    &|state| {
+                        self.res
+                            .collision()
+                            .cached_shapes()
+                            .cached_shape(state)
+                            .ok()
+                            .flatten()
+                            .and_then(|shape| shape.bounds())
+                    },
                     sprite,
                     camera,
                     pos,
