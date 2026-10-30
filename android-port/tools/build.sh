@@ -28,6 +28,9 @@ mkdir -p "$OUT"
 # Keep desktop gilrs out of Android while preserving Horizon's controller
 # semantics through the Android DeviceEvent -> PadState adapter.
 python3 "$REPO/tools/patch-android-gamepad.py" "$HORIZON_SRC"
+# The touch module is additive too; upstream Game only receives its two
+# Android-gated state fields in the disposable APK build tree.
+python3 "$REPO/tools/patch-android-touch-state.py" "$HORIZON_SRC"
 
 # The current touch source already owns its icon HUD. Older Android hook code
 # recognises standalone markers, so normalize the grouped import and add the
