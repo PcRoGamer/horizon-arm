@@ -1,0 +1,198 @@
+name: Upstream parity matrix
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'android-port/**'
+      - 'crates/horizon-android/**'
+      - 'crates/horizon-client/src/android.rs'
+      - 'crates/horizon-client/src/android/**'
+      - 'crates/horizon-client/src/game/touch.rs'
+      - 'crates/horizon-client/src/game/touch_icons.rs'
+      - 'crates/horizon-client/src/game/mobile_ui.rs'
+      - '.github/workflows/upstream-parity-matrix.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream-parity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  overlay-contract:
+    name: Android overlay contract
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare pristine upstream + Android overlay
+        shell: bash
+        run: |
+          bash android-port/tools/prepare-upstream-overlay.sh "$RUNNER_TEMP/horizon" main
+      - name: Enforce tiny upstream mutation surface
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/horizon"
+          echo "Upstream: $(cat .horizon-upstream-sha)"
+          git diff --check -- \
+            ':!crates/horizon-client/src/game/touch.rs' \
+            ':!crates/horizon-client/src/game/touch_icons.rs' \
+            ':!crates/horizon-client/src/game/mobile_ui.rs' \
+            ':!crates/horizon-client/src/android.rs' \
+            ':!crates/horizon-client/src/android/**'
+          python3 - <<'PY'
+          import subprocess
+          allowed = {
+              'Cargo.toml',
+              'crates/horizon-client/Cargo.toml',
+              'crates/horizon-client/src/lib.rs',
+              'crates/horizon-client/src/game.rs',
+          }
+          changed = set(subprocess.check_output(
+              ['git', 'diff', '--name-only'], text=True
+          ).splitlines())
+          unexpected = sorted(changed - allowed)
+          if unexpected:
+              raise SystemExit('unexpected upstream mutations before Android patch stage: ' + ', '.join(unexpected))
+          print('Base overlay mutates only:', ', '.join(sorted(changed)))
+          PY
+      - name: Verify upstream feature surface survives overlay
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/horizon"
+          cargo metadata --format-version 1 > "$RUNNER_TEMP/metadata.json"
+          python3 - "$RUNNER_TEMP/metadata.json" <<'PY'
+          import json, sys
+          meta = json.load(open(sys.argv[1], encoding='utf-8'))
+          names = {p['name'] for p in meta['packages']}
+          required = {
+              'horizon-client',
+              'horizon-client-render',
+              'horizon-shaders',
+              'horizon-shader-api',
+              'horizon-mods',
+              'horizon-android',
+          }
+          missing = sorted(required - names)
+          if missing:
+              raise SystemExit('feature-parity packages missing: ' + ', '.join(missing))
+          client = next(p for p in meta['packages'] if p['name'] == 'horizon-client')
+          android = next(p for p in meta['packages'] if p['name'] == 'horizon-android')
+          client_deps = {d['name'] for d in client['dependencies']}
+          android_deps = {d['name'] for d in android['dependencies']}
+          for dep in ('horizon-client-render', 'horizon-shaders', 'horizon-mods'):
+              if dep not in client_deps:
+                  raise SystemExit(f'upstream client parity dependency disappeared: {dep}')
+          if 'horizon-client' not in android_deps:
+              raise SystemExit('Android wrapper no longer consumes the upstream horizon-client')
+          print('Renderer, shaders and mods remain inherited from current upstream.')
+          PY
+
+  desktop:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64
+            runner: ubuntu-24.04
+            linux: true
+          - name: Linux ARM64
+            runner: ubuntu-24.04-arm
+            linux: true
+          - name: Windows x64
+            runner: windows-2025
+            linux: false
+          - name: Windows ARM64
+            runner: windows-11-arm
+            linux: false
+          - name: macOS Intel
+            runner: macos-15-intel
+            linux: false
+          - name: macOS ARM64
+            runner: macos-15
+            linux: false
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout current upstream Horizon
+        uses: actions/checkout@v4
+        with:
+          repository: horizon-rust/horizon
+          ref: main
+          fetch-depth: 1
+      - name: Linux native dependencies
+        if: matrix.linux
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libudev-dev pkg-config
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Check full upstream client
+        shell: bash
+        run: |
+          echo "Upstream $(git rev-parse HEAD) on ${{ matrix.name }}"
+          cargo check -p horizon-client
+
+  android-arm64:
+    name: Android ARM64 latest upstream
+    needs: overlay-contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare latest upstream build tree
+        shell: bash
+        run: |
+          bash android-port/tools/prepare-upstream-overlay.sh "$RUNNER_TEMP/horizon" main
+      - name: Install Rust Android target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Set up Android SDK/NDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android packages
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-34' 'build-tools;34.0.0' 'ndk;27.2.12479018'
+      - name: Wire toolchain paths expected by Android port
+        shell: bash
+        run: |
+          PORT="$RUNNER_TEMP/horizon/android-port"
+          mkdir -p "$PORT/.toolchain/android-sdk" "$PORT/.toolchain"
+          # env.sh expects its private toolchain paths; point them at runner installs.
+          rm -rf "$PORT/.toolchain/android-sdk"
+          ln -s "$ANDROID_SDK_ROOT" "$PORT/.toolchain/android-sdk"
+          rm -rf "$PORT/.toolchain/jdk"
+          ln -s "$JAVA_HOME" "$PORT/.toolchain/jdk"
+      - name: Build ARM64 APK from current upstream
+        shell: bash
+        env:
+          HORIZON_NO_ASSETS: '1'
+          HORIZON_JOBS: '2'
+          HORIZON_SKIP_WGPU_BACKENDS: 'dx12,metal'
+        run: |
+          cd "$RUNNER_TEMP/horizon"
+          bash android-port/tools/build.sh arm64 fast
+      - name: Record provenance
+        if: always()
+        shell: bash
+        run: |
+          if [ -f "$RUNNER_TEMP/horizon/.horizon-upstream-sha" ]; then
+            echo "UPSTREAM_SHA=$(cat "$RUNNER_TEMP/horizon/.horizon-upstream-sha")" >> "$GITHUB_ENV"
+          fi
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: horizon-android-arm64-${{ env.UPSTREAM_SHA }}
+          path: ${{ runner.temp }}/horizon/android-port/build/*.apk
+          if-no-files-found: error
