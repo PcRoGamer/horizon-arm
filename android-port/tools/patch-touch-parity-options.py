@@ -142,17 +142,20 @@ replace_once(
     'let look_dy = if settings.invert_y',
 )
 
-# Hotbar-only hides movement controls entirely.
+# Hotbar-only hides movement controls entirely. Use unique begin/end markers;
+# the original source already contains the brace sequence around this match, so
+# using that brace sequence as an idempotence marker falsely skipped the close.
 replace_once(
     touch,
     '''        match settings.preset {
             Preset::DpadTap => touch_icons::dpad(
 ''',
-    '''        if !settings.hotbar_only {
+    '''        // Horizon Android hotbar-only movement HUD begin
+        if !settings.hotbar_only {
         match settings.preset {
             Preset::DpadTap => touch_icons::dpad(
 ''',
-    'if !settings.hotbar_only {\n        match settings.preset',
+    '// Horizon Android hotbar-only movement HUD begin',
 )
 replace_once(
     touch,
@@ -163,11 +166,11 @@ replace_once(
 ''',
     '''            }
         }
-        }
+        } // Horizon Android hotbar-only movement HUD end
 
         for (control, (cx, cy), r) in &layout.buttons {
 ''',
-    '}\n        }\n\n        for (control, (cx, cy), r)',
+    '// Horizon Android hotbar-only movement HUD end',
 )
 
 # Expand the methods injected by patch-touch-settings.py and persist all toggles.
