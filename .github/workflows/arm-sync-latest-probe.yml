@@ -34,9 +34,40 @@ jobs:
           mapfile -t COMMITS < <(git rev-list --reverse "$BASE..$CANDIDATE")
           echo "android_delta_commits=${#COMMITS[@]}"
           git checkout -B sync/replay-latest "$UPSTREAM"
+
+          resolve_known_conflict() {
+            local c="$1"
+            case "$c" in
+              9a9687b38ccb4773869329a2dd3023b4dbfba5a9)
+                mapfile -t unresolved < <(git diff --name-only --diff-filter=U)
+                if [[ "${#unresolved[@]}" -eq 1 && "${unresolved[0]}" == "crates/horizon-client/src/main.rs" ]]; then
+                  echo "Resolving client library move against modern startup/error handling"
+                  git checkout --ours -- crates/horizon-client/src/main.rs
+                  python3 - <<'PY'
+from pathlib import Path
+p = Path('crates/horizon-client/src/main.rs')
+s = p.read_text()
+s = s.replace('mod game;\n', '', 1)
+s = s.replace('game::run()', 'horizon_client::game::run()')
+s = s.replace('game::UsageError', 'horizon_client::game::UsageError')
+s = s.replace('game::exit_code::', 'horizon_client::game::exit_code::')
+p.write_text(s)
+PY
+                  git add crates/horizon-client/src/main.rs crates/horizon-client/src/lib.rs
+                  GIT_EDITOR=true git cherry-pick --continue
+                  return 0
+                fi
+                ;;
+            esac
+            return 1
+          }
+
           for c in "${COMMITS[@]}"; do
             echo "=== cherry-pick $c $(git show -s --format=%s "$c")"
             if ! git cherry-pick "$c"; then
+              if resolve_known_conflict "$c"; then
+                continue
+              fi
               echo "::error::conflict while replaying $c"
               git status --short
               echo '--- unmerged paths ---'
