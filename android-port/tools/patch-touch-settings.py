@@ -7,6 +7,7 @@ launcherless manager hooks.
 """
 
 from pathlib import Path
+import subprocess
 import sys
 
 root = Path(sys.argv[1])
@@ -172,3 +173,8 @@ replace_once(
 )
 
 print("patched Horizon Android in-game touch settings")
+
+# The editor extends this same panel. Chaining here keeps build.sh stable and
+# guarantees the editor sees the settings helpers above before it patches them.
+editor = Path(__file__).with_name("patch-touch-editor.py")
+subprocess.run([sys.executable, str(editor), str(root)], check=True)
