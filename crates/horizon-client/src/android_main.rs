@@ -19,6 +19,10 @@ mod account;
 mod browser;
 #[path = "android/catalog.rs"]
 mod catalog;
+#[path = "android/exit_reports.rs"]
+mod exit_reports;
+#[path = "android/device_runtime.rs"]
+mod device_runtime;
 #[path = "android/display.rs"]
 mod display;
 #[path = "android/document_bridge.rs"]
@@ -245,6 +249,7 @@ fn android_main(app: AndroidApp) {
         std::process::exit(0);
     }
     horizon_client::crash::install(home.clone(), "client");
+    exit_reports::install(&home);
     let _ = std::fs::remove_file(home.join("android-error.txt"));
     if let Some(mut data) = engine_data {
         let copied = (|| -> std::io::Result<()> {

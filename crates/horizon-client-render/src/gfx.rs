@@ -3813,6 +3813,12 @@ impl Renderer {
             .then(|| frame_timing::FrameTiming::new(&self.device, &self.queue))
             .flatten();
     }
+    pub fn gpu_stage_distributions(&self) -> Vec<(&'static str, f32, f32, f32, usize)> {
+        self.gpu_stages
+            .as_ref()
+            .map(|s| s.distributions())
+            .unwrap_or_default()
+    }
     pub fn gpu_stage_times(&self) -> Vec<(&'static str, f32, f32, usize)> {
         self.gpu_stages
             .as_ref()
@@ -5388,7 +5394,7 @@ impl Renderer {
                 }
             }
             // LevelRenderer.executeTranslucentAfterTerrain: vanilla's
-            // translucent particle layer draws after translucent terrain —
+            // translucent particle layer draws after translucent terrain â€”
             // the quads write depth, so before it they would hide the glass
             // or water behind them.
             if translucent_particle_quads > 0 {

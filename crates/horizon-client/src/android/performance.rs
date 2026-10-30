@@ -268,3 +268,20 @@ mod tests {
         std::fs::remove_dir_all(home).unwrap();
     }
 }
+
+static PROFILE_SWITCH: AtomicBool = AtomicBool::new(false);
+static PROFILE_OWNS_RECORDER: AtomicBool = AtomicBool::new(false);
+pub fn configure_gpu_profile(on: bool, home: &Path) {
+    let old = PROFILE_SWITCH.swap(on, Ordering::Relaxed);
+    if on && !old && !active() {
+        match start(
+            home,
+            json!({"purpose":"detailed_gpu_profile","quantiles":"rolling 120 completed GPU samples per stage; delayed readback","limits":"No GPU clocks or vendor hardware counters; correlation is not proof of cause."}),
+        ) {
+            Ok(()) => PROFILE_OWNS_RECORDER.store(true, Ordering::Relaxed),
+            Err(error) => log::warn!("Cannot start GPU profile: {error}"),
+        }
+    } else if !on && old && PROFILE_OWNS_RECORDER.swap(false, Ordering::Relaxed) {
+        stop();
+    }
+}

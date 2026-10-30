@@ -136,6 +136,10 @@ impl Game<'_> {
         }
         #[cfg(target_os = "android")]
         {
+            crate::performance::configure_gpu_profile(
+                self.settings.touch.gpu_profile,
+                &crate::backend::game_home(),
+            );
             self.pad.touch.inventory_mode = self.android_inventory_controls();
             let active = horizon_client::android_runtime::active_input();
             if self.pad.last_input_mode.replace(active).is_some_and(|old| {
@@ -515,6 +519,27 @@ impl Game<'_> {
 
     /// The right stick turns the view, once per frame (`Entity.turn`).
     pub(super) fn pad_look(&mut self, seconds: f32) {
+        #[cfg(target_os = "android")]
+        {
+            let enabled = self.settings.touch.gyroscope
+                && !self.pad_in_menu()
+                && self.player.is_some()
+                && self.pad_focused()
+                && crate::touch_visible();
+            let rotation = if enabled {
+                crate::platform::display_rotation()
+            } else {
+                0
+            };
+            let delta = crate::device_runtime::gyro(
+                enabled,
+                self.settings.touch.gyro_sensitivity,
+                rotation,
+            );
+            if enabled {
+                self.turn_player(f64::from(delta[0] / 0.15), f64::from(delta[1] / 0.15));
+            }
+        }
         let settings = &self.settings.controller;
         if !settings.enabled || self.pad_in_menu() || self.player.is_none() || !self.pad_focused() {
             return;

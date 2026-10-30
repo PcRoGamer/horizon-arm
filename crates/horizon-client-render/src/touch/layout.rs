@@ -140,6 +140,11 @@ pub struct Settings {
     pub sprint_toggle: bool,
     pub inventory_controls: bool,
     pub virtual_mouse: bool,
+    pub gyroscope: bool,
+    pub gyro_sensitivity: f32,
+    pub display_hz: u16,
+    pub performance_hints: bool,
+    pub gpu_profile: bool,
     pub attack_indicator_left: bool,
     pub button_visibility: [u8; 12],
     pub horizontal_margin: f32,
@@ -198,6 +203,11 @@ impl Default for Settings {
             sprint_toggle: false,
             inventory_controls: false,
             virtual_mouse: false,
+            gyroscope: false,
+            gyro_sensitivity: 1.0,
+            display_hz: 0,
+            performance_hints: false,
+            gpu_profile: false,
             attack_indicator_left: true,
             button_visibility: [0; 12],
             horizontal_margin: 0.0,
@@ -240,6 +250,14 @@ impl Settings {
         s
     }
     pub fn sanitize(&mut self) {
+        self.gyro_sensitivity = if self.gyro_sensitivity.is_finite() {
+            self.gyro_sensitivity.clamp(0.1, 3.0)
+        } else {
+            1.0
+        };
+        if ![0, 30, 60, 90, 120, 144, 165].contains(&self.display_hz) {
+            self.display_hz = 0;
+        }
         for value in [&mut self.horizontal_margin, &mut self.vertical_margin] {
             *value = if value.is_finite() {
                 value.clamp(0.0, 0.12)
@@ -325,6 +343,26 @@ pub fn contains([x, y, w, h]: [f32; 4], p: [f32; 2]) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn native_android_preferences_roundtrip_and_reject_bad_values() {
+        let mut s = super::Settings::default();
+        assert!(!s.gyroscope && !s.performance_hints && !s.gpu_profile);
+        assert_eq!(s.display_hz, 0);
+        s.gyroscope = true;
+        s.gyro_sensitivity = 2.0;
+        s.display_hz = 120;
+        s.performance_hints = true;
+        s.gpu_profile = true;
+        let restored: super::Settings =
+            serde_json::from_slice(&serde_json::to_vec(&s).unwrap()).unwrap();
+        assert!(restored.gyroscope && restored.performance_hints && restored.gpu_profile);
+        assert_eq!((restored.gyro_sensitivity, restored.display_hz), (2.0, 120));
+        s.gyro_sensitivity = f32::NAN;
+        s.display_hz = u16::MAX;
+        s.sanitize();
+        assert_eq!((s.gyro_sensitivity, s.display_hz), (1.0, 0));
+    }
+
     #[test]
     fn blank_buttons_and_game_actions_survive_settings_validation() {
         let mut settings = super::Settings::default();

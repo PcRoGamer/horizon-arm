@@ -68,6 +68,21 @@ impl FrameTiming {
             }
         }
     }
+    pub(super) fn distributions(&self) -> Vec<(&'static str, f32, f32, f32, usize)> {
+        ["prepare_uploads", "world", "post_hand_hud"]
+            .into_iter()
+            .zip(&self.history)
+            .filter_map(|(name, h)| {
+                let mut samples: Vec<_> = h.iter().copied().collect();
+                if samples.is_empty() {
+                    return None;
+                }
+                samples.sort_by(f32::total_cmp);
+                let at = |p: usize| samples[((samples.len() - 1) * p) / 100];
+                Some((name, at(50), at(95), at(99), samples.len()))
+            })
+            .collect()
+    }
     pub(super) fn summaries(&self) -> Vec<(&'static str, f32, f32, usize)> {
         ["prepare_uploads", "world", "post_hand_hud"]
             .into_iter()

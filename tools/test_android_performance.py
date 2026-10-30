@@ -30,6 +30,7 @@ mod platform {
     pub fn open_documents(_: &str) -> bool { true }
 }
 #[path = "../../../../crates/horizon-client/src/android/performance.rs"] mod performance;
+#[path = "../../../../crates/horizon-client/src/android/device_math.rs"] mod device_math;
 ''', encoding='utf-8')
     subprocess.run(['cargo', 'test', '--manifest-path', str(harness / 'Cargo.toml'),
                     '--', '--test-threads=1'], cwd=ROOT, check=True)
