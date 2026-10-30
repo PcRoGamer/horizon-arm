@@ -158,23 +158,16 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: Set up Android SDK/NDK
-        uses: android-actions/setup-android@v3
-      - name: Install Android packages
+      - name: Install Android packages in hosted SDK
         shell: bash
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager 'platforms;android-34' 'build-tools;34.0.0' 'ndk;27.2.12479018'
-      - name: Wire toolchain paths expected by Android port
-        shell: bash
-        run: |
-          PORT="$RUNNER_TEMP/horizon/android-port"
-          mkdir -p "$PORT/.toolchain/android-sdk" "$PORT/.toolchain"
-          # env.sh expects its private toolchain paths; point them at runner installs.
-          rm -rf "$PORT/.toolchain/android-sdk"
-          ln -s "$ANDROID_SDK_ROOT" "$PORT/.toolchain/android-sdk"
-          rm -rf "$PORT/.toolchain/jdk"
-          ln -s "$JAVA_HOME" "$PORT/.toolchain/jdk"
+          : "${ANDROID_HOME:=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          export ANDROID_HOME ANDROID_SDK_ROOT="$ANDROID_HOME"
+          test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platforms;android-34' 'build-tools;34.0.0' 'ndk;27.2.12479018'
+          test -x "$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang"
       - name: Build ARM64 APK from current upstream
         shell: bash
         env:
