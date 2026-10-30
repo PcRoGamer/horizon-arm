@@ -25,9 +25,10 @@ mkdir -p "$OUT"
 # (idempotent; it also drops the crate's artifacts the first time).
 "$REPO/tools/patch-winit.sh"
 
-# The current touch source already owns its icon HUD.  Older Android hook code
-# recognises a standalone import marker, so normalize the grouped import before
-# running that idempotent patcher.  This changes only the CI/build worktree.
+# The current touch source already owns its icon HUD. Older Android hook code
+# recognises standalone markers, so normalize the grouped import and add the
+# legacy icon-patch marker before running that idempotent patcher. This changes
+# only the CI/build worktree; the real Bedrock HUD stays in touch.rs/icons.rs.
 TOUCH_RS="$HORIZON_SRC/crates/horizon-client/src/game/touch.rs"
 python3 - "$TOUCH_RS" <<'PY'
 from pathlib import Path
@@ -39,6 +40,13 @@ text = text.replace(
     'use super::{Game, Screen};\nuse super::touch_icons;',
     1,
 )
+legacy = 'touch_icons::joystick(batch, atlas, sx, sy, r, self.touch_ui.stick);'
+if legacy not in text:
+    text = text.replace(
+        'use super::touch_icons;',
+        'use super::touch_icons;\n// Legacy Android hook marker: ' + legacy,
+        1,
+    )
 path.write_text(text)
 PY
 
