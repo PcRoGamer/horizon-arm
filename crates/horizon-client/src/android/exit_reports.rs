@@ -75,7 +75,7 @@ pub fn collect(home: &Path) {
         }
         Ok(())
     });
-    let report = serde_json::json!({"schema":1,"version":crate::backend::VERSION,"source_commit":option_env!("HORIZON_BUILD_COMMIT"),"exits":reports,"note":"Android reasons: 4 Java crash, 5 native crash, 6 ANR, 3 low memory. Missing traces mean the OS did not expose one. Reports may contain diagnostic paths or server addresses; inspect before sharing."});
+    let report = serde_json::json!({"schema":1,"version":crate::backend::VERSION,"source_commit":option_env!("HORIZON_ANDROID_BUILD_COMMIT"),"exits":reports,"note":"Android reasons: 4 Java crash, 5 native crash, 6 ANR, 3 low memory. Missing traces mean the OS did not expose one. Reports may contain diagnostic paths or server addresses; inspect before sharing."});
     if let Ok(bytes) = serde_json::to_vec_pretty(&report) {
         let _ = std::fs::write(dir.join("android-exits.json"), bytes);
     }

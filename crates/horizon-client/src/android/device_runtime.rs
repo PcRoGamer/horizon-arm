@@ -3,6 +3,7 @@
 mod math;
 use std::{
     cell::RefCell,
+    collections::VecDeque,
     ffi::{c_char, c_int, c_void},
     time::Instant,
 };
@@ -21,9 +22,10 @@ unsafe extern "C" {
         m: *mut c_void,
         l: *mut c_void,
         id: c_int,
-        cb: *mut c_void,
+        cb: Option<unsafe extern "C" fn(c_int, c_int, *mut c_void) -> c_int>,
         data: *mut c_void,
     ) -> *mut c_void;
+    fn ASensorManager_destroyEventQueue(m: *mut c_void, q: *mut c_void) -> c_int;
     fn ASensorEventQueue_enableSensor(q: *mut c_void, s: *const c_void) -> c_int;
     fn ASensorEventQueue_disableSensor(q: *mut c_void, s: *const c_void) -> c_int;
     fn ASensorEventQueue_setEventRate(q: *mut c_void, s: *const c_void, rate: c_int) -> c_int;
@@ -40,12 +42,40 @@ struct SensorEvent {
     flags: u32,
     tail: [i32; 3],
 }
+#[derive(Default)]
+struct SensorDelivery {
+    queue: *mut c_void,
+    pending: VecDeque<SensorEvent>,
+}
+impl SensorDelivery {
+    // Both the looper callback and frame consumption run on the game thread.
+    fn drain(&mut self) {
+        for _ in 0..256 {
+            let mut event: SensorEvent = unsafe { std::mem::zeroed() };
+            if unsafe { ASensorEventQueue_getEvents(self.queue, &mut event, 1) } <= 0 {
+                break;
+            }
+            if self.pending.len() == 128 {
+                self.pending.pop_front();
+            }
+            self.pending.push_back(event);
+        }
+    }
+}
+unsafe extern "C" fn sensor_ready(_: c_int, _: c_int, data: *mut c_void) -> c_int {
+    // A callback must drain readiness here. Returning an arbitrary looper ID
+    // leaves NativeActivity repeatedly polling an unread sensor FD and starves
+    // frames/input before gyro() can consume it.
+    unsafe { &mut *data.cast::<SensorDelivery>() }.drain();
+    1
+}
 struct Runtime {
     lib: *mut c_void,
     window: usize,
     hz: u16,
     rate_status: i32,
     queue: *mut c_void,
+    delivery: Box<SensorDelivery>,
     sensor: *const c_void,
     gyro_on: bool,
     last_sensor: i64,
@@ -64,6 +94,7 @@ impl Default for Runtime {
             hz: u16::MAX,
             rate_status: -1,
             queue: std::ptr::null_mut(),
+            delivery: Box::default(),
             sensor: std::ptr::null(),
             gyro_on: false,
             last_sensor: 0,
@@ -73,6 +104,16 @@ impl Default for Runtime {
             gyro_samples: 0,
             adpf_reports: 0,
             adpf_status: 0,
+        }
+    }
+}
+impl Drop for Runtime {
+    fn drop(&mut self) {
+        self.close_hint();
+        if !self.queue.is_null() {
+            unsafe {
+                ASensorManager_destroyEventQueue(ASensorManager_getInstance(), self.queue);
+            }
         }
     }
 }
@@ -205,10 +246,11 @@ pub fn gyro(enabled: bool, sensitivity: f32, rotation: i32) -> [f32; 2] {
                         r.queue = ASensorManager_createEventQueue(
                             manager,
                             ALooper_prepare(1),
-                            907,
-                            std::ptr::null_mut(),
-                            std::ptr::null_mut(),
+                            -1,
+                            Some(sensor_ready),
+                            (&mut *r.delivery as *mut SensorDelivery).cast(),
                         );
+                        r.delivery.queue = r.queue;
                     }
                 }
             }
@@ -226,12 +268,10 @@ pub fn gyro(enabled: bool, sensitivity: f32, rotation: i32) -> [f32; 2] {
                 }
                 r.gyro_on = enabled;
                 r.last_sensor = 0;
+                r.delivery.pending.clear();
             }
-            for _ in 0..128 {
-                let mut event: SensorEvent = std::mem::zeroed();
-                if ASensorEventQueue_getEvents(r.queue, &mut event, 1) <= 0 {
-                    break;
-                }
+            r.delivery.drain();
+            while let Some(event) = r.delivery.pending.pop_front() {
                 if !enabled || event.kind != 4 {
                     continue;
                 }
@@ -256,7 +296,20 @@ pub fn gyro(enabled: bool, sensitivity: f32, rotation: i32) -> [f32; 2] {
     })
 }
 pub fn diagnostics() -> serde_json::Value {
-    STATE.with(|s|{let r=s.borrow();serde_json::json!({"display_hz_requested":r.hz,"display_request_result":r.rate_status,"adpf_session_active":!r.session.is_null(),"adpf_unavailable":r.hint_failed,"gyro_available":!r.sensor.is_null(),"gyro_active":r.gyro_on,"gyro_samples":r.gyro_samples,"adpf_report_count":r.adpf_reports,"adpf_report_status":r.adpf_status})})
+    STATE.with(|s| {
+        let r = s.borrow();
+        serde_json::json!({
+            "display_hz_requested": r.hz,
+            "display_request_result": r.rate_status,
+            "adpf_session_active": !r.session.is_null(),
+            "adpf_unavailable": r.hint_failed,
+            "gyro_available": !r.sensor.is_null(),
+            "gyro_active": r.gyro_on,
+            "gyro_samples": r.gyro_samples,
+            "adpf_report_count": r.adpf_reports,
+            "adpf_report_status": r.adpf_status,
+        })
+    })
 }
 
 /// Release sensor delivery and hint sessions immediately when the window loses focus.
