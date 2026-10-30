@@ -1,138 +1,91 @@
-name: ARM sync conflict probe
+name: ARM sync candidate validation
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  probe:
+  validate:
     if: github.event.pull_request.head.ref == 'sync/trigger-conflict-probe'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: sync/upstream-2026-10-30
+          ref: sync/candidate-2026-10-30
           fetch-depth: 0
-      - name: Replay Android foundation and fork-only ARM work
-        shell: bash
+
+      - name: Validate merged tree
         run: |
           set -euo pipefail
-          git config user.name "ARM Sync Probe"
-          git config user.email "arm-sync-probe@users.noreply.github.com"
-          git remote add upstream https://github.com/horizon-rust/horizon.git || true
-          git fetch upstream refs/pull/3676/head:refs/remotes/upstream/android-3676
-          git fetch origin backup/pre-upstream-sync-2026-10-30
-
-          base=$(git merge-base HEAD refs/remotes/upstream/android-3676)
-          echo "CURRENT=$(git rev-parse HEAD)"
-          echo "ANDROID_HEAD=$(git rev-parse refs/remotes/upstream/android-3676)"
-          echo "MERGE_BASE=$base"
-          mapfile -t commits < <(git rev-list --reverse "$base"..refs/remotes/upstream/android-3676)
-          printf 'FOUNDATION_COMMITS=%s\n' "${#commits[@]}"
-          for c in "${commits[@]}"; do
-            echo "=== FOUNDATION $c $(git show -s --format=%s "$c") ==="
-            if ! git cherry-pick "$c"; then
-              conflicts=$(git diff --name-only --diff-filter=U)
-              if [[ "$c" == 5f145ed3c9ff54f74f83f2b7584dddedda63170b && "$conflicts" == "Cargo.toml" ]]; then
-                git checkout --ours Cargo.toml
-                python3 - <<'PY'
-          from pathlib import Path
-          p = Path('Cargo.toml')
-          s = p.read_text()
-          needle = '    "crates/horizon-client-render",\n'
-          assert needle in s
-          if '    "crates/horizon-android",\n' not in s:
-              s = s.replace(needle, needle + '    "crates/horizon-android",\n', 1)
-          p.write_text(s)
-          PY
-                git add Cargo.toml
-                GIT_EDITOR=true git cherry-pick --continue
-                continue
-              fi
-              if [[ "$c" == ccfe63095b024246d1f195924c311175beaec265 && "$conflicts" == "crates/horizon-client/src/game.rs" ]]; then
-                python3 - <<'PY'
-          from pathlib import Path
-          import re
-          p = Path('crates/horizon-client/src/game.rs')
-          s = p.read_text()
-          markers = [line for line in s.splitlines() if line.startswith(('<<<<<<< ', '=======', '>>>>>>> '))]
-          assert len(markers) == 3, markers
-          s = re.sub(r'^(?:<<<<<<< .*|=======|>>>>>>> .*)\n?', '', s, flags=re.M)
-          p.write_text(s)
-          PY
-                git add crates/horizon-client/src/game.rs
-                GIT_EDITOR=true git cherry-pick --continue
-                continue
-              fi
-              if [[ "$c" == 25306f558372688b58f2d3256e4e97327d842a6f && "$conflicts" == "crates/horizon-client/src/game.rs" ]]; then
-                python3 - <<'PY'
-          from pathlib import Path
-          import re
-          p = Path('crates/horizon-client/src/game.rs')
-          s = p.read_text()
-          replacement = '''        #[cfg(not(target_os = "android"))]\n        let [vx, vy] = self.view_at.map(f64::from);\n        #[cfg(not(target_os = "android"))]\n        let centre = winit::dpi::PhysicalPosition::new(\n            vx + f64::from(size[0]) / 2.0,\n            vy + f64::from(size[1]) / 2.0,\n        );\n        #[cfg(not(target_os = "android"))]\n'''
-          pattern = r'^<<<<<<< HEAD\n.*?^=======\n.*?^>>>>>>> 25306f558 \(client: the phone\'s own controls in the world\)\n'
-          s2, n = re.subn(pattern, replacement, s, count=1, flags=re.M | re.S)
-          assert n == 1, f'expected one cursor conflict, got {n}'
-          assert '<<<<<<< ' not in s2 and '\n=======\n' not in s2 and '>>>>>>> ' not in s2
-          p.write_text(s2)
-          PY
-                git add crates/horizon-client/src/game.rs
-                GIT_EDITOR=true git cherry-pick --continue
-                continue
-              fi
-              if [[ "$c" == 8209f74d1cc53b4bfa40800b8b65f249a8f8a2f4 && "$conflicts" == "README.md" ]]; then
-                git checkout --ours README.md
-                git show "$c:README.md" > android-port/README.md
-                python3 - <<'PY'
-          from pathlib import Path
-          p = Path('android-port/README.md')
-          s = p.read_text()
-          s = s.replace("Licensed MIT, like upstream — see [LICENSE](LICENSE). Upstream's own README is\n[README.upstream.md](README.upstream.md).",
-                        "Licensed MIT, like upstream — see [LICENSE](LICENSE). Upstream's current README remains at the\n[repository root](../README.md).")
-          p.write_text(s)
-          PY
-                git rm -f README.upstream.md
-                git add README.md android-port/README.md
-                GIT_EDITOR=true git cherry-pick --continue
-                continue
-              fi
-              echo "=== FOUNDATION CONFLICTED FILES ==="
-              printf '%s\n' "$conflicts"
-              git status --short
-              git diff --cc || true
-              exit 23
-            fi
-          done
-          echo "ANDROID_FOUNDATION_REPLAY_OK=$(git rev-parse HEAD)"
-
-          snapshot=319e087ee9d4601c4466223a64580a71c3772dfd
-          fork_head=695cfe884739eaf79f6438b63c06bfc007f7c8f7
-          mapfile -t later < <(git rev-list --reverse --ancestry-path "$snapshot..$fork_head")
-          printf 'FORK_ONLY_COMMITS=%s\n' "${#later[@]}"
-          for c in "${later[@]}"; do
-            echo "=== FORK-ONLY $c $(git show -s --format=%s "$c") ==="
-            parent_count=$(git rev-list --parents -n 1 "$c" | awk '{print NF-1}')
-            if (( parent_count > 1 )); then
-              pick=(git cherry-pick -m 1 "$c")
-            else
-              pick=(git cherry-pick "$c")
-            fi
-            if ! "${pick[@]}"; then
-              echo "CONFLICT_COMMIT=$c"
-              git diff --name-only --diff-filter=U
-              git status --short
-              git diff --cc || true
-              exit 24
-            fi
-          done
-
-          echo "FULL_ARM_REPLAY_OK=$(git rev-parse HEAD)"
           git diff --check
           cargo metadata --no-deps --format-version 1 >/dev/null
-          test -z "$(git status --porcelain)"
-          git push origin HEAD:refs/heads/sync/candidate-2026-10-30
-          echo "CANDIDATE_PUSHED=$(git rev-parse HEAD)"
+          cargo check -p horizon-client --lib
+
+      - name: Set up Java 25 for fact generation
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Prepare Android toolchain symlink target
+        run: mkdir -p ../horizon-android/.toolchain
+
+      - name: Install host packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl unzip zip patch
+
+      - name: Fetch Android toolchain
+        env:
+          ANDROID_HOME: ${{ github.workspace }}/android-port/.toolchain/android-sdk
+          ANDROID_SDK_ROOT: ${{ github.workspace }}/android-port/.toolchain/android-sdk
+        run: android-port/tools/fetch-toolchain.sh
+
+      - name: Fetch Rust dependencies
+        run: cargo fetch
+
+      - name: Fetch pinned Minecraft inputs for CI only
+        run: python3 android-port/tools/ci-fetch-minecraft.py
+
+      - name: Compute Horizon 26.3 facts
+        run: |
+          cargo run --release -p horizon-prepare -- \
+            --prepare \
+            --minecraft-dir android-port/build/ci-minecraft \
+            --server-jar android-port/build/ci-minecraft/server.jar \
+            --root .
+
+      - name: Package Horizon-only fact bundle
+        run: |
+          python3 android-port/tools/ci-pack-facts.py
+          unzip -l android-port/build/horizon-facts-26.3.zip | head -80
+          if unzip -l android-port/build/horizon-facts-26.3.zip | grep -E '(^|/)(assets|data)/|pack.png|client.jar|server.jar'; then
+            echo 'fact bundle contains a Minecraft file' >&2
+            exit 1
+          fi
+
+      - name: Build self-bootstrapping ARM64 APK
+        env:
+          HORIZON_NO_ASSETS: '1'
+          HORIZON_FACTS_ZIP: ${{ github.workspace }}/android-port/build/horizon-facts-26.3.zip
+          HORIZON_JOBS: '4'
+        run: android-port/tools/build.sh arm64 fast
+
+      - name: Verify APK
+        run: |
+          test -f android-port/build/horizon-android-arm64.apk
+          ls -lh android-port/build/horizon-android-arm64.apk
+          unzip -l android-port/build/horizon-android-arm64.apk | grep 'lib/arm64-v8a/libhorizon_android.so'
+          unzip -l android-port/build/horizon-android-arm64.apk | grep 'assets/horizon-facts-26.3.zip'
+          sha256sum android-port/build/horizon-android-arm64.apk
+
+      - name: Upload validated APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: horizon-arm-upstream-sync-candidate-apk
+          path: android-port/build/horizon-android-arm64.apk
+          if-no-files-found: error
