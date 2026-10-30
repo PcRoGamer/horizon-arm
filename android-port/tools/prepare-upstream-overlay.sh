@@ -115,9 +115,9 @@ if 'mod touch; // horizon-android overlay' not in text:
     addition = '''#[cfg(target_os = "android")]
 mod touch; // horizon-android overlay
 #[cfg(target_os = "android")]
-mod touch_icons; // horizon-android overlay
+mod touch_icons; // Horizon Android icon HUD
 #[cfg(target_os = "android")]
-mod mobile_ui; // horizon-android overlay
+mod mobile_ui; // Horizon Android launcherless manager
 '''
     if anchor not in text:
         raise SystemExit("prepare-upstream-overlay: game module anchor missing")
