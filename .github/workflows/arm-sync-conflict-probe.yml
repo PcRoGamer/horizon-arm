@@ -51,6 +51,22 @@ jobs:
                 GIT_EDITOR=true git cherry-pick --continue
                 continue
               fi
+              if [[ "$c" == ccfe63095b024246d1f195924c311175beaec265 && "$conflicts" == "crates/horizon-client/src/game.rs" ]]; then
+                echo "Resolving event dispatch: keep upstream keymap and Android touch handling"
+                python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path('crates/horizon-client/src/game.rs')
+          s = p.read_text()
+          markers = [line for line in s.splitlines() if line.startswith(('<<<<<<< ', '=======', '>>>>>>> '))]
+          assert len(markers) == 3, markers
+          s = re.sub(r'^(?:<<<<<<< .*|=======|>>>>>>> .*)\n?', '', s, flags=re.M)
+          p.write_text(s)
+          PY
+                git add crates/horizon-client/src/game.rs
+                GIT_EDITOR=true git cherry-pick --continue
+                continue
+              fi
               echo "=== CONFLICTED FILES ==="
               printf '%s\n' "$conflicts"
               echo "=== STATUS ==="
