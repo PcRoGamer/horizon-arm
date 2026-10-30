@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Wire Android system haptics into the safe client and Bedrock touch UI."""
+"""Wire Android system haptics into the safe client and Bedrock touch UI.
+
+Hotbar feedback is handled by patch-touch-haptics-hotbar.py after the layout
+and parity patches. Keeping it separate makes this bridge independent of the
+exact hotbar source shape.
+"""
 
 from pathlib import Path
 import sys
@@ -20,7 +25,6 @@ def replace_once(path: Path, old: str, new: str, marker: str) -> None:
     path.write_text(text.replace(old, new, 1))
 
 
-# Safe callback boundary in horizon-client.
 replace_once(
     android,
     'static RECREATE: Mutex<Option<fn()>> = Mutex::new(None);\n',
@@ -56,7 +60,6 @@ pub fn haptic(kind: Haptic) {
     'pub fn set_haptic_hook(hook: fn(Haptic))',
 )
 
-# Compile/install the JNI bridge from the shell, not the unsafe-forbidden client.
 replace_once(
     android_shell,
     'mod instances;\n',
@@ -83,7 +86,6 @@ replace_once(
     'haptics::install();',
 )
 
-# Two independent player-facing haptic settings.
 replace_once(
     touch,
     '''    hotbar_only: bool,
@@ -121,7 +123,6 @@ replace_once(
     '"button_haptics" => out.button_haptics = yes,',
 )
 
-# Haptic on a deliberate on-screen action press. Camera movement remains silent.
 replace_once(
     touch,
     '''    fn press(&mut self, control: Control, down: bool) {
@@ -136,44 +137,6 @@ replace_once(
     'crate::android::haptic(crate::android::Haptic::Tap)',
 )
 
-# Hotbar selection gets a light tick only when the slot actually changes.
-replace_once(
-    touch,
-    '''                if let Some(slot) = hotbar_slot(pos, (batch.width, batch.height)) {
-                    self.selected = slot;
-                    Gesture::Hotbar
-''',
-    '''                if let Some(slot) = hotbar_slot(pos, (batch.width, batch.height)) {
-                    if slot != self.selected && self.touch_ui.settings.button_haptics {
-                        crate::android::haptic(crate::android::Haptic::Tap);
-                    }
-                    self.selected = slot;
-                    Gesture::Hotbar
-''',
-    'slot != self.selected && self.touch_ui.settings.button_haptics',
-)
-replace_once(
-    touch,
-    '''                        if let Some(slot) = hotbar_slot(pos, (batch.width, batch.height)) {
-                            self.selected = slot;
-                        }
-''',
-    '''                        if let Some(slot) = hotbar_slot(pos, (batch.width, batch.height)) {
-                            if slot != self.selected && self.touch_ui.settings.button_haptics {
-                                crate::android::haptic(crate::android::Haptic::Tap);
-                            }
-                            self.selected = slot;
-                        }
-''',
-    'Gesture::Hotbar => {\n                        if let Some(slot)',
-)
-# The marker above exists already as context; if replacement ran, add a durable marker.
-text = touch.read_text()
-if 'Horizon Android hotbar haptic' not in text:
-    text = text.replace('Gesture::Hotbar => {\n                        if let Some(slot)', '// Horizon Android hotbar haptic\n                    Gesture::Hotbar => {\n                        if let Some(slot)', 1)
-touch.write_text(text)
-
-# Long-press mining feedback when breaking starts.
 replace_once(
     touch,
     '''        if self.play_mouse(MouseButton::Left, true).is_ok()
@@ -194,7 +157,6 @@ replace_once(
     'crate::android::haptic(crate::android::Haptic::Break)',
 )
 
-# Persist and expose the two settings through the in-game panel.
 replace_once(
     touch,
     '''    pub(super) fn touch_handedness_name(&self) -> &'static str {
@@ -250,8 +212,6 @@ replace_once(
     'pub(super) fn touch_toggle_button_haptics(&mut self)',
 )
 
-# Compact the now-long touch settings list so it remains usable on landscape
-# phones at Horizon's GUI scale.
 replace_once(settings_ui, 'const ROW_H: f32 = 27.0;\n', 'const ROW_H: f32 = 22.0;\n', 'const ROW_H: f32 = 22.0;')
 replace_once(
     settings_ui,
