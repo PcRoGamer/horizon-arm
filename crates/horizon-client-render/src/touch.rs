@@ -67,7 +67,6 @@ pub struct TouchControls {
     pub auxiliary_only: bool,
     /// Inventory utility buttons emit real modifier/mouse events, never movement.
     pub inventory_mode: bool,
-    pub virtual_mouse_controls: bool,
     pub editor: Option<editor::Editor>,
     fingers: BTreeMap<u64, (Role, [f32; 2])>,
     custom_fingers: BTreeMap<u64, String>,
@@ -167,11 +166,6 @@ impl TouchControls {
     fn visible(&self, c: Control) -> bool {
         if self.auxiliary_only && !Self::auxiliary_control(c) {
             return false;
-        }
-        if (self.virtual_mouse_controls && self.inventory_mode)
-            && matches!(c, Control::Attack | Control::Use)
-        {
-            return true;
         }
         if self.force_crosshair
             && matches!(c, Control::Attack | Control::Use)
@@ -1185,11 +1179,9 @@ mod tests {
             assert_eq!(t.poll_state().triggers, [0.0; 2]);
             assert_eq!(t.take_tap(), Some(false));
             assert_eq!(t.aim, Some([0.5, 0.5]));
-            t.virtual_mouse_controls = true;
             t.inventory_mode = true;
             t.settings.button_visibility[Control::Attack as usize] = 2;
-            assert!(t.visible(Control::Attack));
-            assert!(t.visible(Control::Use));
+            assert!(!t.visible(Control::Attack));
         }
     }
     #[test]

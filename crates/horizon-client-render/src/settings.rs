@@ -779,7 +779,6 @@ pub enum Opt {
     TouchInventoryControls,
     TouchVirtualMouse,
     TouchMouseSensitivity,
-    TouchMouseClicks,
     TouchCrosshairGestures,
     AndroidGyroscope,
     AndroidGyroSensitivity,

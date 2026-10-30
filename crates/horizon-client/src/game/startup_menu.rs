@@ -652,7 +652,7 @@ impl Loading {
                 touch.location.x as f32 / b.scale,
                 touch.location.y as f32 / b.scale,
             ];
-            if let Some(action) = self.menu.touch.action(b.width, p, true) {
+            if let Some(action) = self.menu.touch.action(b.width, b.height, p, true) {
                 if touch.phase == TouchPhase::Started {
                     match action {
                         Action::More => self.menu.touch.expanded = !self.menu.touch.expanded,

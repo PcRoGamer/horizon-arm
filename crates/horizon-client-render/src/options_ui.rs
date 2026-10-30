@@ -195,7 +195,6 @@ impl Opt {
             Opt::TouchMode => "Control scheme",
             Opt::TouchCrosshairGestures => "Touch gestures with crosshair",
             Opt::TouchMouseSensitivity => "Virtual mouse sensitivity",
-            Opt::TouchMouseClicks => "Mouse tap / hold clicks",
             Opt::TouchAnalog => "360-degree movement",
             Opt::TouchCircleSize => "Touch circle size",
             Opt::TouchAttackSide => "Attack indicator side",
@@ -472,14 +471,6 @@ impl Opt {
             Opt::TouchMouseSensitivity => {
                 Some(format!("{:.0}%", s.touch.virtual_mouse_sensitivity * 100.0))
             }
-            Opt::TouchMouseClicks => Some(
-                if s.touch.virtual_mouse_clicks {
-                    "ON"
-                } else {
-                    "OFF"
-                }
-                .into(),
-            ),
             Opt::TouchCrosshairGestures => Some(
                 if s.touch.crosshair_gestures {
                     "ON"
@@ -975,7 +966,6 @@ impl Opt {
             Opt::TouchSprintToggle => s.touch.sprint_toggle ^= true,
             Opt::TouchInventoryControls => s.touch.inventory_controls ^= true,
             Opt::TouchVirtualMouse => s.touch.virtual_mouse ^= true,
-            Opt::TouchMouseClicks => s.touch.virtual_mouse_clicks ^= true,
             Opt::TouchCrosshairGestures => s.touch.crosshair_gestures ^= true,
             Opt::AndroidInputMode => {
                 let all = crate::android_gamepad::InputMode::ALL;
@@ -1492,7 +1482,7 @@ fn option_widget(s: &Settings, opt: Opt, x: f32, y: f32, w: f32) -> Widget {
         }
         Opt::TouchInteract => !s.touch.crosshair(),
         Opt::TouchCrosshairGestures => s.touch.crosshair(),
-        Opt::TouchMouseSensitivity | Opt::TouchMouseClicks => s.touch.virtual_mouse,
+        Opt::TouchMouseSensitivity => s.touch.virtual_mouse,
         Opt::TouchSwapJumpSneak => s.touch.mode == crate::touch::Mode::Dpad,
         _ => true,
     };
@@ -2026,7 +2016,6 @@ impl OptionsUi {
                     Opt::TouchInventoryControls,
                     Opt::TouchVirtualMouse,
                     Opt::TouchMouseSensitivity,
-                    Opt::TouchMouseClicks,
                     Opt::AndroidGyroscope,
                     Opt::AndroidGyroSensitivity,
                     Opt::AndroidDisplayHz,

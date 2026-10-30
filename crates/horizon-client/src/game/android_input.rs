@@ -96,7 +96,7 @@ impl Game<'_> {
         let utility = self
             .pad
             .touch_ui
-            .action(batch.width, point, self.pad_in_menu())
+            .action(batch.width, batch.height, point, self.pad_in_menu())
             .is_some()
             || self.pad.touch_ui.owns_key(POINTER)
             || self.pad.touch.owns_pointer(POINTER)
@@ -239,12 +239,51 @@ impl Game<'_> {
         Ok(())
     }
 
+    fn android_menu_mouse(
+        &mut self,
+        events: &ActiveEventLoop,
+        id: WindowId,
+        right: bool,
+        down: bool,
+    ) -> Result<()> {
+        let button = if right {
+            MouseButton::Right
+        } else {
+            MouseButton::Left
+        };
+        if matches!(self.screen, Screen::Inventory | Screen::Creative) {
+            self.android_custom_mouse(button, down)
+        } else {
+            self.window_event(
+                events,
+                id,
+                WindowEvent::MouseInput {
+                    device_id: DeviceId::dummy(),
+                    button,
+                    state: if down {
+                        ElementState::Pressed
+                    } else {
+                        ElementState::Released
+                    },
+                },
+            );
+            Ok(())
+        }
+    }
     pub(super) fn android_aux_touch(
         &mut self,
         t: &Touch,
         events: &ActiveEventLoop,
         id: WindowId,
     ) -> Result<bool> {
+        if t.phase == TouchPhase::Ended
+            && let Some((right, last)) = self.pad.touch_ui.release_mouse(t.id)
+        {
+            if last {
+                self.android_menu_mouse(events, id, right, false)?;
+            }
+            return Ok(true);
+        }
         if t.phase == TouchPhase::Cancelled {
             self.pad.touch_ui.cancel();
             self.android_release_touch_keys(true);
@@ -263,7 +302,11 @@ impl Game<'_> {
         let size = self.window.as_ref().unwrap().inner_size();
         let b = HudBatch::new([size.width, size.height]);
         let p = [t.location.x as f32 / b.scale, t.location.y as f32 / b.scale];
-        if let Some(action) = self.pad.touch_ui.action(b.width, p, self.pad_in_menu()) {
+        if let Some(action) = self
+            .pad
+            .touch_ui
+            .action(b.width, b.height, p, self.pad_in_menu())
+        {
             if t.phase == TouchPhase::Started {
                 self.pad.touch.clear();
                 self.pad.touch.ignore(t.id);
@@ -297,7 +340,16 @@ impl Game<'_> {
                         }
                         self.pad.touch_ui.expanded = false;
                     }
+                    Action::MouseButton(right) => {
+                        if self.pad.touch_ui.press_mouse(t.id, right) {
+                            self.android_menu_mouse(events, id, right, true)?;
+                        }
+                    }
                     Action::VirtualMouse => {
+                        for right in self.pad.touch_ui.release_all_mouse() {
+                            self.android_menu_mouse(events, id, right, false)?;
+                        }
+
                         if matches!(self.screen, Screen::Inventory | Screen::Creative) {
                             // Cancel a prior drag without clicking/dropping at
                             // the toggle button, which is outside the inventory.
@@ -486,6 +538,18 @@ impl Game<'_> {
         self.debug_key(key, KeyAction::Release);
     }
     pub(super) fn android_release_touch_keys(&mut self, cancelled: bool) {
+        self.pad.touch_ui.cancel_relative();
+        for right in self.pad.touch_ui.release_all_mouse() {
+            let button = if right {
+                MouseButton::Right
+            } else {
+                MouseButton::Left
+            };
+            if let Err(error) = self.android_custom_mouse(button, false) {
+                log::warn!("Release virtual mouse: {error}");
+            }
+        }
+
         if cancelled {
             self.pad.hardware_keys.clear();
             crate::platform::cancel_vibration();
@@ -596,7 +660,7 @@ impl Game<'_> {
             [self.cursor.0, self.cursor.1],
             [b.width, b.height],
             self.settings.touch.virtual_mouse_sensitivity,
-            self.settings.touch.virtual_mouse_clicks,
+            !self.pad.touch_ui.mouse_held(),
         );
         self.window_event(
             events,
@@ -617,13 +681,16 @@ impl Game<'_> {
             || !self.pad.touch_ui.virtual_mouse
         {
             self.pad.touch_ui.cancel_relative();
+            for right in self.pad.touch_ui.release_all_mouse() {
+                if let Some(id) = self.window.as_ref().map(|w| w.id()) {
+                    if let Err(error) = self.android_menu_mouse(events, id, right, false) {
+                        log::warn!("Release virtual mouse: {error}");
+                    }
+                }
+            }
             return;
         }
-        let Some(right) = self
-            .pad
-            .touch_ui
-            .relative_click(self.settings.touch.virtual_mouse_clicks)
-        else {
+        let Some(right) = self.pad.touch_ui.relative_click(true) else {
             return;
         };
         let button = if right {

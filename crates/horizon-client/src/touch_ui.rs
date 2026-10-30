@@ -13,6 +13,7 @@ use winit::{event::TouchPhase, keyboard::KeyCode};
 pub struct TouchUi {
     pub expanded: bool,
     pub virtual_mouse: bool,
+    mouse_buttons: BTreeMap<u64, bool>,
     pub virtual_mouse_button: bool,
     relative: Option<RelativeTouch>,
     relative_click: Option<bool>,
@@ -42,6 +43,7 @@ pub enum Action {
     Key(KeyCode),
     Keyboard,
     VirtualMouse,
+    MouseButton(bool),
     More,
 }
 
@@ -102,6 +104,29 @@ impl TouchUi {
         keys.dedup();
         keys
     }
+    pub fn press_mouse(&mut self, id: u64, right: bool) -> bool {
+        if let Some(touch) = &mut self.relative {
+            touch.dragged = true;
+        }
+        let first = !self.mouse_buttons.values().any(|v| *v == right);
+        self.mouse_buttons.insert(id, right);
+        first
+    }
+    pub fn release_mouse(&mut self, id: u64) -> Option<(bool, bool)> {
+        let right = self.mouse_buttons.remove(&id)?;
+        Some((right, !self.mouse_buttons.values().any(|v| *v == right)))
+    }
+    pub fn mouse_held(&self) -> bool {
+        !self.mouse_buttons.is_empty()
+    }
+    pub fn release_all_mouse(&mut self) -> Vec<bool> {
+        let mut buttons: Vec<_> = std::mem::take(&mut self.mouse_buttons)
+            .into_values()
+            .collect();
+        buttons.sort();
+        buttons.dedup();
+        buttons
+    }
     pub fn cancel(&mut self) {
         self.gesture = None;
         self.pointer_drag = None;
@@ -133,7 +158,7 @@ impl TouchUi {
                 origin: point,
                 last: point,
                 since: Instant::now(),
-                dragged: false,
+                dragged: !clicks,
                 right_sent: false,
             });
         }
@@ -225,7 +250,19 @@ impl TouchUi {
             Gesture::None
         }
     }
-    pub fn action(&self, w: f32, p: [f32; 2], menu: bool) -> Option<Action> {
+    pub fn action(&self, w: f32, h: f32, p: [f32; 2], menu: bool) -> Option<Action> {
+        if menu
+            && self.virtual_mouse_button
+            && self.virtual_mouse
+            && (h - 27.0..h - 3.0).contains(&p[1])
+        {
+            if (w / 2.0 - 59.0..w / 2.0 - 3.0).contains(&p[0]) {
+                return Some(Action::MouseButton(false));
+            }
+            if (w / 2.0 + 3.0..w / 2.0 + 59.0).contains(&p[0]) {
+                return Some(Action::MouseButton(true));
+            }
+        }
         if self.virtual_mouse_button
             && menu
             && (3.0..23.0).contains(&p[1])
@@ -304,6 +341,10 @@ impl TouchUi {
                 50.0,
             );
         }
+        if menu && self.virtual_mouse_button && self.virtual_mouse {
+            button(b, a, "LMB", b.width / 2.0 - 59.0, b.height - 27.0, 56.0);
+            button(b, a, "RMB", b.width / 2.0 + 3.0, b.height - 27.0, 56.0);
+        }
         if menu {
             button(b, a, "Back", b.width - 53.0, 3.0, 50.0);
         }
@@ -363,6 +404,60 @@ fn button(b: &mut HudBatch, a: &HudAtlas, label: &str, x: f32, y: f32, w: f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn explicit_mouse_drag_does_not_generate_an_extra_tap_or_hold_click() {
+        let mut ui = TouchUi::default();
+        ui.relative_touch(
+            1,
+            [10.0, 10.0],
+            TouchPhase::Started,
+            [20.0, 20.0],
+            [400.0, 250.0],
+            1.0,
+            true,
+        );
+        ui.press_mouse(2, false);
+        ui.relative.as_mut().unwrap().since = Instant::now() - Duration::from_millis(700);
+        assert_eq!(ui.relative_click(false), None);
+        assert_eq!(ui.release_mouse(2), Some((false, true)));
+        assert_eq!(ui.relative_click(true), None);
+        ui.relative_touch(
+            1,
+            [10.0, 10.0],
+            TouchPhase::Ended,
+            [20.0, 20.0],
+            [400.0, 250.0],
+            1.0,
+            true,
+        );
+        assert_eq!(ui.relative_click(true), None);
+    }
+    #[test]
+    fn menu_mouse_buttons_share_ownership_and_release_outside_their_bounds() {
+        let mut ui = TouchUi {
+            virtual_mouse: true,
+            virtual_mouse_button: true,
+            ..Default::default()
+        };
+        assert!(matches!(
+            ui.action(427.0, 267.0, [180.0, 250.0], true),
+            Some(Action::MouseButton(false))
+        ));
+        assert!(matches!(
+            ui.action(427.0, 267.0, [245.0, 250.0], true),
+            Some(Action::MouseButton(true))
+        ));
+        assert!(ui.action(427.0, 267.0, [180.0, 250.0], false).is_none());
+        assert!(ui.press_mouse(1, false));
+        assert!(!ui.press_mouse(2, false));
+        assert!(ui.press_mouse(3, true));
+        assert_eq!(ui.release_mouse(1), Some((false, false)));
+        assert_eq!(ui.release_mouse(2), Some((false, true)));
+        assert_eq!(ui.release_all_mouse(), vec![true]);
+        assert_eq!(ui.release_mouse(3), None);
+        ui.virtual_mouse = false;
+        assert!(ui.action(427.0, 267.0, [180.0, 250.0], true).is_none());
+    }
     #[test]
     fn virtual_mouse_moves_relatively_and_dragging_never_clicks() {
         let mut ui = TouchUi::default();
