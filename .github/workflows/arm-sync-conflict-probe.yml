@@ -1,0 +1,45 @@
+name: ARM sync conflict probe
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    if: github.event.pull_request.head.ref == 'sync/trigger-conflict-probe'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: sync/upstream-2026-10-30
+          fetch-depth: 0
+      - name: Probe original Android PR replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "ARM Sync Probe"
+          git config user.email "arm-sync-probe@users.noreply.github.com"
+          git remote add upstream https://github.com/horizon-rust/horizon.git || true
+          git fetch upstream refs/pull/3676/head:refs/remotes/upstream/android-3676
+          base=$(git merge-base HEAD refs/remotes/upstream/android-3676)
+          echo "CURRENT=$(git rev-parse HEAD)"
+          echo "ANDROID_HEAD=$(git rev-parse refs/remotes/upstream/android-3676)"
+          echo "MERGE_BASE=$base"
+          mapfile -t commits < <(git rev-list --reverse "$base"..refs/remotes/upstream/android-3676)
+          printf 'COMMITS=%s\n' "${#commits[@]}"
+          for c in "${commits[@]}"; do
+            echo "=== CHERRY-PICK $c $(git show -s --format=%s "$c") ==="
+            if ! git cherry-pick "$c"; then
+              echo "=== CONFLICTED FILES ==="
+              git diff --name-only --diff-filter=U
+              echo "=== STATUS ==="
+              git status --short
+              echo "=== CONFLICT DIFF ==="
+              git diff --cc || true
+              exit 23
+            fi
+          done
+          echo "ANDROID_FOUNDATION_REPLAY_OK=$(git rev-parse HEAD)"
