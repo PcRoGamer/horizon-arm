@@ -95,23 +95,67 @@ fn request_to(method: &str, url: &str) -> ureq::Request {
 
 /// One request's result: the status and the JSON body (empty when there is none). Transport
 /// errors name the service, never the URL's query or the request.
-fn send(request: ureq::Request, body: Option<Body>, service: &str) -> Result<(u16, Value), String> {
-    let result = match body {
-        None => request.call(),
-        Some(Body::Form(fields)) => request.send_form(&fields),
-        Some(Body::Json(value)) => request.set("Accept", "application/json").send_json(value),
-    };
-    let response = match result {
-        Ok(r) => r,
-        Err(ureq::Error::Status(_, r)) => r,
-        Err(ureq::Error::Transport(_)) => {
-            return Err(format!(
-                "Could not reach {service}. Check your internet connection."
-            ));
+fn transient_network(kind: ureq::ErrorKind) -> bool {
+    matches!(
+        kind,
+        ureq::ErrorKind::Dns
+            | ureq::ErrorKind::ConnectionFailed
+            | ureq::ErrorKind::Io
+            | ureq::ErrorKind::ProxyConnect
+    )
+}
+fn contact_error(service: &str, kind: ureq::ErrorKind) -> String {
+    // Only a category is shown. Raw errors can contain URLs or request details.
+    format!("Could not reach {service} ({kind:?}). Check your internet connection.")
+}
+fn send_response(
+    request: ureq::Request,
+    body: Option<&Body<'_>>,
+) -> Result<ureq::Response, ureq::ErrorKind> {
+    // The legacy launcher endpoint has an immediate login_with_xbox fallback.
+    let retry_http = !request.url().ends_with("/launcher/login");
+    for attempt in 0..3u64 {
+        let request = request.clone();
+        let result = match body {
+            None => request.call(),
+            Some(Body::Form(fields)) => request.send_form(fields),
+            Some(Body::Json(value)) => request.set("Accept", "application/json").send_json(value),
+        };
+        match result {
+            Ok(r) => return Ok(r),
+            Err(ureq::Error::Status(status, r)) => {
+                let delay = r
+                    .header("Retry-After")
+                    .and_then(|h| h.parse::<u64>().ok())
+                    .unwrap_or(1 << attempt);
+                if retry_http
+                    && attempt < 2
+                    && (status == 429 || (500..600).contains(&status))
+                    && delay <= 30
+                {
+                    std::thread::sleep(Duration::from_secs(delay.max(1)));
+                    continue;
+                }
+                return Ok(r);
+            }
+            Err(ureq::Error::Transport(e)) => {
+                if attempt < 2 && transient_network(e.kind()) {
+                    std::thread::sleep(Duration::from_secs(1 << attempt));
+                    continue;
+                }
+                return Err(e.kind());
+            }
         }
-    };
+    }
+    unreachable!("bounded attempts always return")
+}
+fn send(request: ureq::Request, body: Option<Body>, service: &str) -> Result<(u16, Value), String> {
+    let response =
+        send_response(request, body.as_ref()).map_err(|kind| contact_error(service, kind))?;
     let status = response.status();
-    let text = response.into_string().unwrap_or_default();
+    let text = response
+        .into_string()
+        .map_err(|_| format!("Could not read the {service} response. Try again."))?;
     Ok((status, serde_json::from_str(&text).unwrap_or(Value::Null)))
 }
 
@@ -202,6 +246,7 @@ pub enum Poll {
     Pending,
     /// The server asked to poll less often: wait 5 s more.
     SlowDown,
+    Retry(u64),
     Done(MsTokens),
 }
 
@@ -213,14 +258,17 @@ pub fn device_code(ep: &Endpoints, client_id: &str) -> Result<DeviceCode, String
     if legacy_client(client_id) {
         fields.push(("response_type", "device_code"));
     }
-    let response = match request_to("POST", &microsoft_endpoint(ep, client_id, false))
-        .send_form(&fields)
-    {
-        Ok(r) => r,
-        Err(ureq::Error::Status(_, r)) => r,
-        Err(_) => return Err("Could not reach Microsoft. Check your internet connection.".into()),
-    };
+    let response = send_response(
+        request_to("POST", &microsoft_endpoint(ep, client_id, false)),
+        Some(&Body::Form(fields)),
+    )
+    .map_err(|kind| contact_error("Microsoft", kind))?;
     let status = response.status();
+    if status == 429 || (500..600).contains(&status) {
+        return Err(format!(
+            "Microsoft is temporarily unavailable (HTTP {status}). Try again later."
+        ));
+    }
     let cookies = response
         .all("set-cookie")
         .iter()
@@ -267,15 +315,34 @@ fn oauth_error(v: &Value) -> String {
 
 /// One poll of the token endpoint while the player signs in.
 pub fn poll(ep: &Endpoints, client_id: &str, code: &DeviceCode) -> Result<Poll, String> {
-    let (status, v) = send(
+    let body = Body::Form(vec![
+        ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
+        ("client_id", client_id),
+        ("device_code", &code.device_code),
+    ]);
+    let response = match send_response(
         request_to("POST", &microsoft_endpoint(ep, client_id, true)).set("Cookie", &code.cookies),
-        Some(Body::Form(vec![
-            ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
-            ("client_id", client_id),
-            ("device_code", &code.device_code),
-        ])),
-        "Microsoft",
-    )?;
+        Some(&body),
+    ) {
+        Ok(response) => response,
+        Err(kind) if transient_network(kind) => return Ok(Poll::Retry(0)),
+        Err(kind) => return Err(contact_error("Microsoft", kind)),
+    };
+    let status = response.status();
+    if status == 429 || (500..600).contains(&status) {
+        return Ok(Poll::Retry(
+            response
+                .header("Retry-After")
+                .and_then(|h| h.parse().ok())
+                .unwrap_or(0),
+        ));
+    }
+    let v: Value = match response.into_json() {
+        Ok(value) => value,
+        Err(_) => {
+            return Err("Microsoft returned an unreadable sign-in response. Try again.".into());
+        }
+    };
     match v.get("error").and_then(Value::as_str) {
         Some("authorization_pending") => return Ok(Poll::Pending),
         Some("slow_down") => return Ok(Poll::SlowDown),
@@ -317,6 +384,9 @@ pub fn wait_for_sign_in(
             if cancelled() {
                 return Err("Sign-in cancelled.".into());
             }
+            if now() >= code.expires_at {
+                return Err("The sign-in code expired. Start again.".into());
+            }
             std::thread::sleep(Duration::from_millis(100));
         }
         if now() > code.expires_at {
@@ -324,7 +394,14 @@ pub fn wait_for_sign_in(
         }
         match poll(ep, client_id, code)? {
             Poll::Pending => {}
-            Poll::SlowDown => interval += 5,
+            Poll::SlowDown => interval = interval.saturating_add(5),
+            Poll::Retry(after) => {
+                interval = interval
+                    .saturating_mul(2)
+                    .min(60)
+                    .max(after)
+                    .min(code.expires_at.saturating_sub(now()).max(1))
+            }
             Poll::Done(tokens) => return Ok(tokens),
         }
     }

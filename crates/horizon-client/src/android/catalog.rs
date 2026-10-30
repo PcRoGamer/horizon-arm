@@ -45,9 +45,8 @@ pub struct Config {
     pub renderer: RendererMode,
     pub render_scale: crate::display::RenderScale,
     pub orientation: Orientation,
-    pub immersive: bool,
-    pub avoid_cutout: bool,
-    pub aspect: crate::display::Aspect,
+    #[serde(flatten)]
+    pub screen: crate::display::ScreenPreferences,
     pub input_host: InputHost,
     pub keypad_controls: bool,
     pub record_performance: bool,
@@ -108,7 +107,8 @@ impl Config {
             config.renderer = RendererMode::OpenGl;
         }
         // Ignore saved app registrations while this dev build uses the fixed ID.
-        config.microsoft_client_id = MICROSOFT_CLIENT_ID.into();
+        config.microsoft_client_id =
+            crate::account::client_id().unwrap_or_else(|| MICROSOFT_CLIENT_ID.into());
         if value.get("renderer").is_none() && value["gpu_batching"].as_bool() == Some(true) {
             config.renderer = RendererMode::Vulkan;
         }

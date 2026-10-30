@@ -53,7 +53,7 @@ impl Launcher {
                         a.label().into(),
                         String::new(),
                         Action::ChooseAspect(a),
-                        c.aspect == a,
+                        c.screen.aspect == a,
                     )
                 })
                 .collect(),

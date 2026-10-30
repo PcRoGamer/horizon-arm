@@ -802,15 +802,19 @@ impl Launcher {
                 ("Input", c.input_host.label().to_owned(), Action::InputHost),
                 (
                     "Immersive fullscreen",
-                    if c.immersive { "On" } else { "Off" }.into(),
+                    if c.screen.immersive { "On" } else { "Off" }.into(),
                     Action::Immersive,
                 ),
                 (
                     "Avoid camera cutout",
-                    if c.avoid_cutout { "On" } else { "Off" }.into(),
+                    if c.screen.avoid_cutout { "On" } else { "Off" }.into(),
                     Action::Cutout,
                 ),
-                ("Aspect ratio", c.aspect.label().into(), Action::Aspect),
+                (
+                    "Aspect ratio",
+                    c.screen.aspect.label().into(),
+                    Action::Aspect,
+                ),
                 (
                     "Display refresh rate",
                     c.device.display_label(),
@@ -903,8 +907,8 @@ impl Launcher {
                         ],
                         match action {
                             Action::PerformanceHints => c.device.performance_hints,
-                            Action::Immersive => c.immersive,
-                            Action::Cutout => c.avoid_cutout,
+                            Action::Immersive => c.screen.immersive,
+                            Action::Cutout => c.screen.avoid_cutout,
                             _ => c.device.gpu_profile,
                         },
                         action,
@@ -1161,18 +1165,18 @@ impl Launcher {
         }
         match action {
             Some(Action::Immersive) => {
-                self.catalog.config.immersive ^= true;
+                self.catalog.config.screen.immersive ^= true;
                 self.catalog.config.save(&self.home)?;
                 self.configure_screen();
             }
             Some(Action::Cutout) => {
-                self.catalog.config.avoid_cutout ^= true;
+                self.catalog.config.screen.avoid_cutout ^= true;
                 self.catalog.config.save(&self.home)?;
                 self.configure_screen();
             }
             Some(Action::Aspect) => self.open_chooser(chooser::Kind::Aspect),
             Some(Action::ChooseAspect(aspect)) => {
-                self.catalog.config.aspect = aspect;
+                self.catalog.config.screen.aspect = aspect;
                 self.catalog.config.save(&self.home)?;
                 self.configure_screen();
                 self.chooser = None;

@@ -185,3 +185,36 @@ impl Aspect {
         }
     }
 }
+
+/// Client-wide screen choices. Missing preferences start in navigation-free mode.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ScreenPreferences {
+    pub immersive: bool,
+    pub avoid_cutout: bool,
+    pub aspect: Aspect,
+}
+impl Default for ScreenPreferences {
+    fn default() -> Self {
+        Self {
+            immersive: true,
+            avoid_cutout: false,
+            aspect: Aspect::Native,
+        }
+    }
+}
+#[cfg(test)]
+mod screen_tests {
+    use super::*;
+    #[test]
+    fn missing_screen_preferences_hide_navigation_but_keep_explicit_off() {
+        let defaults: ScreenPreferences = serde_json::from_str("{}").unwrap();
+        assert!(defaults.immersive);
+        let saved: ScreenPreferences =
+            serde_json::from_str(r#"{"immersive":false,"aspect":"classic","avoid_cutout":true}"#)
+                .unwrap();
+        assert!(!saved.immersive);
+        assert!(saved.avoid_cutout);
+        assert_eq!(saved.aspect, Aspect::Classic);
+    }
+}

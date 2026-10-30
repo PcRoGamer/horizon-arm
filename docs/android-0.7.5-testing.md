@@ -109,7 +109,7 @@ Both are in launcher Settings and default off.
   should appear inside the Android game.
 - System preferences belong to the launcher; gyro/mouse options belong to Touch
   Controls. Existing values should survive restarting and legacy migration.
-- Launcher Settings: toggle Immersive fullscreen. Navigation bars should hide;
+- Launcher Settings: toggle Immersive fullscreen. Navigation bars should hide; the status bar stays hidden with either choice;
   an edge swipe temporarily reveals system bars. Recheck after Home, screen lock,
   keyboard use and opening the system file picker.
 - Toggle Avoid camera cutout with a real or emulated cutout. The full picture

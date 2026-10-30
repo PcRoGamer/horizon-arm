@@ -13,6 +13,8 @@ struct Mock {
     legacy: bool,
     /// Polls left before the token endpoint stops saying authorization_pending.
     pending: usize,
+    temporary_poll_failures: usize,
+    poll_error: Option<&'static str>,
     xerr: Option<u64>,
     owns_game: bool,
     no_profile: bool,
@@ -27,6 +29,15 @@ fn reply(status: u16, body: Value) -> (u16, String) {
 }
 
 fn route(mock: &mut Mock, method: &str, path: &str, auth: &str, body: &str) -> (u16, String) {
+    if path == "/ms/token" && mock.temporary_poll_failures > 0 {
+        mock.temporary_poll_failures -= 1;
+        return reply(503, json!({"error":"temporarily_unavailable"}));
+    }
+    if path == "/ms/token" {
+        if let Some(error) = mock.poll_error {
+            return reply(400, json!({"error":error}));
+        }
+    }
     let form = |key: &str| {
         body.split('&')
             .filter_map(|p| p.split_once('='))
@@ -690,7 +701,7 @@ fn refusals_have_messages() {
     // Nothing listening: a message, not a URL.
     assert_eq!(
         device_code(&offline(), "x").unwrap_err(),
-        "Could not reach Microsoft. Check your internet connection."
+        "Could not reach Microsoft (ConnectionFailed). Check your internet connection."
     );
 }
 
@@ -975,5 +986,85 @@ fn the_java_edition_plays_as_an_owner_even_offline() {
     assert_eq!(
         java_player_with(&offline(), Some("test-client"), &store, &mut accounts).unwrap_err(),
         NoOwner.to_string()
+    );
+}
+
+#[test]
+fn temporary_poll_outage_preserves_device_code_until_recovery() {
+    let (m, ep) = mock(|m| m.temporary_poll_failures = 3);
+    let code = device_code(&ep, "test-client").unwrap();
+    assert!(matches!(
+        poll(&ep, "test-client", &code).unwrap(),
+        Poll::Retry(_)
+    ));
+    assert!(matches!(
+        poll(&ep, "test-client", &code).unwrap(),
+        Poll::Done(_)
+    ));
+    let m = m.lock().unwrap();
+    assert_eq!(
+        m.log
+            .iter()
+            .filter(|(_, p, _)| p == "/ms/devicecode")
+            .count(),
+        1
+    );
+}
+#[test]
+fn invalid_configuration_errors_are_not_retryable() {
+    assert!(transient_network(ureq::ErrorKind::Dns));
+    assert!(!transient_network(ureq::ErrorKind::InvalidUrl));
+    assert!(!transient_network(ureq::ErrorKind::ProxyUnauthorized));
+    assert_eq!(
+        contact_error("Microsoft", ureq::ErrorKind::Dns),
+        "Could not reach Microsoft (Dns). Check your internet connection."
+    );
+}
+
+#[test]
+fn declined_registration_is_terminal_without_network_retries() {
+    let (m, ep) = mock(|m| m.poll_error = Some("invalid_client"));
+    let code = device_code(&ep, "test-client").unwrap();
+    assert!(
+        poll(&ep, "test-client", &code)
+            .err()
+            .unwrap()
+            .contains("client ID")
+    );
+    assert_eq!(
+        m.lock()
+            .unwrap()
+            .log
+            .iter()
+            .filter(|(_, p, _)| p == "/ms/token")
+            .count(),
+        1
+    );
+}
+#[test]
+fn cancelled_and_expired_flows_stop_without_polling() {
+    let (m, ep) = mock(|_| {});
+    let mut code = device_code(&ep, "test-client").unwrap();
+    assert_eq!(
+        wait_for_sign_in(&ep, "test-client", &code, &|| true)
+            .err()
+            .unwrap(),
+        "Sign-in cancelled."
+    );
+    code.expires_at = now().saturating_sub(1);
+    assert!(
+        wait_for_sign_in(&ep, "test-client", &code, &|| false)
+            .err()
+            .unwrap()
+            .contains("expired")
+    );
+    assert_eq!(
+        m.lock()
+            .unwrap()
+            .log
+            .iter()
+            .filter(|(_, p, _)| p == "/ms/token")
+            .count(),
+        0
     );
 }

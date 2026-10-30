@@ -54,6 +54,7 @@ struct Ui {
     keyboard_request: Mutex<Option<std::time::Instant>>,
     last_bounds: Mutex<Option<std::time::Instant>>,
     avoid_cutout: AtomicBool,
+    immersive: AtomicBool,
 }
 static UI: OnceLock<Arc<Ui>> = OnceLock::new();
 
@@ -164,6 +165,7 @@ pub unsafe fn initialize(
         keyboard_request: Mutex::new(None),
         last_bounds: Mutex::new(None),
         avoid_cutout: AtomicBool::new(false),
+        immersive: AtomicBool::new(true),
     });
     let looper = unsafe { ALooper_forThread() };
     if looper.is_null() {
@@ -293,11 +295,14 @@ impl Ui {
                     "(I)V",
                     &[JValue::Int(2)],
                 )?;
+                // Status bars stay hidden in both modes. This preference only
+                // changes navigation buttons / the gesture bar, never the IME.
+                env.call_method(&controller, "hide", "(I)V", &[JValue::Int(1)])?;
                 env.call_method(
                     &controller,
                     if immersive { "hide" } else { "show" },
                     "(I)V",
-                    &[JValue::Int(7)],
+                    &[JValue::Int(2)],
                 )?;
             }
         } else {
@@ -305,7 +310,7 @@ impl Ui {
                 decor,
                 "setSystemUiVisibility",
                 "(I)V",
-                &[JValue::Int(if immersive { 0x1706 } else { 0 })],
+                &[JValue::Int(if immersive { 0x1706 } else { 0x0004 })],
             )?;
         }
         Ok(())
@@ -314,6 +319,7 @@ impl Ui {
         match c {
             Command::Screen(immersive, avoid) => {
                 self.avoid_cutout.store(avoid, Ordering::Release);
+                self.immersive.store(immersive, Ordering::Release);
                 if let Err(error) = self.apply_screen(env, immersive) {
                     let _ = env.exception_clear();
                     log::warn!("Android screen preferences: {error}");
@@ -463,7 +469,9 @@ impl Ui {
                     Ordering::Release,
                 );
                 let mut safe = [0; 4];
-                if self.avoid_cutout.load(Ordering::Acquire) {
+                if self.avoid_cutout.load(Ordering::Acquire)
+                    || !self.immersive.load(Ordering::Acquire)
+                {
                     let result = (|| -> jni::errors::Result<()> {
                         let insets = env
                             .call_method(
@@ -474,27 +482,51 @@ impl Ui {
                             )?
                             .l()?;
                         if !insets.is_null() {
-                            let cutout = env
-                                .call_method(
-                                    insets,
-                                    "getDisplayCutout",
-                                    "()Landroid/view/DisplayCutout;",
-                                    &[],
-                                )?
-                                .l()?;
-                            if !cutout.is_null() {
-                                for (i, method) in [
-                                    "getSafeInsetLeft",
-                                    "getSafeInsetTop",
-                                    "getSafeInsetRight",
-                                    "getSafeInsetBottom",
-                                ]
-                                .into_iter()
-                                .enumerate()
+                            let sdk = env
+                                .get_static_field("android/os/Build$VERSION", "SDK_INT", "I")?
+                                .i()?;
+                            if !self.immersive.load(Ordering::Acquire) && sdk >= 30 {
+                                let navigation = env
+                                    .call_method(
+                                        &insets,
+                                        "getInsets",
+                                        "(I)Landroid/graphics/Insets;",
+                                        &[JValue::Int(2)],
+                                    )?
+                                    .l()?;
+                                for (i, field) in
+                                    ["left", "top", "right", "bottom"].into_iter().enumerate()
                                 {
                                     safe[i] =
-                                        env.call_method(&cutout, method, "()I", &[])?.i()?.max(0)
-                                            as u32;
+                                        env.get_field(&navigation, field, "I")?.i()?.max(0) as u32;
+                                }
+                            }
+                            if self.avoid_cutout.load(Ordering::Acquire) && sdk >= 28 {
+                                let cutout = env
+                                    .call_method(
+                                        &insets,
+                                        "getDisplayCutout",
+                                        "()Landroid/view/DisplayCutout;",
+                                        &[],
+                                    )?
+                                    .l()?;
+                                if !cutout.is_null() {
+                                    for (i, method) in [
+                                        "getSafeInsetLeft",
+                                        "getSafeInsetTop",
+                                        "getSafeInsetRight",
+                                        "getSafeInsetBottom",
+                                    ]
+                                    .into_iter()
+                                    .enumerate()
+                                    {
+                                        safe[i] = safe[i].max(
+                                            env.call_method(&cutout, method, "()I", &[])?
+                                                .i()?
+                                                .max(0)
+                                                as u32,
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -685,10 +717,9 @@ pub fn configure_screen(immersive: bool, avoid_cutout: bool) {
     }
 }
 pub fn refresh_bounds() {
-    if let Some(ui) = UI
-        .get()
-        .filter(|ui| ui.avoid_cutout.load(Ordering::Acquire))
-    {
+    if let Some(ui) = UI.get().filter(|ui| {
+        ui.avoid_cutout.load(Ordering::Acquire) || !ui.immersive.load(Ordering::Acquire)
+    }) {
         let mut last = ui
             .last_bounds
             .lock()

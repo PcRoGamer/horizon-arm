@@ -29,3 +29,11 @@ Skin/cape management and native `.hnmod` engine experiments are excluded from th
 Source checks and focused input tests cover gesture ownership, cancellation, mouse dragging and settings migration. A complete on-device playthrough of the final source is still required before publication. Compilation checks are not APK startup tests or a performance benchmark.
 
 The screen adapter and viewport changes pass ARM64/ARMv7 source checks and standalone geometry tests. The minimal x86_64 screen probe builds, but this host's emulator exits with Windows error `0xC0000005` before the application can run; native window behavior and final game presentation still need device testing.
+
+Immersive fullscreen defaults to on for missing screen preferences; explicitly
+saved Off choices are retained. The status bar stays hidden in both modes. Off
+shows only Android navigation, with its occupied area excluded from the picture.
+Microsoft device-code polling retains the active code through temporary network
+outages, with bounded request retries, backoff and service/error categories.
+The configured `HORIZON_MSA_CLIENT_ID` is honored when supplied; the upstream
+registration value is not distributed in source and has not been substituted.

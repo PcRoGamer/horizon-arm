@@ -142,10 +142,12 @@ impl Launcher {
     }
     pub(super) fn configure_screen(&self) {
         crate::native_ime::configure_screen(
-            self.catalog.config.immersive,
-            self.catalog.config.avoid_cutout,
+            self.catalog.config.screen.immersive,
+            self.catalog.config.screen.avoid_cutout,
         );
-        winit::platform::android::set_native_content_aspect(self.catalog.config.aspect.ratio());
+        winit::platform::android::set_native_content_aspect(
+            self.catalog.config.screen.aspect.ratio(),
+        );
     }
     fn fail(&mut self, error: impl std::fmt::Display) {
         log::error!("{error}");
