@@ -1,0 +1,60 @@
+name: Temporary ARM upstream sync
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/arm-upstream-sync-temp.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  merge-and-replay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: sync/upstream-2026-10-30
+          fetch-depth: 0
+
+      - name: Merge original Android PR and replay post-snapshot work
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git remote add upstream https://github.com/horizon-rust/horizon.git
+          git fetch upstream refs/pull/3676/head:refs/remotes/upstream/android-pr-3676
+          git fetch origin main
+
+          echo "=== merging original Android PR #3676 onto current upstream ==="
+          if ! git merge --no-ff --no-edit refs/remotes/upstream/android-pr-3676; then
+            echo "::error::Original Android PR merge conflicted"
+            echo "=== conflicted files ==="
+            git diff --name-only --diff-filter=U
+            echo "=== status ==="
+            git status --short
+            echo "=== combined conflict diff ==="
+            git diff --cc || true
+            exit 21
+          fi
+
+          echo "=== replaying fork commits after the snapshot restore ==="
+          mapfile -t commits < <(git rev-list --reverse --ancestry-path 319e087ee9d4601c4466223a64580a71c3772dfd..695cfe884739eaf79f6438b63c06bfc007f7c8f7)
+          for c in "${commits[@]}"; do
+            echo "--- cherry-pick $c: $(git show -s --format=%s "$c")"
+            if ! git cherry-pick "$c"; then
+              echo "::error::Cherry-pick conflicted at $c"
+              echo "CONFLICT_COMMIT=$c"
+              echo "=== conflicted files ==="
+              git diff --name-only --diff-filter=U
+              echo "=== status ==="
+              git status --short
+              echo "=== combined conflict diff ==="
+              git diff --cc || true
+              exit 22
+            fi
+          done
+
+          git push origin HEAD:refs/heads/sync/candidate-2026-10-30
