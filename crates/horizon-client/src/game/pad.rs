@@ -208,12 +208,22 @@ impl Game<'_> {
             {
                 touch.triggers = [1.0, 0.0];
                 self.pad.touch.latch_use();
-            } else if self.pad.touch.aim.is_some()
-                && !self.pad.touch.holding
-                && touch.triggers[0] > 0.0
-                && self.entity_targeted()
-            {
-                touch.triggers = [0.0, 1.0];
+            }
+            if let Some(held_use) = self.pad.touch.take_tap() {
+                if self.entity_targeted() && self.using.is_none() && self.screen == Screen::Playing
+                {
+                    // Resolve the entity attack now, never as held LMB. A mob
+                    // disappearing before the next tick cannot expose a block.
+                    if self.remote.is_some() {
+                        self.remote_start_attack();
+                    } else {
+                        self.attack();
+                    }
+                } else if !held_use {
+                    // Preserve normal block placement and empty-hand interaction.
+                    // Items with a use action wait for the long-press instead.
+                    touch.triggers[0] = 1.0;
+                }
             }
             state.merge(&touch)
         };

@@ -6455,7 +6455,7 @@ impl Game<'_> {
         }
     }
 
-    fn remote_start_attack(&mut self) -> bool {
+    pub(super) fn remote_start_attack(&mut self) -> bool {
         if self.clicks.miss_time > 0 {
             return false;
         }
@@ -7645,7 +7645,7 @@ fn use_ends_click(info: &horizon_client::items::ItemInfo, fall_flying: bool) -> 
 /// throws, shoots, fills or places), which ends `Minecraft.startUseItem` at
 /// its hand. Tools and materials pass, and the off hand gets its turn. The
 /// server decides; this is the client's guess of whether to go on.
-fn item_has_use(info: &horizon_client::items::ItemInfo) -> bool {
+pub(super) fn item_has_use(info: &horizon_client::items::ItemInfo) -> bool {
     let id = info.id.trim_start_matches("minecraft:");
     id.ends_with("_spear")
         || info.consumable.is_some()

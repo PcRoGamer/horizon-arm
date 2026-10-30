@@ -6,24 +6,6 @@ use std::{
     time::{Duration, Instant},
 };
 const HOLD_DELAY: Duration = Duration::from_millis(350);
-/// Items whose use action belongs to a world hold in tap control modes.
-pub fn item_uses_hold(name: &str, consumable: bool, equippable: bool) -> bool {
-    consumable
-        || equippable
-        || matches!(
-            name,
-            "minecraft:fishing_rod"
-                | "minecraft:wind_charge"
-                | "minecraft:firework_rocket"
-                | "minecraft:bow"
-                | "minecraft:crossbow"
-                | "minecraft:trident"
-                | "minecraft:spyglass"
-                | "minecraft:shield"
-                | "minecraft:goat_horn"
-                | "minecraft:brush"
-        )
-}
 mod custom;
 mod editor;
 pub use custom::CustomButton;
@@ -93,6 +75,7 @@ pub struct TouchControls {
     pending: PadState,
     pub aim: Option<[f32; 2]>,
     tap_aim: Option<[f32; 2]>,
+    pending_tap: Option<bool>,
     aspect: f32,
     loaded: bool,
     pub chat_requested: bool,
@@ -167,6 +150,7 @@ impl TouchControls {
         self.pending = PadState::default();
         self.aim = None;
         self.tap_aim = None;
+        self.pending_tap = None;
         self.last_marker = None;
         self.holding = false;
         self.holding_use = false;
@@ -501,7 +485,7 @@ impl TouchControls {
                     start
                 });
                 self.last_marker = Some((start, Instant::now()));
-                self.pending.triggers[usize::from(held_use)] = 1.0;
+                self.pending_tap = Some(held_use);
             }
             return [0.0; 2];
         }
@@ -609,6 +593,7 @@ impl TouchControls {
         self.pending = PadState::default();
         self.aim = None;
         self.tap_aim = None;
+        self.pending_tap = None;
         self.last_marker = None;
         self.holding_use = false;
         self.holding = false;
@@ -616,6 +601,11 @@ impl TouchControls {
         self.settings_requested = false;
         self.debug_requested = false;
         self.perspective_requested = false;
+    }
+    /// A short world tap never holds a mouse button into the next tick.
+    /// Its item-use intent is resolved against the current entity target.
+    pub fn take_tap(&mut self) -> Option<bool> {
+        self.pending_tap.take()
     }
     pub fn poll_state(&mut self) -> PadState {
         let mut state = self.state().merge(&std::mem::take(&mut self.pending));
@@ -957,24 +947,31 @@ fn line(
 #[cfg(test)]
 mod tests {
     #[test]
-    fn use_items_keep_tap_attack_and_hold_use() {
-        use super::*;
-        for (mode, split, _) in Mode::SCHEMES {
-            if mode == Mode::Crosshair || (mode == Mode::Dpad && split) {
-                continue;
+    fn world_taps_never_press_attack_or_use_and_remember_the_original_item() {
+        for (mode, split) in [
+            (Mode::Tap, false),
+            (Mode::Dpad, false),
+            (Mode::Crosshair, false),
+            (Mode::Dpad, true),
+        ] {
+            for held_use in [false, true] {
+                let mut t = TouchControls::default();
+                t.settings.mode = mode;
+                t.settings.split_controls = split;
+                t.settings.crosshair_gestures = true;
+                t.hold_uses_item = held_use;
+                t.update(1, [0.6, 0.4], true, false);
+                t.hold_uses_item = !held_use;
+                t.update(1, [0.6, 0.4], false, true);
+                assert_eq!(t.poll_state().triggers, [0.0; 2]);
+                assert_eq!(t.take_tap(), Some(held_use));
+                assert_eq!(t.take_tap(), None);
+                t.update(2, [0.6, 0.4], true, false);
+                t.update(2, [0.6, 0.4], false, true);
+                t.clear();
+                assert_eq!(t.take_tap(), None);
             }
-            let mut t = TouchControls::default();
-            t.settings.mode = mode;
-            t.settings.split_controls = split;
-            t.hold_uses_item = true;
-            t.update(99, [0.6, 0.4], true, false);
-            t.update(99, [0.6, 0.4], false, true);
-            assert_eq!(t.poll_state().triggers, [0.0, 1.0]);
-            assert_eq!(t.poll_state().triggers, [0.0, 0.0]);
         }
-        assert!(item_uses_hold("minecraft:fishing_rod", false, false));
-        assert!(item_uses_hold("test:armor", false, true));
-        assert!(!item_uses_hold("minecraft:stone", false, false));
     }
     #[test]
     fn sprint_toggle_survives_finger_release_and_clears_on_focus_loss() {
@@ -1185,7 +1182,8 @@ mod tests {
             t.settings.crosshair_gestures = true;
             t.update(1, [0.6, 0.4], true, false);
             t.update(1, [0.6, 0.4], false, true);
-            assert_eq!(t.poll_state().triggers[0], 1.0);
+            assert_eq!(t.poll_state().triggers, [0.0; 2]);
+            assert_eq!(t.take_tap(), Some(false));
             assert_eq!(t.aim, Some([0.5, 0.5]));
             t.virtual_mouse_controls = true;
             t.inventory_mode = true;
@@ -1243,7 +1241,8 @@ mod tests {
         t.settings.mode = Mode::Tap;
         t.update(1, [0.6, 0.4], true, false);
         t.update(1, [0.6, 0.4], false, true);
-        assert_eq!(t.poll_state().triggers[0], 1.0);
+        assert_eq!(t.poll_state().triggers, [0.0; 2]);
+        assert_eq!(t.take_tap(), Some(false));
         assert_eq!(t.aim, Some([0.6, 0.4]));
         assert_eq!(t.poll_state().triggers[0], 0.0);
         assert_eq!(t.aim, None);
@@ -1311,7 +1310,8 @@ mod tests {
         assert!(!t.holding);
         t.update(2, [0.6, 0.4], true, false);
         t.update(2, [0.6, 0.4], false, true);
-        assert_eq!(t.poll_state().triggers, [1.0, 0.0]);
+        assert_eq!(t.poll_state().triggers, [0.0, 0.0]);
+        assert_eq!(t.take_tap(), Some(false));
         assert!(!t.holding);
     }
     #[test]

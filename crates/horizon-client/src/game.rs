@@ -2443,13 +2443,39 @@ impl Game<'_> {
     /// Whether a world hold should use the held item instead of mining.
     #[cfg(target_os = "android")]
     pub(super) fn touch_item_held_use(&self) -> bool {
-        self.held().is_some_and(|s| {
-            let data = self.res.items().get(&s.item);
-            horizon_client::touch::item_uses_hold(
-                &s.item,
-                data.is_some_and(|i| i.consumable.is_some()),
-                data.is_some_and(|i| i.equip_slot.is_some()),
-            ) || self.blocks_attacks(s).is_some()
+        self.held().is_some_and(|stack| {
+            #[cfg(feature = "mods")]
+            if self.mods.mods.claims(&stack.item) {
+                return true;
+            }
+            let Some(info) = self.items().get(&stack.item) else {
+                return false;
+            };
+            remote::item_has_use(info)
+                || info.bundle
+                || info.dye.is_some()
+                || info.jukebox_song.is_some()
+                || stack.item.ends_with("_spawn_egg")
+                || matches!(
+                    &*stack.item,
+                    "minecraft:firework_rocket"
+                        | "minecraft:armor_stand"
+                        | "minecraft:item_frame"
+                        | "minecraft:glow_item_frame"
+                        | "minecraft:painting"
+                        | "minecraft:lead"
+                        | "minecraft:name_tag"
+                        | "minecraft:bone_meal"
+                        | "minecraft:flint_and_steel"
+                        | "minecraft:fire_charge"
+                )
+                || info.block.is_some_and(|state| {
+                    let block = self.res.facts().get(state);
+                    ["CropBlock", "StemBlock", "NetherWartBlock", "CocoaBlock"]
+                        .iter()
+                        .any(|class| block.has_class(class))
+                })
+                || self.blocks_attacks(stack).is_some()
         })
     }
     pub(super) fn touch_editing(&self) -> bool {
