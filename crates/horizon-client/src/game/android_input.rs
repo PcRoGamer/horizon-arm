@@ -298,6 +298,15 @@ impl Game<'_> {
                         self.pad.touch_ui.expanded = false;
                     }
                     Action::VirtualMouse => {
+                        if matches!(self.screen, Screen::Inventory | Screen::Creative) {
+                            // Cancel a prior drag without clicking/dropping at
+                            // the toggle button, which is outside the inventory.
+                            self.inv_clicks = Default::default();
+                            self.inv_drag = None;
+                            self.creative_screen.release();
+                            self.loom_release();
+                        }
+                        self.pad.touch_ui.cancel();
                         self.pad.touch_ui.virtual_mouse ^= true;
                     }
                     Action::More => self.pad.touch_ui.expanded = !self.pad.touch_ui.expanded,

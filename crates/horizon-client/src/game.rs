@@ -12366,7 +12366,11 @@ impl Game<'_> {
     }
     fn render(&mut self) -> Result<bool> {
         #[cfg(target_os = "android")]
-        let _native_frame = crate::device_runtime::frame(self.settings.touch.performance_hints, self.settings.touch.display_hz, self.focused);
+        let _native_frame = crate::device_runtime::frame(
+            self.settings.touch.performance_hints,
+            self.settings.touch.display_hz,
+            self.focused,
+        );
         if self.renderer.as_mut().is_some_and(|r| r.display_changed()) {
             self.apply_ui_settings();
         }
@@ -13876,6 +13880,11 @@ impl ApplicationHandler for Game<'_> {
                         position: touch.location,
                     },
                 );
+                if self.settings.touch.virtual_mouse && self.pad.touch_ui.virtual_mouse {
+                    // Inventories have their own direct-touch path, separate
+                    // from android_menu_touch. Hover must suppress clicks here too.
+                    return;
+                }
                 if touch.phase != TouchPhase::Moved {
                     self.window_event(
                         event_loop,
@@ -14938,7 +14947,9 @@ impl ApplicationHandler for Game<'_> {
         self.android_poll_keyboard();
         #[cfg(target_os = "android")]
         if let Some(renderer) = &mut self.renderer {
-            renderer.set_detailed_gpu_timing(crate::performance::active() || self.settings.touch.gpu_profile);
+            renderer.set_detailed_gpu_timing(
+                crate::performance::active() || self.settings.touch.gpu_profile,
+            );
         }
         if horizon_threads::stop_requests() > 0
             && self.pending_save.as_ref().is_none_or(|save| !save.quit)
