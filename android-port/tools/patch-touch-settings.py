@@ -166,9 +166,13 @@ replace_once(
 
 print("patched Horizon Android in-game touch settings")
 
-# Extend the same panel in deterministic order: first the live layout editor,
-# then the remaining Bedrock touch-mode behavior toggles.
+# Extend the same panel in deterministic order: live layout editor, Bedrock
+# behavior toggles, then Android system haptics and swipe-hotbar feedback.
 editor = Path(__file__).with_name("patch-touch-editor.py")
 subprocess.run([sys.executable, str(editor), str(root)], check=True)
 parity = Path(__file__).with_name("patch-touch-parity-options.py")
 subprocess.run([sys.executable, str(parity), str(root)], check=True)
+haptics = Path(__file__).with_name("patch-touch-haptics.py")
+subprocess.run([sys.executable, str(haptics), str(root)], check=True)
+hotbar_haptics = Path(__file__).with_name("patch-touch-haptics-hotbar.py")
+subprocess.run([sys.executable, str(hotbar_haptics), str(root)], check=True)
