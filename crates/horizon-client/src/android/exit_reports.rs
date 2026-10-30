@@ -51,26 +51,44 @@ pub fn collect(home: &Path) {
             .i()?
             .clamp(0, 8);
         for i in 0..count {
-            let row=env.with_local_frame(32,|env|->jni::errors::Result<serde_json::Value>{
-   let item=env.call_method(&exits,"get","(I)Ljava/lang/Object;",&[JValue::Int(i)])?.l()?;
-   let stamp=env.call_method(&item,"getTimestamp","()J",&[])?.j()?;
-   let reason=env.call_method(&item,"getReason","()I",&[])?.i()?;
-   let status=env.call_method(&item,"getStatus","()I",&[])?.i()?;
-   let desc=env.call_method(&item,"getDescription","()Ljava/lang/String;",&[])?.l()?;
-   let description=if desc.is_null(){String::new()}else{env.get_string(&JString::from(desc))?.to_string_lossy().chars().take(4096).collect()};
-   // Native-crash and ANR traces are available on supported firmware. No broad
-   // logcat access or external-storage permission is requested.
-   let mut trace_file=None;
-   if matches!(reason,4..=6) {
-    let stream=env.call_method(&item,"getTraceInputStream","()Ljava/io/InputStream;",&[])?.l()?;
-    if !stream.is_null(){let buf=env.new_byte_array(8192)?;let mut data=Vec::new();
-     let read=(||->jni::errors::Result<()>{while data.len()<256*1024 {let n=env.call_method(&stream,"read","([B)I",&[JValue::Object(&buf)])?.i()?;if n<=0{break;}let bytes=env.convert_byte_array(JByteArray::from(env.new_local_ref(&buf)?))?;data.extend_from_slice(&bytes[..n as usize]);}Ok(())})();
-     let _=env.call_method(&stream,"close","()V",&[]);read?;
-     if !data.is_empty(){let name=format!("exit-{stamp}.trace");if std::fs::write(dir.join(&name),data).is_ok(){trace_file=Some(name);}}
-    }
-   }
-   Ok(serde_json::json!({"timestamp_ms":stamp,"reason":reason,"status":status,"description":description,"trace_file":trace_file}))
-  })?;
+            let row = env.with_local_frame(32, |env| -> jni::errors::Result<serde_json::Value> {
+                let item = env.call_method(&exits, "get", "(I)Ljava/lang/Object;", &[JValue::Int(i)])?.l()?;
+                let stamp = env.call_method(&item, "getTimestamp", "()J", &[])?.j()?;
+                let reason = env.call_method(&item, "getReason", "()I", &[])?.i()?;
+                let status = env.call_method(&item, "getStatus", "()I", &[])?.i()?;
+                let desc = env.call_method(&item, "getDescription", "()Ljava/lang/String;", &[])?.l()?;
+                let description = if desc.is_null() {
+                    String::new()
+                } else {
+                    env.get_string(&JString::from(desc))?.to_string_lossy().chars().take(4096).collect()
+                };
+                // No broad logcat access or external-storage permission is requested.
+                let mut trace_file = None;
+                if matches!(reason, 4..=6) {
+                    let stream = env.call_method(&item, "getTraceInputStream", "()Ljava/io/InputStream;", &[])?.l()?;
+                    if !stream.is_null() {
+                        let buf = env.new_byte_array(8192)?;
+                        let mut data = Vec::new();
+                        let read = (|| -> jni::errors::Result<()> {
+                            while data.len() < 256 * 1024 {
+                                let n = env.call_method(&stream, "read", "([B)I", &[JValue::Object(&buf)])?.i()?;
+                                if n <= 0 { break; }
+                                let bytes = env.convert_byte_array(JByteArray::from(env.new_local_ref(&buf)?))?;
+                                data.extend_from_slice(&bytes[..n as usize]);
+                            }
+                            Ok(())
+                        })();
+                        let _ = env.call_method(&stream, "close", "()V", &[]);
+                        read?;
+                        if !data.is_empty() {
+                            let name = format!("exit-{stamp}.trace");
+                            if std::fs::write(dir.join(&name), data).is_ok() { trace_file = Some(name); }
+                        }
+                    }
+                }
+                Ok(serde_json::json!({"timestamp_ms": stamp, "reason": reason, "status": status,
+                    "description": description, "trace_file": trace_file}))
+            })?;
             reports.push(row);
         }
         Ok(())

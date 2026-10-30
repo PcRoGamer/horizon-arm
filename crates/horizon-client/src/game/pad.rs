@@ -136,6 +136,10 @@ impl Game<'_> {
         }
         #[cfg(target_os = "android")]
         {
+            self.pad.touch_ui.virtual_mouse_button = self.settings.touch.virtual_mouse;
+            if !self.settings.touch.virtual_mouse {
+                self.pad.touch_ui.virtual_mouse = false;
+            }
             crate::performance::configure_gpu_profile(
                 self.settings.touch.gpu_profile,
                 &crate::backend::game_home(),
