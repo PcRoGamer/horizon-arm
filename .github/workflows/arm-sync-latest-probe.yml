@@ -49,6 +49,126 @@ jobs:
                   return 0
                 fi
                 ;;
+              0b3f994e9ad3d3d235ec48e491c420e0a03e994c)
+                mapfile -t unresolved < <(git diff --name-only --diff-filter=U)
+                if [[ "${#unresolved[@]}" -eq 1 && "${unresolved[0]}" == "crates/horizon-client/src/game.rs" ]]; then
+                  echo "Resolving Android activity startup against modern Options::read/parse"
+                  git checkout --ours -- crates/horizon-client/src/game.rs
+                  python3 - <<'PY'
+          from pathlib import Path
+          p = Path('crates/horizon-client/src/game.rs')
+          s = p.read_text()
+          def once(old, new, label):
+              global s
+              if old not in s:
+                  raise SystemExit(f'missing modern Android replay anchor: {label}')
+              s = s.replace(old, new, 1)
+
+          once(
+              '''    fn read() -> Result<Option<Self>> {
+                  let Some(mut o) = Self::parse(std::env::args().skip(1))
+                      .map_err(|e| launch_api::UsageError(e.to_string()))?
+          ''',
+              '''    fn read() -> Result<Option<Self>> {
+                  // Android's process argv belongs to the platform, not Horizon.
+                  #[cfg(not(target_os = "android"))]
+                  let args = std::env::args().skip(1);
+                  #[cfg(target_os = "android")]
+                  let args = std::iter::empty::<String>();
+                  let Some(mut o) = Self::parse(args)
+                      .map_err(|e| launch_api::UsageError(e.to_string()))?
+          ''',
+              'Options::read argv',
+          )
+          once(
+              '''    fn parse(mut args: impl Iterator<Item = String>) -> Result<Option<Self>> {
+                  let sibling = std::env::current_exe()?
+                      .parent()
+                      .ok_or("missing executable directory")?
+                      .join("resources");
+          ''',
+              '''    fn parse(mut args: impl Iterator<Item = String>) -> Result<Option<Self>> {
+                  // NativeActivity is launched through Android's zygote, so its executable
+                  // path has no adjacent Horizon resources.
+                  #[cfg(not(target_os = "android"))]
+                  let sibling = std::env::current_exe()?
+                      .parent()
+                      .ok_or("missing executable directory")?
+                      .join("resources");
+                  #[cfg(target_os = "android")]
+                  let sibling = PathBuf::new();
+          ''',
+              'Options::parse sibling resources',
+          )
+          once(
+              '''            resources: if sibling.join("horizon-resources.json").exists() {
+                          sibling
+                      } else {
+                          std::path::Path::new(".local/horizon-client").join(horizon_core::VANILLA_VERSION)
+                      },
+          ''',
+              '''            // Android and launchers without argv can provide the prepared
+                      // resource directory explicitly.
+                      resources: match std::env::var_os("HORIZON_RESOURCES").filter(|v| !v.is_empty()) {
+                          Some(dir) => PathBuf::from(dir),
+                          None if sibling.join("horizon-resources.json").exists() => sibling,
+                          None => std::path::Path::new(".local/horizon-client")
+                              .join(horizon_core::VANILLA_VERSION),
+                      },
+          ''',
+              'resources default',
+          )
+          once(
+              '''            world: None,
+          ''',
+              '''            world: {
+                          #[cfg(target_os = "android")]
+                          {
+                              std::env::var("HORIZON_WORLD").ok().filter(|w| !w.is_empty())
+                          }
+                          #[cfg(not(target_os = "android"))]
+                          None
+                      },
+          ''',
+              'Android HORIZON_WORLD',
+          )
+          once(
+              '''fn run_event_loop(mut game: Game<'_>) -> Result<()> {
+              let result = EventLoop::new()?.run_app(&mut game);
+          ''',
+              '''/// Build Winit from Android's NativeActivity when the OS owns the process;
+          /// desktop platforms continue to create a normal event loop.
+          fn event_loop() -> Result<EventLoop<()>> {
+              #[cfg(target_os = "android")]
+              {
+                  use winit::platform::android::EventLoopBuilderExtAndroid;
+                  let app = horizon_client::android::app()
+                      .ok_or("the Android activity was not handed over (crates/horizon-android)")?;
+                  return Ok(EventLoop::builder().with_android_app(app).build()?);
+              }
+              #[cfg(not(target_os = "android"))]
+              Ok(EventLoop::new()?)
+          }
+
+          fn run_event_loop(mut game: Game<'_>) -> Result<()> {
+              let result = event_loop()?.run_app(&mut game);
+          ''',
+              'run_event_loop',
+          )
+          once(
+              '''    let result = EventLoop::new()?.run_app(&mut app);
+          ''',
+              '''    let result = event_loop()?.run_app(&mut app);
+          ''',
+              'loading event loop',
+          )
+          p.write_text(s)
+          PY
+                  git add crates/horizon-client/src/game.rs crates/horizon-client/Cargo.toml crates/horizon-client/src/android.rs
+                  GIT_EDITOR=true git cherry-pick --continue
+                  return 0
+                fi
+                ;;
             esac
             return 1
           }
