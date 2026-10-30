@@ -1,8 +1,9 @@
-//! Minimal icon-first Android touch HUD primitives.
+//! Clean-room Bedrock-style Android touch HUD primitives.
 //!
-//! These glyphs are drawn from Horizon's existing HUD white texel instead of
-//! shipping another texture atlas. They stay sharp at every GUI scale and keep
-//! the mobile controls visually separate from desktop key labels.
+//! The shapes deliberately use Horizon's white HUD texel instead of Mojang
+//! artwork.  We mirror the mobile visual language (translucent rounded plates,
+//! white line glyphs, joystick/D-pad affordances and pressed states) while
+//! keeping all pixels original to Horizon.
 
 use horizon_client::hud::{HudAtlas, HudBatch, rgba};
 
@@ -16,10 +17,10 @@ pub(super) enum Icon {
     Inventory,
     Chat,
     Pause,
+    Perspective,
 }
 
 fn tri(batch: &mut HudBatch, atlas: &HudAtlas, a: [f32; 2], b: [f32; 2], c: [f32; 2], color: u32) {
-    // A degenerate fourth point turns HudBatch's quad into one triangle.
     batch.fill_quad(atlas, [a, b, c, a], color);
 }
 
@@ -48,21 +49,43 @@ fn segment(
     );
 }
 
-fn octagon(batch: &mut HudBatch, atlas: &HudAtlas, cx: f32, cy: f32, r: f32, color: u32) {
-    let k = 0.414_213_57 * r;
+/// An eight-point rounded-square approximation.  The old HUD used regular
+/// octagons, which read as generic gamepad buttons rather than Minecraft
+/// Bedrock's squarer mobile plates.
+fn plate(batch: &mut HudBatch, atlas: &HudAtlas, cx: f32, cy: f32, r: f32, color: u32) {
+    let c = r * 0.24;
     let points = [
-        [cx - k, cy - r],
-        [cx + k, cy - r],
-        [cx + r, cy - k],
-        [cx + r, cy + k],
-        [cx + k, cy + r],
-        [cx - k, cy + r],
-        [cx - r, cy + k],
-        [cx - r, cy - k],
+        [cx - r + c, cy - r],
+        [cx + r - c, cy - r],
+        [cx + r, cy - r + c],
+        [cx + r, cy + r - c],
+        [cx + r - c, cy + r],
+        [cx - r + c, cy + r],
+        [cx - r, cy + r - c],
+        [cx - r, cy - r + c],
     ];
     for i in 0..8 {
         tri(batch, atlas, [cx, cy], points[i], points[(i + 1) & 7], color);
     }
+}
+
+fn ring_plate(batch: &mut HudBatch, atlas: &HudAtlas, cx: f32, cy: f32, r: f32, down: bool) {
+    plate(
+        batch,
+        atlas,
+        cx,
+        cy,
+        r,
+        rgba(255, 255, 255, if down { 122 } else { 58 }),
+    );
+    plate(
+        batch,
+        atlas,
+        cx,
+        cy,
+        (r - 1.4).max(1.0),
+        rgba(18, 20, 23, if down { 148 } else { 94 }),
+    );
 }
 
 pub(super) fn joystick(
@@ -73,32 +96,71 @@ pub(super) fn joystick(
     r: f32,
     vector: [f32; 2],
 ) {
-    octagon(batch, atlas, cx, cy, r, rgba(7, 9, 13, 46));
-    octagon(batch, atlas, cx, cy, r * 0.82, rgba(255, 255, 255, 17));
+    // Bedrock's newer joystick is a quiet translucent base with a brighter
+    // thumb cap.  A rounded-square ring also survives tiny GUI scales better
+    // than a true circle rendered from quads.
+    plate(batch, atlas, cx, cy, r, rgba(255, 255, 255, 24));
+    plate(batch, atlas, cx, cy, r * 0.92, rgba(17, 19, 22, 50));
 
-    // Four small directional ticks make the affordance readable without a
-    // permanent D-pad. They fade behind the moving thumb knob.
-    let tick = rgba(255, 255, 255, 42);
-    let d = r * 0.54;
-    let q = r * 0.10;
-    segment(batch, atlas, [cx, cy - d - q], [cx, cy - d + q], q * 0.65, tick);
-    segment(batch, atlas, [cx, cy + d - q], [cx, cy + d + q], q * 0.65, tick);
-    segment(batch, atlas, [cx - d - q, cy], [cx - d + q, cy], q * 0.65, tick);
-    segment(batch, atlas, [cx + d - q, cy], [cx + d + q, cy], q * 0.65, tick);
-
-    let knob = r * 0.39;
-    let kx = cx + vector[0] * r;
-    let ky = cy - vector[1] * r;
+    let knob = r * 0.37;
+    let kx = cx + vector[0] * r * 0.78;
+    let ky = cy - vector[1] * r * 0.78;
     let moving = vector != [0.0, 0.0];
-    octagon(
+    plate(
         batch,
         atlas,
         kx,
         ky,
         knob,
-        rgba(255, 255, 255, if moving { 146 } else { 74 }),
+        rgba(255, 255, 255, if moving { 122 } else { 64 }),
     );
-    octagon(batch, atlas, kx, ky, knob * 0.76, rgba(18, 20, 25, 76));
+    plate(
+        batch,
+        atlas,
+        kx,
+        ky,
+        (knob - 1.5).max(1.0),
+        rgba(38, 40, 44, if moving { 104 } else { 72 }),
+    );
+}
+
+/// Bedrock classic D-pad.  `vector` is the active digital direction and may be
+/// diagonal.  Each arm lights independently so sliding a thumb through the pad
+/// has immediate feedback.
+pub(super) fn dpad(
+    batch: &mut HudBatch,
+    atlas: &HudAtlas,
+    cx: f32,
+    cy: f32,
+    r: f32,
+    vector: [f32; 2],
+) {
+    let arm = r * 0.46;
+    let gap = r * 0.10;
+    let positions = [
+        ([0.0, -1.0], cx, cy - r * 0.62),
+        ([0.0, 1.0], cx, cy + r * 0.62),
+        ([-1.0, 0.0], cx - r * 0.62, cy),
+        ([1.0, 0.0], cx + r * 0.62, cy),
+    ];
+    for (dir, x, y) in positions {
+        let down = (dir[0] != 0.0 && vector[0] == dir[0])
+            || (dir[1] != 0.0 && -vector[1] == dir[1]);
+        ring_plate(batch, atlas, x, y, arm, down);
+        let color = rgba(255, 255, 255, if down { 255 } else { 210 });
+        let tip = arm * 0.55;
+        let tail = arm * 0.16;
+        if dir[1] < 0.0 {
+            tri(batch, atlas, [x, y - tip], [x - tip * 0.62, y + tail], [x + tip * 0.62, y + tail], color);
+        } else if dir[1] > 0.0 {
+            tri(batch, atlas, [x, y + tip], [x - tip * 0.62, y - tail], [x + tip * 0.62, y - tail], color);
+        } else if dir[0] < 0.0 {
+            tri(batch, atlas, [x - tip, y], [x + tail, y - tip * 0.62], [x + tail, y + tip * 0.62], color);
+        } else {
+            tri(batch, atlas, [x + tip, y], [x - tail, y - tip * 0.62], [x - tail, y + tip * 0.62], color);
+        }
+    }
+    plate(batch, atlas, cx, cy, gap, rgba(255, 255, 255, 32));
 }
 
 pub(super) fn button(
@@ -110,26 +172,7 @@ pub(super) fn button(
     r: f32,
     down: bool,
 ) {
-    octagon(
-        batch,
-        atlas,
-        cx,
-        cy,
-        r,
-        rgba(7, 9, 13, if down { 150 } else { 68 }),
-    );
-    octagon(
-        batch,
-        atlas,
-        cx,
-        cy,
-        r - 2.0,
-        if down {
-            rgba(255, 255, 255, 78)
-        } else {
-            rgba(53, 57, 66, 45)
-        },
-    );
+    ring_plate(batch, atlas, cx, cy, r, down);
     draw_icon(
         batch,
         atlas,
@@ -137,7 +180,7 @@ pub(super) fn button(
         cx,
         cy,
         r * 0.58,
-        rgba(255, 255, 255, if down { 255 } else { 222 }),
+        rgba(255, 255, 255, if down { 255 } else { 224 }),
     );
 }
 
@@ -152,160 +195,72 @@ fn draw_icon(
 ) {
     match icon {
         Icon::Jump => {
-            let stem = s * 0.18;
-            batch.fill(atlas, cx - stem * 0.5, cy - s * 0.05, stem, s * 0.72, color);
-            tri(
-                batch,
-                atlas,
-                [cx, cy - s * 0.76],
-                [cx - s * 0.58, cy - s * 0.08],
-                [cx + s * 0.58, cy - s * 0.08],
-                color,
-            );
+            let stem = s * 0.17;
+            batch.fill(atlas, cx - stem * 0.5, cy - s * 0.02, stem, s * 0.66, color);
+            tri(batch, atlas, [cx, cy - s * 0.72], [cx - s * 0.55, cy - s * 0.08], [cx + s * 0.55, cy - s * 0.08], color);
         }
         Icon::Sneak => {
-            // A low chevron over a floor line: visually reads as crouch/down.
-            segment(
-                batch,
-                atlas,
-                [cx - s * 0.56, cy - s * 0.35],
-                [cx, cy + s * 0.18],
-                s * 0.17,
-                color,
-            );
-            segment(
-                batch,
-                atlas,
-                [cx + s * 0.56, cy - s * 0.35],
-                [cx, cy + s * 0.18],
-                s * 0.17,
-                color,
-            );
-            segment(
-                batch,
-                atlas,
-                [cx - s * 0.58, cy + s * 0.54],
-                [cx + s * 0.58, cy + s * 0.54],
-                s * 0.13,
-                color,
-            );
+            segment(batch, atlas, [cx - s * 0.56, cy - s * 0.30], [cx, cy + s * 0.22], s * 0.16, color);
+            segment(batch, atlas, [cx + s * 0.56, cy - s * 0.30], [cx, cy + s * 0.22], s * 0.16, color);
+            segment(batch, atlas, [cx - s * 0.58, cy + s * 0.52], [cx + s * 0.58, cy + s * 0.52], s * 0.12, color);
         }
         Icon::Sprint => {
-            // Two stacked forward chevrons, like a mobile game's boost glyph.
-            for oy in [-s * 0.25, s * 0.28] {
-                segment(
-                    batch,
-                    atlas,
-                    [cx - s * 0.50, cy + oy + s * 0.20],
-                    [cx, cy + oy - s * 0.20],
-                    s * 0.15,
-                    color,
-                );
-                segment(
-                    batch,
-                    atlas,
-                    [cx + s * 0.50, cy + oy + s * 0.20],
-                    [cx, cy + oy - s * 0.20],
-                    s * 0.15,
-                    color,
-                );
+            // Bedrock-like double forward chevron.
+            for oy in [-s * 0.26, s * 0.27] {
+                segment(batch, atlas, [cx - s * 0.48, cy + oy + s * 0.18], [cx, cy + oy - s * 0.20], s * 0.14, color);
+                segment(batch, atlas, [cx + s * 0.48, cy + oy + s * 0.18], [cx, cy + oy - s * 0.20], s * 0.14, color);
             }
         }
         Icon::Attack => {
-            // Sword: diagonal blade, tip, crossguard and short grip.
-            segment(
-                batch,
-                atlas,
-                [cx - s * 0.42, cy + s * 0.42],
-                [cx + s * 0.42, cy - s * 0.42],
-                s * 0.20,
-                color,
-            );
-            tri(
-                batch,
-                atlas,
-                [cx + s * 0.66, cy - s * 0.66],
-                [cx + s * 0.31, cy - s * 0.48],
-                [cx + s * 0.48, cy - s * 0.31],
-                color,
-            );
-            segment(
-                batch,
-                atlas,
-                [cx - s * 0.56, cy + s * 0.14],
-                [cx - s * 0.12, cy + s * 0.58],
-                s * 0.16,
-                color,
-            );
-            segment(
-                batch,
-                atlas,
-                [cx - s * 0.45, cy + s * 0.45],
-                [cx - s * 0.66, cy + s * 0.66],
-                s * 0.22,
-                color,
-            );
+            segment(batch, atlas, [cx - s * 0.42, cy + s * 0.42], [cx + s * 0.42, cy - s * 0.42], s * 0.18, color);
+            tri(batch, atlas, [cx + s * 0.66, cy - s * 0.66], [cx + s * 0.30, cy - s * 0.47], [cx + s * 0.47, cy - s * 0.30], color);
+            segment(batch, atlas, [cx - s * 0.56, cy + s * 0.12], [cx - s * 0.12, cy + s * 0.56], s * 0.14, color);
         }
         Icon::Use => {
-            // Open hand/pointer. The taller index finger gives it a distinct
-            // silhouette from attack even at the smallest phone GUI scale.
-            let w = s * 0.18;
-            batch.fill(atlas, cx - s * 0.28, cy - s * 0.05, s * 0.70, s * 0.55, color);
-            batch.fill(atlas, cx - s * 0.25, cy - s * 0.60, w, s * 0.62, color);
-            batch.fill(atlas, cx + s * 0.02, cy - s * 0.38, w, s * 0.42, color);
-            batch.fill(atlas, cx + s * 0.29, cy - s * 0.26, w, s * 0.32, color);
-            segment(
-                batch,
-                atlas,
-                [cx - s * 0.34, cy + s * 0.33],
-                [cx - s * 0.58, cy + s * 0.08],
-                s * 0.18,
-                color,
-            );
+            // Open hand/pointer: distinct from attack at phone scale.
+            let w = s * 0.17;
+            batch.fill(atlas, cx - s * 0.29, cy - s * 0.04, s * 0.70, s * 0.54, color);
+            batch.fill(atlas, cx - s * 0.26, cy - s * 0.60, w, s * 0.62, color);
+            batch.fill(atlas, cx + s * 0.01, cy - s * 0.38, w, s * 0.42, color);
+            batch.fill(atlas, cx + s * 0.28, cy - s * 0.26, w, s * 0.32, color);
+            segment(batch, atlas, [cx - s * 0.34, cy + s * 0.32], [cx - s * 0.58, cy + s * 0.08], s * 0.17, color);
         }
         Icon::Inventory => {
-            // 3x3 inventory slots.
-            let cell = s * 0.31;
+            let cell = s * 0.29;
             let gap = s * 0.10;
             let total = cell * 3.0 + gap * 2.0;
             let x0 = cx - total * 0.5;
             let y0 = cy - total * 0.5;
             for row in 0..3 {
                 for col in 0..3 {
-                    batch.fill(
-                        atlas,
-                        x0 + col as f32 * (cell + gap),
-                        y0 + row as f32 * (cell + gap),
-                        cell,
-                        cell,
-                        color,
-                    );
+                    batch.fill(atlas, x0 + col as f32 * (cell + gap), y0 + row as f32 * (cell + gap), cell, cell, color);
                 }
             }
         }
         Icon::Chat => {
-            let w = s * 1.25;
-            let h = s * 0.82;
+            let w = s * 1.23;
+            let h = s * 0.80;
             let x = cx - w * 0.5;
             let y = cy - h * 0.55;
-            let line = (s * 0.14).max(1.2);
+            let line = (s * 0.13).max(1.1);
             batch.fill(atlas, x, y, w, line, color);
             batch.fill(atlas, x, y + h - line, w, line, color);
             batch.fill(atlas, x, y, line, h, color);
             batch.fill(atlas, x + w - line, y, line, h, color);
-            tri(
-                batch,
-                atlas,
-                [cx - s * 0.30, y + h - line],
-                [cx - s * 0.54, cy + s * 0.66],
-                [cx + s * 0.02, y + h - line],
-                color,
-            );
+            tri(batch, atlas, [cx - s * 0.28, y + h - line], [cx - s * 0.52, cy + s * 0.64], [cx + s * 0.02, y + h - line], color);
         }
         Icon::Pause => {
-            let w = s * 0.28;
-            batch.fill(atlas, cx - s * 0.48, cy - s * 0.62, w, s * 1.24, color);
-            batch.fill(atlas, cx + s * 0.20, cy - s * 0.62, w, s * 1.24, color);
+            let w = s * 0.27;
+            batch.fill(atlas, cx - s * 0.47, cy - s * 0.61, w, s * 1.22, color);
+            batch.fill(atlas, cx + s * 0.20, cy - s * 0.61, w, s * 1.22, color);
+        }
+        Icon::Perspective => {
+            // Camera/perspective eye.  It avoids Mojang's sprite while keeping
+            // the Bedrock top-HUD affordance immediately recognisable.
+            tri(batch, atlas, [cx - s * 0.68, cy], [cx, cy - s * 0.46], [cx, cy + s * 0.46], color);
+            tri(batch, atlas, [cx + s * 0.68, cy], [cx, cy - s * 0.46], [cx, cy + s * 0.46], color);
+            plate(batch, atlas, cx, cy, s * 0.18, rgba(18, 20, 23, 230));
+            plate(batch, atlas, cx, cy, s * 0.09, color);
         }
     }
 }
