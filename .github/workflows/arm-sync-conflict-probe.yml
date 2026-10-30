@@ -67,6 +67,24 @@ jobs:
                 GIT_EDITOR=true git cherry-pick --continue
                 continue
               fi
+              if [[ "$c" == 25306f558372688b58f2d3256e4e97327d842a6f && "$conflicts" == "crates/horizon-client/src/game.rs" ]]; then
+                echo "Resolving cursor capture: keep upstream view_at centering on desktop and no warp on Android"
+                python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path('crates/horizon-client/src/game.rs')
+          s = p.read_text()
+          replacement = '''        #[cfg(not(target_os = "android"))]\n        let [vx, vy] = self.view_at.map(f64::from);\n        #[cfg(not(target_os = "android"))]\n        let centre = winit::dpi::PhysicalPosition::new(\n            vx + f64::from(size[0]) / 2.0,\n            vy + f64::from(size[1]) / 2.0,\n        );\n        #[cfg(not(target_os = "android"))]\n'''
+          pattern = r'^<<<<<<< HEAD\n.*?^=======\n.*?^>>>>>>> 25306f558 \(client: the phone\'s own controls in the world\)\n'
+          s2, n = re.subn(pattern, replacement, s, count=1, flags=re.M | re.S)
+          assert n == 1, f'expected one cursor conflict, got {n}'
+          assert '<<<<<<< ' not in s2 and '\n=======\n' not in s2 and '>>>>>>> ' not in s2
+          p.write_text(s2)
+          PY
+                git add crates/horizon-client/src/game.rs
+                GIT_EDITOR=true git cherry-pick --continue
+                continue
+              fi
               echo "=== CONFLICTED FILES ==="
               printf '%s\n' "$conflicts"
               echo "=== STATUS ==="
