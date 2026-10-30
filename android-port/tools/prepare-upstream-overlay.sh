@@ -33,7 +33,7 @@ cp -a "$OVERLAY_ROOT/crates/horizon-android" "$DEST/crates/horizon-android"
 mkdir -p "$DEST/crates/horizon-client/src/android" "$DEST/crates/horizon-client/src/game"
 cp "$OVERLAY_ROOT/crates/horizon-client/src/android.rs" "$DEST/crates/horizon-client/src/android.rs"
 cp -a "$OVERLAY_ROOT/crates/horizon-client/src/android/." "$DEST/crates/horizon-client/src/android/"
-for file in touch.rs touch_icons.rs mobile_ui.rs; do
+for file in touch.rs touch_icons.rs mobile_ui.rs touch_settings.rs; do
   cp "$OVERLAY_ROOT/crates/horizon-client/src/game/$file" "$DEST/crates/horizon-client/src/game/$file"
 done
 
