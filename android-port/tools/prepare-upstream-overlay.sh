@@ -124,20 +124,26 @@ mod mobile_ui; // Horizon Android launcherless manager
     text = text.replace(anchor, addition + anchor, 1)
 
 # Fresh upstream has no mobile touch dispatcher. Inject the smallest possible
-# hook into Game::window_event. Manager text input gets first refusal, then raw
-# touch events are handed to the Android-owned touch module. Non-Android builds
-# compile these branches out and keep the upstream path byte-for-byte in logic.
+# hook into Game::window_event. Scope the search to Game's ApplicationHandler
+# implementation and insert immediately before its follow_keymap call. This
+# survives harmless formatting/guard refactors while still failing loudly if
+# upstream removes or fundamentally restructures the Game event path.
 if 'self.android_manager_key(event)' not in text:
-    anchor = '''        if self.window.as_ref().is_none_or(|w| w.id() != id) {
-            return;
-        }
-        follow_keymap(&mut event);
-        if let WindowEvent::KeyboardInput { event, .. } = &event {
-'''
-    replacement = '''        if self.window.as_ref().is_none_or(|w| w.id() != id) {
-            return;
-        }
-        #[cfg(target_os = "android")]
+    impl_marker = "impl ApplicationHandler for Game<'_> {"
+    impl_start = text.find(impl_marker)
+    if impl_start < 0:
+        raise SystemExit("prepare-upstream-overlay: Game ApplicationHandler missing")
+    next_impl = text.find("\nimpl ApplicationHandler", impl_start + len(impl_marker))
+    impl_end = len(text) if next_impl < 0 else next_impl
+    game_impl = text[impl_start:impl_end]
+    event_start = game_impl.find("fn window_event")
+    if event_start < 0:
+        raise SystemExit("prepare-upstream-overlay: Game::window_event missing")
+    follow = "        follow_keymap(&mut event);\n"
+    follow_at = game_impl.find(follow, event_start)
+    if follow_at < 0:
+        raise SystemExit("prepare-upstream-overlay: Game::window_event follow_keymap hook changed")
+    hook = '''        #[cfg(target_os = "android")]
         if let WindowEvent::KeyboardInput { event, .. } = &event
             && self.android_manager_key(event)
         {
@@ -148,12 +154,9 @@ if 'self.android_manager_key(event)' not in text:
             self.touch(event_loop, id, touch);
             return;
         }
-        follow_keymap(&mut event);
-        if let WindowEvent::KeyboardInput { event, .. } = &event {
 '''
-    if anchor not in text:
-        raise SystemExit("prepare-upstream-overlay: Game::window_event anchor changed")
-    text = text.replace(anchor, replacement, 1)
+    absolute = impl_start + follow_at
+    text = text[:absolute] + hook + text[absolute:]
 
 # NativeActivity has no meaningful process command line. Preserve upstream's
 # parser unchanged on every non-Android target.
