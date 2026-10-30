@@ -210,9 +210,6 @@ impl Opt {
             Opt::TouchVirtualMouse => "Virtual mouse button",
             Opt::AndroidGyroscope => "Gyroscope aiming",
             Opt::AndroidGyroSensitivity => "Gyroscope sensitivity",
-            Opt::AndroidDisplayHz => "Preferred display refresh rate",
-            Opt::AndroidPerformanceHints => "Android performance hints (ADPF)",
-            Opt::AndroidGpuProfile => "Detailed GPU profiling",
             Opt::AndroidInputMode => "Input device",
             Opt::TouchSwapJumpSneak => "Swap jump / sneak",
             Opt::TouchAutoSprint => "Auto Sprint",
@@ -453,20 +450,6 @@ impl Opt {
             Opt::AndroidGyroSensitivity => {
                 Some(format!("{:.0}%", s.touch.gyro_sensitivity * 100.0))
             }
-            Opt::AndroidDisplayHz => Some(if s.touch.display_hz == 0 {
-                "System default".into()
-            } else {
-                format!("{} Hz (request)", s.touch.display_hz)
-            }),
-            Opt::AndroidPerformanceHints => Some(
-                if s.touch.performance_hints {
-                    "ON"
-                } else {
-                    "OFF"
-                }
-                .into(),
-            ),
-            Opt::AndroidGpuProfile => Some(if s.touch.gpu_profile { "ON" } else { "OFF" }.into()),
             Opt::TouchSensitivity => Some(format!("{:.0}%", s.touch.sensitivity * 100.0)),
             Opt::TouchMouseSensitivity => {
                 Some(format!("{:.0}%", s.touch.virtual_mouse_sensitivity * 100.0))
@@ -949,16 +932,6 @@ impl Opt {
                 s.touch.split_controls = split;
             }
             Opt::AndroidGyroscope => s.touch.gyroscope ^= true,
-            Opt::AndroidPerformanceHints => s.touch.performance_hints ^= true,
-            Opt::AndroidGpuProfile => s.touch.gpu_profile ^= true,
-            Opt::AndroidDisplayHz => {
-                let rates = [0, 30, 60, 90, 120, 144, 165];
-                let i = rates
-                    .iter()
-                    .position(|v| *v == s.touch.display_hz)
-                    .unwrap_or(0);
-                s.touch.display_hz = rates[usize::from(next(i as u8, rates.len() as u8))];
-            }
             Opt::TouchAnalog => s.touch.analog_movement ^= true,
             Opt::TouchInteract => s.touch.contextual_interact ^= true,
             Opt::TouchLeftHand => s.touch.left_handed ^= true,
@@ -2018,9 +1991,6 @@ impl OptionsUi {
                     Opt::TouchMouseSensitivity,
                     Opt::AndroidGyroscope,
                     Opt::AndroidGyroSensitivity,
-                    Opt::AndroidDisplayHz,
-                    Opt::AndroidPerformanceHints,
-                    Opt::AndroidGpuProfile,
                     Opt::TouchInteract,
                     Opt::TouchLeftHand,
                     Opt::TouchSwapJumpSneak,

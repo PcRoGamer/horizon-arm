@@ -7,6 +7,7 @@ use crate::catalog::RendererMode;
 use horizon_client::ui_theme::{Face, Ui, color};
 
 pub(super) enum Kind {
+    DisplayHz,
     Renderer,
     RenderScale,
     Profile,
@@ -36,6 +37,25 @@ impl Launcher {
         };
         let c = &self.catalog.config;
         let (title, help, choices) = match kind {
+            Kind::DisplayHz => (
+                "Display refresh rate",
+                "An Android display preference, not a game FPS cap. Unsupported rates may be ignored.",
+                crate::device_preferences::DISPLAY_RATES
+                    .into_iter()
+                    .map(|hz| {
+                        (
+                            if hz == 0 {
+                                "System default".into()
+                            } else {
+                                format!("{hz} Hz")
+                            },
+                            String::new(),
+                            Action::ChooseDisplayHz(hz),
+                            c.device.display_hz == hz,
+                        )
+                    })
+                    .collect(),
+            ),
             Kind::RenderScale => {
                 let mut choices: Vec<_> = crate::display::RenderScale::PRESETS
                     .into_iter()

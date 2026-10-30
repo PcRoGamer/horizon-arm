@@ -196,3 +196,22 @@ pub fn suspend() {
     let _ = gyro(false, 1.0, 0);
     let _ = frame(false, 0, false);
 }
+
+// One atomic snapshot avoids mixing frequency and flags when the client changes
+// its preferences. Touch profiles never own these system settings.
+static PREFERENCES: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+pub fn configure(mut settings: crate::device_preferences::Settings) {
+    settings.sanitize();
+    let bits = u32::from(settings.display_hz)
+        | (u32::from(settings.performance_hints) << 16)
+        | (u32::from(settings.gpu_profile) << 17);
+    PREFERENCES.store(bits, std::sync::atomic::Ordering::Relaxed);
+}
+pub fn preferences() -> crate::device_preferences::Settings {
+    let bits = PREFERENCES.load(std::sync::atomic::Ordering::Relaxed);
+    crate::device_preferences::Settings {
+        display_hz: bits as u16,
+        performance_hints: bits & (1 << 16) != 0,
+        gpu_profile: bits & (1 << 17) != 0,
+    }
+}

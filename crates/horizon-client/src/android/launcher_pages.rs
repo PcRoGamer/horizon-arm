@@ -47,6 +47,10 @@ pub(super) enum Action {
     ChooseRenderer(crate::catalog::RendererMode),
     ChooseProfile(u32),
     Dismiss,
+    DisplayHz,
+    ChooseDisplayHz(u16),
+    PerformanceHints,
+    GpuProfile,
 }
 
 pub(super) fn button(
@@ -765,11 +769,11 @@ impl Launcher {
             self.catalog.scroll = self
                 .catalog
                 .scroll
-                .clamp(0.0, (8.0 * row_height - (h - 130.0 - 195.0)).max(0.0));
+                .clamp(0.0, (11.0 * row_height - (h - 130.0 - 195.0)).max(0.0));
             self.list_view = Some([
                 195.0,
                 h - 130.0,
-                (8.0 * row_height - (h - 130.0 - 195.0)).max(0.0),
+                (11.0 * row_height - (h - 130.0 - 195.0)).max(0.0),
             ]);
             for (i, (title, value, action)) in [
                 ("Rendering", c.renderer.label().to_owned(), Action::Renderer),
@@ -789,6 +793,31 @@ impl Launcher {
                     Action::Orientation,
                 ),
                 ("Input", c.input_host.label().to_owned(), Action::InputHost),
+                (
+                    "Display refresh rate",
+                    c.device.display_label(),
+                    Action::DisplayHz,
+                ),
+                (
+                    "Performance hints",
+                    if c.device.performance_hints {
+                        "On (ADPF)"
+                    } else {
+                        "Off"
+                    }
+                    .into(),
+                    Action::PerformanceHints,
+                ),
+                (
+                    "GPU profiling",
+                    if c.device.gpu_profile {
+                        "On / diagnostic recording"
+                    } else {
+                        "Off"
+                    }
+                    .into(),
+                    Action::GpuProfile,
+                ),
                 (
                     "Performance recording",
                     if c.record_performance {
@@ -838,34 +867,54 @@ impl Launcher {
                     color::MUTED,
                     title,
                 );
-                button(
-                    &mut ui,
-                    &mut self.targets,
-                    [
-                        if compact { 32.0 } else { w * 0.36 },
-                        y + if compact { 24.0 } else { 0.0 },
-                        if compact { w - 64.0 } else { w * 0.64 - 32.0 },
-                        46.0,
-                    ],
-                    &format!(
-                        "{} {}",
-                        value,
-                        if matches!(
-                            action,
-                            Action::Renderer
-                                | Action::RenderScale
-                                | Action::Profile
-                                | Action::Orientation
-                                | Action::InputHost
-                        ) {
-                            "v"
+                if matches!(action, Action::PerformanceHints | Action::GpuProfile) {
+                    toggle(
+                        &mut ui,
+                        &mut self.targets,
+                        [
+                            if compact { 32.0 } else { w * 0.36 },
+                            y + if compact { 24.0 } else { 0.0 },
+                            if compact { w - 64.0 } else { w * 0.64 - 32.0 },
+                            46.0,
+                        ],
+                        if action == Action::PerformanceHints {
+                            c.device.performance_hints
                         } else {
-                            ""
-                        }
-                    ),
-                    action,
-                    false,
-                );
+                            c.device.gpu_profile
+                        },
+                        action,
+                    );
+                } else {
+                    button(
+                        &mut ui,
+                        &mut self.targets,
+                        [
+                            if compact { 32.0 } else { w * 0.36 },
+                            y + if compact { 24.0 } else { 0.0 },
+                            if compact { w - 64.0 } else { w * 0.64 - 32.0 },
+                            46.0,
+                        ],
+                        &format!(
+                            "{} {}",
+                            value,
+                            if matches!(
+                                action,
+                                Action::Renderer
+                                    | Action::DisplayHz
+                                    | Action::RenderScale
+                                    | Action::Profile
+                                    | Action::Orientation
+                                    | Action::InputHost
+                            ) {
+                                "v"
+                            } else {
+                                ""
+                            }
+                        ),
+                        action,
+                        false,
+                    );
+                }
                 ui.rounded(
                     32.0,
                     y + if compact { 78.0 } else { 62.0 },
@@ -1085,6 +1134,27 @@ impl Launcher {
             audio.play_button_click();
         }
         match action {
+            Some(Action::DisplayHz) => self.open_chooser(chooser::Kind::DisplayHz),
+            Some(Action::ChooseDisplayHz(hz)) => {
+                self.catalog.config.device.display_hz = hz;
+                self.catalog.config.device.sanitize();
+                self.catalog.config.save(&self.home)?;
+                crate::device_runtime::configure(self.catalog.config.device);
+                self.chooser = None;
+            }
+            Some(Action::PerformanceHints) => {
+                self.catalog.config.device.performance_hints ^= true;
+                self.catalog.status="ADPF gives Android CPU frame-work hints on supported devices. It does not cap FPS or guarantee a speedup.".into();
+                self.catalog.config.save(&self.home)?;
+                crate::device_runtime::configure(self.catalog.config.device);
+            }
+            Some(Action::GpuProfile) => {
+                self.catalog.config.device.gpu_profile ^= true;
+                self.catalog.status="Detailed GPU profiling records diagnostics and has overhead. Reports remain on this device.".into();
+                self.catalog.config.save(&self.home)?;
+                crate::device_runtime::configure(self.catalog.config.device);
+            }
+
             Some(Action::ModSource(origin)) => {
                 self.catalog.config.mod_source = origin;
                 self.catalog.config.save(&self.home)?;

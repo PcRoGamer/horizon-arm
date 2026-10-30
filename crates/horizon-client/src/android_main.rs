@@ -17,10 +17,12 @@ mod account;
 #[allow(dead_code)]
 #[path = "../../../launcher/src/browser.rs"]
 mod browser;
+#[path = "android/dns.rs"]
+mod android_dns;
 #[path = "android/catalog.rs"]
 mod catalog;
-#[path = "android/exit_reports.rs"]
-mod exit_reports;
+#[path = "android/device_preferences.rs"]
+mod device_preferences;
 #[path = "android/device_runtime.rs"]
 mod device_runtime;
 #[path = "android/display.rs"]
@@ -33,6 +35,8 @@ mod document_provider;
 mod document_store;
 #[path = "android/documents.rs"]
 mod documents;
+#[path = "android/exit_reports.rs"]
+mod exit_reports;
 #[path = "android/gallery.rs"]
 mod gallery;
 #[path = "android/native_ime.rs"]
@@ -41,8 +45,6 @@ mod native_ime;
 mod performance;
 #[path = "android/platform.rs"]
 mod platform;
-#[path = "android/dns.rs"]
-mod android_dns;
 #[rustfmt::skip]
 #[allow(dead_code)]
 #[path = "../../../launcher/src/proxy.rs"]

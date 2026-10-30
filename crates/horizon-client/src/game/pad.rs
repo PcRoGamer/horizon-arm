@@ -141,7 +141,7 @@ impl Game<'_> {
                 self.pad.touch_ui.virtual_mouse = false;
             }
             crate::performance::configure_gpu_profile(
-                self.settings.touch.gpu_profile,
+                crate::device_runtime::preferences().gpu_profile,
                 &crate::backend::game_home(),
             );
             self.pad.touch.inventory_mode = self.android_inventory_controls();

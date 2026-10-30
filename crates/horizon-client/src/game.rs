@@ -12754,9 +12754,11 @@ impl Game<'_> {
     }
     fn render(&mut self) -> Result<bool> {
         #[cfg(target_os = "android")]
+        let device_preferences = crate::device_runtime::preferences();
+        #[cfg(target_os = "android")]
         let _native_frame = crate::device_runtime::frame(
-            self.settings.touch.performance_hints,
-            self.settings.touch.display_hz,
+            device_preferences.performance_hints,
+            device_preferences.display_hz,
             self.focused,
         );
         self.glint_frame = self.capture_glint_frame();
@@ -15389,7 +15391,7 @@ impl ApplicationHandler for Game<'_> {
         #[cfg(target_os = "android")]
         if let Some(renderer) = &mut self.renderer {
             renderer.set_detailed_gpu_timing(
-                crate::performance::active() || self.settings.touch.gpu_profile,
+                crate::performance::active() || crate::device_runtime::preferences().gpu_profile,
             );
         }
         if horizon_threads::stop_requests() > 0

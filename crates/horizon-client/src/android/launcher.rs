@@ -72,6 +72,7 @@ impl Launcher {
         });
         let catalog = Catalog::new(&home);
         crate::configure_input_mode(catalog.config.input_host);
+        crate::device_runtime::configure(catalog.config.device);
         Self {
             home,
             controller_edges: Default::default(),
@@ -189,6 +190,7 @@ impl Launcher {
             return Ok(());
         }
         crate::configure_input_mode(self.catalog.config.input_host);
+        crate::device_runtime::configure(self.catalog.config.device);
         if horizon_client::official_install::ready(&self.home) {
             horizon_client::android_resources::repair_structure_transforms(
                 &self.home.join("engine-data.zip"),

@@ -48,6 +48,8 @@ pub struct Config {
     pub input_host: InputHost,
     pub keypad_controls: bool,
     pub record_performance: bool,
+    #[serde(flatten)]
+    pub device: crate::device_preferences::Settings,
     pub shader_source: crate::shader_catalog::Origin,
     pub mod_source: crate::shader_catalog::Origin,
 }
@@ -107,6 +109,11 @@ impl Config {
         if value.get("renderer").is_none() && value["gpu_batching"].as_bool() == Some(true) {
             config.renderer = RendererMode::Vulkan;
         }
+        let legacy = std::fs::read(config.game_home(home).join("horizon-touch.json"))
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+            .unwrap_or_default();
+        config.device.migrate_missing(&value, &legacy);
         config
     }
     pub fn save(&self, home: &Path) -> Result<(), String> {
