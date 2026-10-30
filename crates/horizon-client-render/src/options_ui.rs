@@ -195,7 +195,7 @@ impl Opt {
     pub(crate) fn caption(self) -> &'static str {
         match self {
             Opt::TouchMode => "Control scheme",
-            Opt::TouchCrosshairGestures => "Touch gestures with crosshair",
+            Opt::TouchCrosshairGestures => "Touch gestures",
             Opt::TouchMouseSensitivity => "Virtual mouse sensitivity",
             Opt::TouchAnalog => "360-degree movement",
             Opt::TouchCircleSize => "Touch circle size",
@@ -209,7 +209,6 @@ impl Opt {
             Opt::TouchSprintButton => "Sprint button",
             Opt::TouchSprintToggle => "Toggle sprint button",
             Opt::TouchInventoryControls => "Controls in inventory",
-            Opt::TouchVirtualMouse => "Virtual mouse button",
             Opt::AndroidGyroscope => "Gyroscope aiming",
             Opt::AndroidGyroSensitivity => "Gyroscope sensitivity",
             Opt::AndroidInputMode => "Input device",
@@ -504,7 +503,6 @@ impl Opt {
             Opt::TouchLeftHand => Some(if s.touch.left_handed { "ON" } else { "OFF" }.into()),
             Opt::TouchSprintButton => Some(if s.touch.sprint_button { "ON" } else { "OFF" }.into()),
             Opt::TouchSprintToggle => Some(if s.touch.sprint_toggle { "ON" } else { "OFF" }.into()),
-            Opt::TouchVirtualMouse => Some(if s.touch.virtual_mouse { "ON" } else { "OFF" }.into()),
             Opt::TouchInventoryControls => Some(
                 if s.touch.inventory_controls {
                     "ON"
@@ -1014,7 +1012,6 @@ impl Opt {
             Opt::TouchSprintButton => s.touch.sprint_button ^= true,
             Opt::TouchSprintToggle => s.touch.sprint_toggle ^= true,
             Opt::TouchInventoryControls => s.touch.inventory_controls ^= true,
-            Opt::TouchVirtualMouse => s.touch.virtual_mouse ^= true,
             Opt::TouchCrosshairGestures => s.touch.crosshair_gestures ^= true,
             Opt::AndroidInputMode => {
                 let all = crate::android_gamepad::InputMode::ALL;
@@ -1600,7 +1597,6 @@ fn option_widget(s: &Settings, opt: Opt, x: f32, y: f32, w: f32) -> Widget {
         }
         Opt::TouchInteract => !s.touch.crosshair(),
         Opt::TouchCrosshairGestures => s.touch.crosshair(),
-        Opt::TouchMouseSensitivity => s.touch.virtual_mouse,
         Opt::TouchSwapJumpSneak => s.touch.mode == crate::touch::Mode::Dpad,
         _ => true,
     };
@@ -2137,11 +2133,10 @@ impl OptionsUi {
                     Opt::TouchSprintButton,
                     Opt::TouchSprintToggle,
                     Opt::TouchInventoryControls,
-                    Opt::TouchVirtualMouse,
+                    Opt::TouchInteract,
                     Opt::TouchMouseSensitivity,
                     Opt::AndroidGyroscope,
                     Opt::AndroidGyroSensitivity,
-                    Opt::TouchInteract,
                     Opt::TouchLeftHand,
                     Opt::TouchSwapJumpSneak,
                 ]));
@@ -4219,6 +4214,7 @@ mod tests {
             description: String::new(),
             problem: None,
             dev: false,
+            has_settings: false,
             native: Some(crate::mod_list::NativePage {
                 keys: vec![["zoom".into(), "Zoom key".into(), "key.keyboard.z".into()]],
                 buttons: Vec::new(),

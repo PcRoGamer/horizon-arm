@@ -3,7 +3,7 @@
 The published RC is followed by source changes for the next 0.7.5 candidate.
 
 - Native-mod upstream synchronization and Android compatibility fixes.
-- Optional virtual mouse: relative touchpad movement for menu tooltips, adjustable sensitivity, tap for LMB and hold for RMB. Dedicated LMB/RMB buttons appear at the bottom of menus while the virtual mouse is active; this does not enable gameplay controls. Tap clicks LMB and a stationary hold clicks RMB without a separate option.
+- Always-available menu virtual mouse: relative touchpad movement for menu tooltips, adjustable sensitivity, tap for LMB and hold for RMB. Dedicated LMB/RMB buttons appear at the lower right of menus while the virtual mouse is active; this does not enable gameplay controls. Tap clicks LMB and a stationary hold clicks RMB without a separate option.
 - Short world taps attack entities without holding the attack button into the next tick. Usable items wait for a long press; ordinary blocks retain tap placement and hold mining. Item classification uses the engine use actions, components, crop classes and sandbox item claims.
 - Four existing touch schemes are retained. An independent crosshair-gesture option allows touch taps and holds to target the center in either crosshair movement scheme.
 - Gyroscope aiming: opt-in, adjustable sensitivity, display-rotation axis mapping, and sensor shutdown on focus loss (within a bounded 20 ms worker poll). A device without a gyro remains playable. Gyro input applies only to active touch gameplay.
@@ -37,3 +37,5 @@ Microsoft device-code polling retains the active code through temporary network
 outages, with bounded request retries, backoff and service/error categories.
 The configured `HORIZON_MSA_CLIENT_ID` is honored when supplied; the upstream
 registration value is not distributed in source and has not been substituted.
+
+Custom physical-key touch buttons now send sandbox `.hmod` key-down/key-up events, matching hardware keyboard dispatch. Entity-placement items (boats, rafts, minecarts, spawn eggs and decorations) retain tap placement; contextual holds include boats and minecarts.

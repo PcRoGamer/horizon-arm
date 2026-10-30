@@ -187,6 +187,7 @@ impl Game<'_> {
             } else {
                 self.physical_keys.remove(&key);
             }
+            self.mod_key(key, down, false);
             self.native_key_event(key, down, false);
             let action = if down {
                 KeyAction::Press
@@ -294,10 +295,6 @@ impl Game<'_> {
                 self.android_key_up(key);
             }
             return Ok(true);
-        }
-        self.pad.touch_ui.virtual_mouse_button = self.settings.touch.virtual_mouse;
-        if !self.settings.touch.virtual_mouse {
-            self.pad.touch_ui.virtual_mouse = false;
         }
         let size = self.window.as_ref().unwrap().inner_size();
         let b = HudBatch::new([size.width, size.height]);
@@ -580,7 +577,7 @@ impl Game<'_> {
         }
     }
     pub(super) fn android_menu_touch(&mut self, t: &Touch, events: &ActiveEventLoop, id: WindowId) {
-        if self.settings.touch.virtual_mouse && self.pad.touch_ui.virtual_mouse {
+        if self.pad.touch_ui.virtual_mouse {
             self.android_virtual_touch(t, events, id);
             return;
         }
@@ -680,11 +677,7 @@ impl Game<'_> {
         );
     }
     pub(super) fn android_virtual_mouse_clicks(&mut self, events: &ActiveEventLoop) {
-        if !self.focused
-            || !self.pad_in_menu()
-            || !self.settings.touch.virtual_mouse
-            || !self.pad.touch_ui.virtual_mouse
-        {
+        if !self.focused || !self.pad_in_menu() || !self.pad.touch_ui.virtual_mouse {
             self.pad.touch_ui.cancel_relative();
             for right in self.pad.touch_ui.release_all_mouse() {
                 if let Some(id) = self.window.as_ref().map(|w| w.id())

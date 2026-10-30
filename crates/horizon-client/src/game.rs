@@ -2514,6 +2514,9 @@ impl Game<'_> {
     #[cfg(target_os = "android")]
     pub(super) fn touch_item_held_use(&self) -> bool {
         self.held().is_some_and(|stack| {
+            if horizon_client::touch::item_places_entity_on_tap(&stack.item) {
+                return false;
+            }
             #[cfg(feature = "mods")]
             if self.mods.mods.claims(&stack.item) {
                 return true;
@@ -2525,14 +2528,9 @@ impl Game<'_> {
                 || info.bundle
                 || info.dye.is_some()
                 || info.jukebox_song.is_some()
-                || stack.item.ends_with("_spawn_egg")
                 || matches!(
                     &*stack.item,
                     "minecraft:firework_rocket"
-                        | "minecraft:armor_stand"
-                        | "minecraft:item_frame"
-                        | "minecraft:glow_item_frame"
-                        | "minecraft:painting"
                         | "minecraft:lead"
                         | "minecraft:name_tag"
                         | "minecraft:bone_meal"
@@ -14551,7 +14549,7 @@ impl ApplicationHandler for Game<'_> {
                     self.android_menu_touch(touch, event_loop, id);
                     return;
                 }
-                if self.settings.touch.virtual_mouse && self.pad.touch_ui.virtual_mouse {
+                if self.pad.touch_ui.virtual_mouse {
                     self.android_virtual_touch(touch, event_loop, id);
                     return;
                 }

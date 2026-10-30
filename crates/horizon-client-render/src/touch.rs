@@ -11,6 +11,22 @@ mod editor;
 pub use custom::CustomButton;
 pub mod layout;
 pub use layout::{Control, Mode, Settings};
+/// Entity-placement items retain short-tap placement, like building blocks.
+pub fn item_places_entity_on_tap(item: &str) -> bool {
+    let Some(id) = item.strip_prefix("minecraft:") else {
+        return false;
+    };
+    id.ends_with("_boat")
+        || id.ends_with("_raft")
+        || id.ends_with("_spawn_egg")
+        || id == "minecart"
+        || id.ends_with("_minecart")
+        || matches!(
+            id,
+            "armor_stand" | "item_frame" | "glow_item_frame" | "painting" | "end_crystal"
+        )
+}
+
 /// In tap modes the crosshair is absent, so use Java's native hotbar gauge.
 pub fn attack_indicator(setting: u8, crosshair: bool) -> u8 {
     if setting == 1 && !crosshair {
@@ -940,6 +956,45 @@ fn line(
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn entity_placement_taps_do_not_change_consumption_and_throwing_holds() {
+        for id in [
+            "oak_boat",
+            "oak_chest_boat",
+            "bamboo_raft",
+            "bamboo_chest_raft",
+            "villager_spawn_egg",
+            "minecart",
+            "chest_minecart",
+            "armor_stand",
+            "item_frame",
+            "painting",
+            "end_crystal",
+        ] {
+            assert!(
+                item_places_entity_on_tap(&format!("minecraft:{id}")),
+                "{id}"
+            );
+        }
+        for id in [
+            "egg",
+            "snowball",
+            "wind_charge",
+            "firework_rocket",
+            "fishing_rod",
+            "apple",
+            "wheat_seeds",
+            "diamond_helmet",
+            "bow",
+        ] {
+            assert!(
+                !item_places_entity_on_tap(&format!("minecraft:{id}")),
+                "{id}"
+            );
+        }
+        assert!(!item_places_entity_on_tap("example:spell_boat"));
+    }
+
     #[test]
     fn world_taps_never_press_attack_or_use_and_remember_the_original_item() {
         for (mode, split) in [

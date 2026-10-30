@@ -605,11 +605,44 @@ impl Loading {
             self.save_menu_address();
         }
     }
+    #[cfg(target_os = "android")]
+    fn startup_mouse_button(
+        &mut self,
+        events: &ActiveEventLoop,
+        right: bool,
+        down: bool,
+    ) -> Result<()> {
+        self.menu_event(
+            events,
+            WindowEvent::MouseInput {
+                device_id: winit::event::DeviceId::dummy(),
+                button: if right {
+                    MouseButton::Right
+                } else {
+                    MouseButton::Left
+                },
+                state: if down {
+                    ElementState::Pressed
+                } else {
+                    ElementState::Released
+                },
+            },
+        )
+    }
+
     pub(super) fn menu_event(
         &mut self,
         event_loop: &ActiveEventLoop,
         event: WindowEvent,
     ) -> Result<()> {
+        #[cfg(target_os = "android")]
+        if matches!(event, WindowEvent::Focused(false)) {
+            self.menu.touch.cancel();
+            for right in self.menu.touch.release_all_mouse() {
+                self.startup_mouse_button(event_loop, right, false)?;
+            }
+            self.menu.dragging = false;
+        }
         #[cfg(target_os = "android")]
         if self.menu.controls.editor.is_some() {
             if matches!(&event, WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed && (event.logical_key == winit::keyboard::Key::Named(winit::keyboard::NamedKey::BrowserBack) || event.physical_key == PhysicalKey::Code(KeyCode::Escape)))
@@ -674,9 +707,36 @@ impl Loading {
                 touch.location.x as f32 / b.scale,
                 touch.location.y as f32 / b.scale,
             ];
+            if touch.phase == TouchPhase::Ended
+                && let Some((right, last)) = self.menu.touch.release_mouse(touch.id)
+            {
+                if last {
+                    self.startup_mouse_button(event_loop, right, false)?;
+                }
+                return Ok(());
+            }
+            if touch.phase == TouchPhase::Cancelled {
+                self.menu.touch.cancel();
+                for right in self.menu.touch.release_all_mouse() {
+                    self.startup_mouse_button(event_loop, right, false)?;
+                }
+                return Ok(());
+            }
             if let Some(action) = self.menu.touch.action(b.width, b.height, p, true) {
                 if touch.phase == TouchPhase::Started {
                     match action {
+                        Action::VirtualMouse => {
+                            for right in self.menu.touch.release_all_mouse() {
+                                self.startup_mouse_button(event_loop, right, false)?;
+                            }
+                            self.menu.touch.cancel();
+                            self.menu.touch.virtual_mouse ^= true;
+                        }
+                        Action::MouseButton(right) => {
+                            if self.menu.touch.press_mouse(touch.id, right) {
+                                self.startup_mouse_button(event_loop, right, true)?;
+                            }
+                        }
                         Action::More => self.menu.touch.expanded = !self.menu.touch.expanded,
                         Action::Keyboard => {
                             if crate::platform::active() {
@@ -710,6 +770,36 @@ impl Loading {
                         }
                         _ => {}
                     }
+                }
+                return Ok(());
+            }
+            if self.menu.touch.virtual_mouse {
+                let cursor = self.menu.touch.relative_touch(
+                    touch.id,
+                    p,
+                    touch.phase,
+                    [self.menu.cursor.0, self.menu.cursor.1],
+                    [b.width, b.height],
+                    self.settings.touch.virtual_mouse_sensitivity,
+                    !self.menu.touch.mouse_held(),
+                );
+                self.menu_event(
+                    event_loop,
+                    WindowEvent::CursorMoved {
+                        device_id: touch.device_id,
+                        position: winit::dpi::PhysicalPosition::new(
+                            f64::from(cursor[0] * b.scale),
+                            f64::from(cursor[1] * b.scale),
+                        ),
+                    },
+                )?;
+                if let Some(right) = self
+                    .menu
+                    .touch
+                    .relative_click(!self.menu.touch.mouse_held())
+                {
+                    self.startup_mouse_button(event_loop, right, true)?;
+                    self.startup_mouse_button(event_loop, right, false)?;
                 }
                 return Ok(());
             }
@@ -1009,6 +1099,9 @@ impl Loading {
         #[cfg(target_os = "android")]
         {
             self.menu.touch.draw(batch, &gui.atlas, true);
+            if self.menu.touch.virtual_mouse {
+                horizon_client::touch_ui::draw_pointer(batch, &gui.atlas, self.menu.cursor);
+            }
         }
         self.menu
             .frame_graph

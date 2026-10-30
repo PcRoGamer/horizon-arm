@@ -17,15 +17,15 @@ worlds first. Do not reset an existing profile just to test settings migration.
 
 ## 2. Virtual mouse
 
-In Options > Controls > Touch Controls enable the virtual-mouse button. In an
-inventory or server container, activate Mouse.
+In an inventory or server container, activate the always-visible Mouse button at
+the top right. Its sensitivity is in Options > Controls > Touch Controls.
 
 - Drag a finger: the cursor moves relative to its previous position, like a
   touchpad, rather than jumping beneath the finger.
 - Hover an item without clicking: its tooltip should appear.
 - Tap once for LMB; hold without dragging for RMB. No extra tap/hold option is
   required. Adjust Virtual mouse sensitivity and compare the same gesture.
-- Use the bottom LMB/RMB buttons. Hold LMB with one finger and move the cursor
+- Use the lower-right LMB/RMB buttons. Hold LMB with one finger and move the cursor
   with another. Release outside the button: it must still release.
 - While carrying/dragging an item, disable Mouse, press Back, or background the
   application. Reopen: there must be no stuck button or unintended extra click.

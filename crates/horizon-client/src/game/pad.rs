@@ -136,10 +136,6 @@ impl Game<'_> {
         }
         #[cfg(target_os = "android")]
         {
-            self.pad.touch_ui.virtual_mouse_button = self.settings.touch.virtual_mouse;
-            if !self.settings.touch.virtual_mouse {
-                self.pad.touch_ui.virtual_mouse = false;
-            }
             crate::performance::configure_gpu_profile(
                 crate::device_runtime::preferences().gpu_profile,
                 &crate::backend::game_home(),
@@ -332,6 +328,18 @@ impl Game<'_> {
 
     #[cfg(target_os = "android")]
     pub(super) fn touch_entity_accepts_use(&self) -> bool {
+        if [
+            self.boat_hit().map(|h| h.1),
+            self.cart_hit().map(|h| h.1),
+            self.armor_stand_hit().map(|h| h.1),
+            self.frame_hit().map(|h| h.1),
+        ]
+        .into_iter()
+        .flatten()
+        .any(|distance| self.before_block(distance))
+        {
+            return true;
+        }
         self.mob_hit()
             .filter(|(_, distance)| self.before_block(*distance))
             .is_some_and(|(i, _)| {
