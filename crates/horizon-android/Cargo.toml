@@ -23,6 +23,7 @@ ndk = "0.9"
 raw-window-handle = "0.6"
 winit = { version = "0.30.13", features = ["android-native-activity"] }
 android-activity = { version = "0.6", default-features = false, features = ["native-activity"] }
+jni = "0.22.4"
 wgpu = { version = "30.0.1", default-features = false, features = ["vulkan", "gles"] }
 pollster = "0.4"
 log = "0.4"
