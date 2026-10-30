@@ -63,6 +63,10 @@ class NightlyTests(unittest.TestCase):
         self.assertNotIn("### Not merged yet", text)
         self.assertIn("Nothing new for players on main", notes())
 
+    def test_notes_open_with_the_way_to_the_launcher(self):
+        # A raw HTML line that launchers skip, as on a game release.
+        self.assertTrue(notes().startswith(nightly.train.PLAYERS + "\n\nNightly 2026-10-28 · bbbbbbb: "))
+
     def test_notes_name_the_commit_and_its_permanent_source_tag(self):
         sha = "0c0206714abc" + "0" * 28
         text = notes(chosen=nightly.Ref("main", sha, None))
@@ -132,9 +136,10 @@ class UntrustedBuildTests(unittest.TestCase):
     def test_an_untrusted_build_never_runs_on_the_release_runner(self):
         runs_on = [line for line in self.game.splitlines() if "runs-on:" in line]
         self.assertEqual(len(runs_on), 2)
-        pr_runner = "fromJSON('[\"self-hosted\", \"macOS\", \"horizon-game\"]')"
+        # The nightly's own runner: never the release runner, and never behind pull requests' parity queue.
+        nightly_runner = "fromJSON('[\"self-hosted\", \"macOS\", \"horizon-nightly\"]')"
         for line in runs_on:
-            self.assertIn(f"inputs.trusted && vars.MAC_RUNNER || {pr_runner}", line)
+            self.assertIn(f"inputs.trusted && vars.MAC_RUNNER || {nightly_runner}", line)
 
     def test_a_trusted_build_never_reads_the_shared_sccache(self):
         calls = self.game.count("bash tools/ci/runner-env.sh")

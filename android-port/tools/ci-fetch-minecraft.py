@@ -13,12 +13,15 @@ import json
 from pathlib import Path, PurePosixPath
 import shutil
 import sys
+import time
+import urllib.error
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
 LOCK = json.loads((ROOT / "research-lock.json").read_text())['minecraft']
 VERSION = LOCK['version']
 OUT = ROOT / "android-port" / "build" / "ci-minecraft"
+FETCH_ATTEMPTS = 4
 
 
 def sha1(path: Path) -> str:
@@ -42,18 +45,39 @@ def fetch(url: str, path: Path, expected: str | None = None, size: int | None = 
             return
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(path.suffix + '.part')
-    print(f"fetch {url}", flush=True)
     req = urllib.request.Request(url, headers={'User-Agent': 'horizon-android-ci/0.1'})
-    with urllib.request.urlopen(req, timeout=120) as response, temp.open('wb') as out:
-        shutil.copyfileobj(response, out, 1024 * 1024)
-    if size is not None and temp.stat().st_size != size:
+
+    last_error: Exception | None = None
+    for attempt in range(1, FETCH_ATTEMPTS + 1):
         temp.unlink(missing_ok=True)
-        raise RuntimeError(f"{url}: wrong size")
-    if expected is not None and sha1(temp) != expected:
-        actual = sha1(temp)
-        temp.unlink(missing_ok=True)
-        raise RuntimeError(f"{url}: sha1 {actual}, expected {expected}")
-    temp.replace(path)
+        suffix = '' if attempt == 1 else f' (attempt {attempt}/{FETCH_ATTEMPTS})'
+        print(f"fetch {url}{suffix}", flush=True)
+        try:
+            with urllib.request.urlopen(req, timeout=120) as response, temp.open('wb') as out:
+                shutil.copyfileobj(response, out, 1024 * 1024)
+            if size is not None and temp.stat().st_size != size:
+                raise RuntimeError(
+                    f"{url}: wrong size {temp.stat().st_size}, expected {size}"
+                )
+            if expected is not None:
+                actual = sha1(temp)
+                if actual != expected:
+                    raise RuntimeError(f"{url}: sha1 {actual}, expected {expected}")
+            temp.replace(path)
+            return
+        except (OSError, RuntimeError, urllib.error.URLError) as exc:
+            last_error = exc
+            temp.unlink(missing_ok=True)
+            if attempt == FETCH_ATTEMPTS:
+                break
+            delay = min(2 ** attempt, 10)
+            print(f"retrying in {delay}s after: {exc}", file=sys.stderr, flush=True)
+            time.sleep(delay)
+
+    assert last_error is not None
+    raise RuntimeError(
+        f"{url}: failed after {FETCH_ATTEMPTS} attempts: {last_error}"
+    ) from last_error
 
 
 def main() -> int:

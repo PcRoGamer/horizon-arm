@@ -112,15 +112,9 @@ pub(super) struct Levels {
 }
 
 impl Levels {
-    /// The chunks of each level not in place (capability `world` lends
-    /// them to server mods for a call).
-    #[cfg_attr(not(feature = "mods"), allow(dead_code))]
-    pub(super) fn parked_chunks(
-        &mut self,
-    ) -> impl Iterator<Item = (Dim, &mut horizon_client::chunk_map::ChunkMap)> {
-        self.parked
-            .iter_mut()
-            .map(|(d, p)| (*d, &mut p.world.chunks))
+    /// A parked level, without opening or loading it.
+    pub(super) fn parked_world(&self, dim: Dim) -> Option<&World> {
+        self.parked.get(&dim).map(|level| &level.world)
     }
 
     /// The level not in place, in `dim`.
@@ -144,9 +138,11 @@ impl Game<'_> {
             &self.settings,
             &self.world_root,
             dim,
+            self.level_shapes.get(dim.id()),
             self.level.seed,
         )?;
         let mut world = World::new(self.res.facts().air, self.level.seed);
+        world.shape = self.level_shapes.get(dim.id());
         world.fast_lava = dim == Dim::Nether;
         Ok(Parked {
             world,
@@ -359,8 +355,6 @@ impl Game<'_> {
             };
             self.update_dedicated_streaming();
             self.update_world();
-            // What server mods set in this level since its last tick.
-            self.apply_mod_block_writes();
             result = if paused {
                 self.tick_lan(true);
                 Ok(())
@@ -378,8 +372,18 @@ impl Game<'_> {
             }
         }
         self.level_pass = Pass::default();
+        if result.is_err() {
+            self.native_lifecycle.cancel_server_tick();
+        }
         result?;
-        self.close_idle_levels()
+        if let Err(error) = self.close_idle_levels() {
+            self.native_lifecycle.cancel_server_tick();
+            return Err(error);
+        }
+        // `ServerTickEnd`: an errored tick or an idle-close failure (at
+        // the `?` above) never reaches this site.
+        self.native_lifecycle_server_tick_end(paused);
+        Ok(())
     }
 
     /// `tick_server` as a server thread runs it. With `HORIZON_SPIKES=MS`, a
@@ -463,8 +467,12 @@ impl Game<'_> {
                         .is_some_and(|p| !p.streaming.forced.is_empty())
                 };
                 guests.iter().any(|g| g.dimension == d.id())
+                    || self.player_bed_levels().any(|b| b == *d)
                     || forced
                     || self.pregen_level() == Some(*d)
+                    // A pending portal arrival keeps its destination level
+                    // running so it can land and tick (the portal ticket).
+                    || !self.arrival_chunks(*d).is_empty()
             })
             .collect();
         if dims.is_empty() {

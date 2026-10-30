@@ -10,7 +10,10 @@ from pathlib import Path
 import sys
 
 root = Path(sys.argv[1])
-hud = root / "crates/horizon-client/src/hud_layout.rs"
+# Upstream moved shared rendering/HUD code into horizon-client-render; horizon-client
+# re-exports hud_layout, so game code keeps the same API while the patch follows the
+# source file to its current crate.
+hud = root / "crates/horizon-client-render/src/hud_layout.rs"
 
 
 def replace_once(old: str, new: str, marker: str) -> None:
