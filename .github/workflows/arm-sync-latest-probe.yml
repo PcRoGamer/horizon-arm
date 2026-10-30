@@ -1,0 +1,51 @@
+name: ARM sync latest-upstream replay probe
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    if: github.event.pull_request.head.ref == 'sync/trigger-conflict-probe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: sync/candidate-2026-10-30
+          fetch-depth: 0
+
+      - name: Replay Android delta onto current upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=b1dfde280b92a8768b0d04eb2265e8fb200bf6de
+          CANDIDATE=$(git rev-parse HEAD)
+          git config user.name 'ARM sync bot'
+          git config user.email 'arm-sync@users.noreply.github.com'
+          git remote add upstream https://github.com/horizon-rust/horizon.git
+          git fetch --no-tags upstream main
+          UPSTREAM=$(git rev-parse upstream/main)
+          echo "candidate=$CANDIDATE"
+          echo "upstream=$UPSTREAM"
+          mapfile -t COMMITS < <(git rev-list --reverse "$BASE..$CANDIDATE")
+          echo "android_delta_commits=${#COMMITS[@]}"
+          git checkout -B sync/replay-latest "$UPSTREAM"
+          for c in "${COMMITS[@]}"; do
+            echo "=== cherry-pick $c $(git show -s --format=%s "$c")"
+            if ! git cherry-pick "$c"; then
+              echo "::error::conflict while replaying $c"
+              git status --short
+              echo '--- unmerged paths ---'
+              git diff --name-only --diff-filter=U
+              echo '--- conflict diff ---'
+              git diff --cc || true
+              exit 1
+            fi
+          done
+          echo "REPLAY_OK upstream=$UPSTREAM head=$(git rev-parse HEAD) commits=${#COMMITS[@]}"
+          git diff --check "$UPSTREAM..HEAD"
+          cargo metadata --no-deps --format-version 1 >/dev/null
