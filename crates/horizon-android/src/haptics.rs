@@ -29,7 +29,9 @@ fn perform_on_ui(app: &AndroidApp, kind: Haptic) -> jni::errors::Result<()> {
 
     // AndroidApp owns both raw references for at least this closure. The cast is
     // borrowed/unowned: it must never delete NativeActivity's global reference.
-    let vm = unsafe { JavaVM::from_raw(app.vm_as_ptr().cast()) }?;
+    // jni 0.22 made JavaVM::from_raw return JavaVM directly; validation of the
+    // non-null VM pointer remains the caller's unsafe precondition.
+    let vm = unsafe { JavaVM::from_raw(app.vm_as_ptr().cast()) };
     vm.attach_current_thread(|env| {
         let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
         let activity = unsafe { env.as_cast_raw::<Global<JObject>>(&raw_activity)? };
