@@ -53,6 +53,9 @@ PY
 # Keep Android's launcherless manager as a small set of explicit game hooks
 # instead of carrying a divergent copy of Horizon's large game loop files.
 bash "$REPO/tools/patch-horizon-mobile.sh"
+# Bedrock-style touch options live in Horizon's pause UI and apply to the
+# current instance without exposing a launcher/config-file workflow.
+python3 "$REPO/tools/patch-touch-settings.py" "$HORIZON_SRC"
 # Bedrock/Pocket presentation is Android-only: preserve upstream Java HUD parity
 # in Git and move only the APK's anchors/crosshair/hotbar presentation.
 python3 "$REPO/tools/patch-bedrock-hud.py" "$HORIZON_SRC"
