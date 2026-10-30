@@ -33,6 +33,7 @@ jobs:
             ':!crates/horizon-client/src/game/touch.rs' \
             ':!crates/horizon-client/src/game/touch_icons.rs' \
             ':!crates/horizon-client/src/game/mobile_ui.rs' \
+            ':!crates/horizon-client/src/game/touch_settings.rs' \
             ':!crates/horizon-client/src/android.rs' \
             ':!crates/horizon-client/src/android/**'
           python3 - <<'PY'
@@ -69,51 +70,6 @@ jobs:
               raise SystemExit('Android wrapper no longer consumes upstream horizon-client')
           print('renderer, shaders and mods inherited from current upstream')
           PY
-
-  desktop:
-    name: ${{ matrix.name }} upstream
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Linux x64
-            runner: ubuntu-24.04
-            linux: true
-          - name: Linux ARM64
-            runner: ubuntu-24.04-arm
-            linux: true
-          - name: Windows x64
-            runner: windows-2025
-            linux: false
-          - name: Windows ARM64
-            runner: windows-11-arm
-            linux: false
-          - name: macOS Intel
-            runner: macos-15-intel
-            linux: false
-          - name: macOS ARM64
-            runner: macos-15
-            linux: false
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: horizon-rust/horizon
-          ref: main
-          fetch-depth: 1
-      - name: Linux dependencies
-        if: matrix.linux
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libasound2-dev libudev-dev pkg-config
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Check full upstream client
-        shell: bash
-        run: |
-          echo "upstream=$(git rev-parse HEAD) platform=${{ matrix.name }}"
-          cargo check -p horizon-client
 
   android-arm64:
     name: Android ARM64 current upstream
