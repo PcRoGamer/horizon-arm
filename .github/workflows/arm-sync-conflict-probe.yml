@@ -5,7 +5,7 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   probe:
@@ -37,7 +37,6 @@ jobs:
             if ! git cherry-pick "$c"; then
               conflicts=$(git diff --name-only --diff-filter=U)
               if [[ "$c" == 5f145ed3c9ff54f74f83f2b7584dddedda63170b && "$conflicts" == "Cargo.toml" ]]; then
-                echo "Resolving workspace split: keep horizon-client-render and add horizon-android"
                 git checkout --ours Cargo.toml
                 python3 - <<'PY'
           from pathlib import Path
@@ -54,7 +53,6 @@ jobs:
                 continue
               fi
               if [[ "$c" == ccfe63095b024246d1f195924c311175beaec265 && "$conflicts" == "crates/horizon-client/src/game.rs" ]]; then
-                echo "Resolving event dispatch: keep upstream keymap and Android touch handling"
                 python3 - <<'PY'
           from pathlib import Path
           import re
@@ -70,7 +68,6 @@ jobs:
                 continue
               fi
               if [[ "$c" == 25306f558372688b58f2d3256e4e97327d842a6f && "$conflicts" == "crates/horizon-client/src/game.rs" ]]; then
-                echo "Resolving cursor capture: keep upstream view_at centering on desktop and no warp on Android"
                 python3 - <<'PY'
           from pathlib import Path
           import re
@@ -88,7 +85,6 @@ jobs:
                 continue
               fi
               if [[ "$c" == 8209f74d1cc53b4bfa40800b8b65f249a8f8a2f4 && "$conflicts" == "README.md" ]]; then
-                echo "Resolving docs: keep current upstream README and preserve Android README under android-port"
                 git checkout --ours README.md
                 git show "$c:README.md" > android-port/README.md
                 python3 - <<'PY'
@@ -113,7 +109,6 @@ jobs:
           done
           echo "ANDROID_FOUNDATION_REPLAY_OK=$(git rev-parse HEAD)"
 
-          echo "=== replaying fork-only commits after stale snapshot restore ==="
           snapshot=319e087ee9d4601c4466223a64580a71c3772dfd
           fork_head=695cfe884739eaf79f6438b63c06bfc007f7c8f7
           mapfile -t later < <(git rev-list --reverse --ancestry-path "$snapshot..$fork_head")
@@ -128,13 +123,16 @@ jobs:
             fi
             if ! "${pick[@]}"; then
               echo "CONFLICT_COMMIT=$c"
-              echo "=== FORK-ONLY CONFLICTED FILES ==="
               git diff --name-only --diff-filter=U
-              echo "=== STATUS ==="
               git status --short
-              echo "=== CONFLICT DIFF ==="
               git diff --cc || true
               exit 24
             fi
           done
+
           echo "FULL_ARM_REPLAY_OK=$(git rev-parse HEAD)"
+          git diff --check
+          cargo metadata --no-deps --format-version 1 >/dev/null
+          test -z "$(git status --porcelain)"
+          git push origin HEAD:refs/heads/sync/candidate-2026-10-30
+          echo "CANDIDATE_PUSHED=$(git rev-parse HEAD)"
