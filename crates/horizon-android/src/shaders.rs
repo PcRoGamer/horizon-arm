@@ -1,14 +1,15 @@
 //! Android's bundled first-party Horizon shader pack.
 //!
-//! Golden Hour remains a normal Horizon shader pack on disk so the existing
-//! shader-pack scanner, option page and hot-reload path all see the same thing
-//! they do on desktop. The APK merely guarantees that the official example is
-//! available in every instance without a separate download.
+//! Golden Hour remains available as a normal Horizon shader pack on disk, but
+//! it is no longer forced on by the Android build. The first Android shader
+//! build briefly made it the default; the v2 migration removes only that old
+//! automatic choice and leaves the pack installed for anyone who wants it.
 
 use std::{fs, path::Path};
 
 const PACK: &str = "golden_hour";
-const MIGRATION: &str = ".horizon-android-golden-hour-default-v1";
+const OLD_DEFAULT_MIGRATION: &str = ".horizon-android-golden-hour-default-v1";
+const DEFAULT_REMOVED_MIGRATION: &str = ".horizon-android-golden-hour-default-removed-v2";
 const GRAPHICS: &str = "horizon-graphics.txt";
 
 const FILES: &[(&str, &str)] = &[
@@ -34,12 +35,12 @@ const FILES: &[(&str, &str)] = &[
     ),
 ];
 
-/// Make Horizon's official Golden Hour pack available to this instance and,
-/// exactly once, choose it when the player has not selected another pack.
+/// Make Horizon's first-party Golden Hour example available to this instance.
+/// It is deliberately *not* selected by default.
 ///
-/// Existing pack files are never overwritten: a player can edit the bundled
-/// example and keep those edits. The migration marker means turning shaders off
-/// later is respected instead of Golden Hour being forced on every launch.
+/// Existing pack files are never overwritten. If this install previously got
+/// Golden Hour only because Android v1 auto-selected it, clear that one old
+/// default exactly once; the player can still choose Golden Hour again later.
 pub fn ensure_golden_hour(home: &Path) -> Result<(), String> {
     let pack = home.join("shaderpacks").join(PACK);
     fs::create_dir_all(pack.join("post"))
@@ -57,45 +58,42 @@ pub fn ensure_golden_hour(home: &Path) -> Result<(), String> {
         fs::write(&path, contents).map_err(|e| format!("write {}: {e}", path.display()))?;
     }
 
-    let marker = home.join(MIGRATION);
-    if marker.exists() {
+    let migrated = home.join(DEFAULT_REMOVED_MIGRATION);
+    if migrated.exists() {
         return Ok(());
     }
 
-    let graphics = home.join(GRAPHICS);
-    let current = fs::read_to_string(&graphics).unwrap_or_default();
-    let mut found = false;
-    let mut has_pick = false;
-    let mut lines = Vec::new();
-    for line in current.lines() {
-        let Some((key, value)) = line.split_once(':') else {
-            lines.push(line.to_owned());
-            continue;
-        };
-        if key.trim() == "pickedShaderPack" {
-            found = true;
-            if value.trim().is_empty() {
-                lines.push(format!("pickedShaderPack:{PACK}"));
-            } else {
-                has_pick = true;
-                lines.push(line.to_owned());
+    // Only installations touched by the short-lived v1 auto-default are
+    // eligible for cleanup. Fresh installs simply start with shaders off.
+    if home.join(OLD_DEFAULT_MIGRATION).exists() {
+        let graphics = home.join(GRAPHICS);
+        if let Ok(current) = fs::read_to_string(&graphics) {
+            let mut changed = false;
+            let mut lines = Vec::new();
+            for line in current.lines() {
+                if let Some((key, value)) = line.split_once(':')
+                    && key.trim() == "pickedShaderPack"
+                    && value.trim() == PACK
+                {
+                    lines.push("pickedShaderPack:".to_owned());
+                    changed = true;
+                } else {
+                    lines.push(line.to_owned());
+                }
             }
-        } else {
-            lines.push(line.to_owned());
+            if changed {
+                let mut text = lines.join("\n");
+                text.push('\n');
+                fs::write(&graphics, text)
+                    .map_err(|e| format!("write {}: {e}", graphics.display()))?;
+            }
         }
     }
-    if !found {
-        lines.push(format!("pickedShaderPack:{PACK}"));
-    }
 
-    if !has_pick {
-        let mut text = lines.join("\n");
-        text.push('\n');
-        fs::write(&graphics, text)
-            .map_err(|e| format!("write {}: {e}", graphics.display()))?;
-    }
-
-    fs::write(&marker, b"Golden Hour 1.0.0\n")
-        .map_err(|e| format!("write {}: {e}", marker.display()))?;
+    fs::write(
+        &migrated,
+        b"Golden Hour remains available but is no longer an Android default.\n",
+    )
+    .map_err(|e| format!("write {}: {e}", migrated.display()))?;
     Ok(())
 }
