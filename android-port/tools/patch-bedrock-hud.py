@@ -22,7 +22,7 @@ def replace_once(old: str, new: str, marker: str) -> None:
     hud.write_text(text.replace(old, new, 1))
 
 
-# Pocket UI keeps the hotbar visually light/transparent.  Items and the
+# Pocket UI keeps the hotbar visually light/transparent. Items and the
 # selected-slot frame still use Horizon's normal Minecraft sprites.
 replace_once(
     '    out.push(sprite("hud/hotbar", center - 91, h - 22, 182, 22));\n',
@@ -32,9 +32,9 @@ replace_once(
     'Android Pocket UI intentionally has no opaque hotbar rail',
 )
 
-# Bedrock tap modes do not show a crosshair.  Crosshair mode does.  Read the
-# same tiny Android touch config once per process; changing modes is applied on
-# the next game start, which matches the current launcherless settings model.
+# Bedrock tap modes do not show a crosshair. Crosshair mode does. The atomic is
+# initialised lazily from the per-instance touch config and can then be updated
+# live by the in-game Android Touch Controls panel.
 replace_once(
     '''pub fn crosshair(w: i32, h: i32, attack: Option<f32>, full: bool) -> Vec<GuiDraw> {
     crosshair_draws(w, h, attack, full)
@@ -44,24 +44,38 @@ replace_once(
 }
 ''',
     '''#[cfg(target_os = "android")]
+static ANDROID_TOUCH_CROSSHAIR: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(2);
+
+#[cfg(target_os = "android")]
 fn android_touch_crosshair() -> bool {
-    use std::sync::OnceLock;
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| {
-        let configured = std::env::var("HORIZON_TOUCH_PRESET")
-            .ok()
-            .or_else(|| std::fs::read_to_string("horizon-touch.txt").ok())
-            .unwrap_or_default()
-            .to_ascii_lowercase();
-        let simple = configured.trim();
-        matches!(simple, "classic" | "crosshair")
-            || configured.lines().any(|line| {
-                line.split_once('=').is_some_and(|(key, value)| {
-                    matches!(key.trim(), "mode" | "control_mode")
-                        && matches!(value.trim(), "crosshair" | "joystick_crosshair" | "joystick & aim crosshair")
-                })
-            })
-    })
+    use std::sync::atomic::Ordering;
+    match ANDROID_TOUCH_CROSSHAIR.load(Ordering::Relaxed) {
+        0 => false,
+        1 => true,
+        _ => {
+            let configured = std::env::var("HORIZON_TOUCH_PRESET")
+                .ok()
+                .or_else(|| std::fs::read_to_string("horizon-touch.txt").ok())
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            let simple = configured.trim();
+            let enabled = matches!(simple, "classic" | "crosshair")
+                || configured.lines().any(|line| {
+                    line.split_once('=').is_some_and(|(key, value)| {
+                        matches!(key.trim(), "mode" | "control_mode")
+                            && matches!(value.trim(), "crosshair" | "joystick_crosshair" | "joystick & aim crosshair")
+                    })
+                });
+            ANDROID_TOUCH_CROSSHAIR.store(u8::from(enabled), Ordering::Relaxed);
+            enabled
+        }
+    }
+}
+
+#[cfg(target_os = "android")]
+pub fn set_android_touch_crosshair(enabled: bool) {
+    use std::sync::atomic::Ordering;
+    ANDROID_TOUCH_CROSSHAIR.store(u8::from(enabled), Ordering::Relaxed);
 }
 
 pub fn crosshair(w: i32, h: i32, attack: Option<f32>, full: bool) -> Vec<GuiDraw> {
@@ -75,12 +89,12 @@ pub fn crosshair(w: i32, h: i32, attack: Option<f32>, full: bool) -> Vec<GuiDraw
         .collect()
 }
 ''',
-    'fn android_touch_crosshair()',
+    'pub fn set_android_touch_crosshair(enabled: bool)',
 )
 
-# Bedrock Pocket UI places player status in the upper corners.  Keep Horizon's
+# Bedrock Pocket UI places player status in the upper corners. Keep Horizon's
 # exact heart/food/armour/air extraction and animation logic; only change its
-# anchors on Android.  Extra heart rows grow downward from a safe top margin.
+# anchors on Android. Extra heart rows grow downward from a safe top margin.
 replace_once(
     '''        let (x_left, x_right, y_base) = (w / 2 - 91, w / 2 + 91, h - 39);
         let max_health = i.max_health.max(old.max(current) as f32);
@@ -110,7 +124,7 @@ replace_once(
     'let left_rows = (rows - 1) * row_height',
 )
 
-# On Java the air row stacks upward from the bottom-right food row.  Pocket UI
+# On Java the air row stacks upward from the bottom-right food row. Pocket UI
 # has free space below the top-right food row, so stack oxygen downward instead.
 replace_once(
     '''            y_air -= 10;
