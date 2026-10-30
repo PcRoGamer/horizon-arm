@@ -21,9 +21,27 @@ VERSION_NAME="${VERSION_NAME:-0.1.0}"
 OUT="$REPO/build"
 mkdir -p "$OUT"
 
+# patch-winit operates on Cargo's unpacked registry source. Make the build
+# self-contained: CI workflows, local builds and fresh machines must not depend
+# on a separate `cargo fetch` having happened beforehand. The Android wrapper is
+# injected into a disposable upstream workspace, so Cargo.lock may legitimately
+# gain its Android-only dependency edges here; never write this generated lock
+# back to upstream Git.
+( cd "$HORIZON_SRC" && cargo fetch )
+
 # winit's Android backend needs the controller patch before anything compiles
 # (idempotent; it also drops the crate's artifacts the first time).
 "$REPO/tools/patch-winit.sh"
+
+# arboard has no Android backend. Keep Horizon's normal clipboard untouched on
+# desktop and retain its process-local copy/paste fallback in the Android tree.
+python3 "$REPO/tools/patch-android-clipboard.py" "$HORIZON_SRC"
+# Keep desktop gilrs out of Android while preserving Horizon's controller
+# semantics through the Android DeviceEvent -> PadState adapter.
+python3 "$REPO/tools/patch-android-gamepad.py" "$HORIZON_SRC"
+# The touch module is additive too; upstream Game only receives its two
+# Android-gated state fields in the disposable APK build tree.
+python3 "$REPO/tools/patch-android-touch-state.py" "$HORIZON_SRC"
 
 # The current touch source already owns its icon HUD. Older Android hook code
 # recognises standalone markers, so normalize the grouped import and add the
@@ -56,6 +74,10 @@ bash "$REPO/tools/patch-horizon-mobile.sh"
 # Bedrock-style touch options live in Horizon's pause UI and apply to the
 # current instance without exposing a launcher/config-file workflow.
 python3 "$REPO/tools/patch-touch-settings.py" "$HORIZON_SRC"
+# Legacy parity patchers predate the live layout editor and used global anchors.
+# Normalize the resulting source so hotbar-only wrapping stays entirely inside
+# the runtime draw_touch_controls method instead of crossing Game impl methods.
+python3 "$REPO/tools/repair-touch-overlay.py" "$HORIZON_SRC"
 # Bedrock/Pocket presentation is Android-only: preserve upstream Java HUD parity
 # in Git and move only the APK's anchors/crosshair/hotbar presentation.
 python3 "$REPO/tools/patch-bedrock-hud.py" "$HORIZON_SRC"

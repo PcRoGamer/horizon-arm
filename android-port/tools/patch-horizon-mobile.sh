@@ -17,7 +17,9 @@ import sys
 root = Path(sys.argv[1])
 game = root / "crates/horizon-client/src/game.rs"
 screens = root / "crates/horizon-client/src/game/screens.rs"
-gfx = root / "crates/horizon-client/src/gfx.rs"
+# Renderer was split out of horizon-client upstream. Android patches the current
+# renderer crate instead of resurrecting the old in-client gfx.rs.
+gfx = root / "crates/horizon-client-render/src/gfx.rs"
 touch = root / "crates/horizon-client/src/game/touch.rs"
 
 
@@ -43,7 +45,9 @@ def replace_between(path: Path, start: str, end: str, new: str, marker: str) -> 
     path.write_text(text[:a] + new + text[b:])
 
 
-# Compile the Android-only UI modules next to the touch module.
+# Compile the Android-only UI modules next to the touch module. The upstream
+# overlay preparer already adds these on fresh trees; this remains idempotent for
+# older developer trees.
 replace_once(
     game,
     '#[cfg(target_os = "android")]\nmod touch;\n',
@@ -287,6 +291,7 @@ replace_between(
                 Control::Inventory => touch_icons::Icon::Inventory,
                 Control::Chat => touch_icons::Icon::Chat,
                 Control::Pause => touch_icons::Icon::Pause,
+                Control::Perspective => touch_icons::Icon::Perspective,
             };
             touch_icons::button(batch, atlas, icon, *cx, *cy, *r, down);
         }
