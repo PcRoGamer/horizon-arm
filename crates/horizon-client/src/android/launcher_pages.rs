@@ -190,6 +190,9 @@ impl Launcher {
         let (Some(r), Some(gui)) = (&mut self.renderer, &self.gui) else {
             return Ok(());
         };
+        if r.suspended {
+            return Ok(());
+        }
         self.targets.clear();
         self.list_targets.clear();
         self.list_view = None;

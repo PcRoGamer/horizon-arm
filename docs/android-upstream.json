@@ -12,6 +12,6 @@
   "last_reviewed_date": "2026-10-30",
   "last_update_commits": 70,
   "latest_fetched_commit": "ab6851d5a",
-  "review": "Reviewed stable upstream main through ab6851d5a: region-cache bounds, resource metadata parsing, item and mob fixes, display culling and SMP native hooks. Preserved sandbox hmod command dispatch ahead of native command dispatch. Android validation of this update is pending owner build/testing. Upstream deployment workflows remain inactive.",
+  "review": "Reviewed stable upstream main through ab6851d5a: region-cache bounds, resource metadata parsing, item and mob fixes, display culling and SMP native hooks. Preserved sandbox hmod command dispatch ahead of native command dispatch. ARM64 and ARMv7 cargo checks and strict ARM64 Clippy passed after integration. Final APK builds and on-device gameplay validation remain with the repository owner. Upstream deployment workflows remain inactive.",
   "pending_review_commits": 0
 }

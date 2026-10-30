@@ -346,10 +346,6 @@ impl Game<'_> {
                         }
                     }
                     Action::VirtualMouse => {
-                        for right in self.pad.touch_ui.release_all_mouse() {
-                            self.android_menu_mouse(events, id, right, false)?;
-                        }
-
                         if matches!(self.screen, Screen::Inventory | Screen::Creative) {
                             // Cancel a prior drag without clicking/dropping at
                             // the toggle button, which is outside the inventory.
@@ -357,6 +353,9 @@ impl Game<'_> {
                             self.inv_drag = None;
                             self.creative_screen.release();
                             self.loom_release();
+                        }
+                        for right in self.pad.touch_ui.release_all_mouse() {
+                            self.android_menu_mouse(events, id, right, false)?;
                         }
                         self.pad.touch_ui.cancel();
                         self.pad.touch_ui.virtual_mouse ^= true;
@@ -538,6 +537,12 @@ impl Game<'_> {
         self.debug_key(key, KeyAction::Release);
     }
     pub(super) fn android_release_touch_keys(&mut self, cancelled: bool) {
+        if cancelled && matches!(self.screen, Screen::Inventory | Screen::Creative) {
+            self.inv_clicks = Default::default();
+            self.inv_drag = None;
+            self.creative_screen.release();
+            self.loom_release();
+        }
         self.pad.touch_ui.cancel_relative();
         for right in self.pad.touch_ui.release_all_mouse() {
             let button = if right {
@@ -682,10 +687,10 @@ impl Game<'_> {
         {
             self.pad.touch_ui.cancel_relative();
             for right in self.pad.touch_ui.release_all_mouse() {
-                if let Some(id) = self.window.as_ref().map(|w| w.id()) {
-                    if let Err(error) = self.android_menu_mouse(events, id, right, false) {
-                        log::warn!("Release virtual mouse: {error}");
-                    }
+                if let Some(id) = self.window.as_ref().map(|w| w.id())
+                    && let Err(error) = self.android_menu_mouse(events, id, right, false)
+                {
+                    log::warn!("Release virtual mouse: {error}");
                 }
             }
             return;
