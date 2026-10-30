@@ -25,7 +25,6 @@ def replace_once(path: Path, old: str, new: str, marker: str) -> None:
     path.write_text(text.replace(old, new, 1))
 
 
-# Compile the panel beside the Android touch and launcherless UI modules.
 replace_once(
     game,
     '#[cfg(target_os = "android")]\nmod mobile_ui; // Horizon Android launcherless manager\n',
@@ -34,9 +33,6 @@ replace_once(
     'mod touch_settings; // Horizon Android Bedrock touch settings',
 )
 
-# The settings panel deliberately talks to Game methods instead of reaching into
-# Touch's private state. These helpers apply immediately, save per instance, and
-# keep the Android crosshair presentation in sync without restarting Horizon.
 replace_once(
     touch,
     '''    pub(super) fn set_soft_keyboard(&self, show: bool) {
@@ -142,8 +138,6 @@ replace_once(
     'pub(super) fn touch_control_mode_name(&self)',
 )
 
-# Put the entry chip above the instance chip. The panel itself is modal but the
-# normal launcherless instance manager remains available when it is closed.
 replace_once(
     mobile,
     '''    pub(super) fn draw_android_pause_controls(&mut self, batch: &mut HudBatch) {
@@ -156,8 +150,6 @@ replace_once(
     'self.draw_android_touch_settings_entry(batch)',
 )
 
-# Touch settings get first refusal while open so a tap cannot also activate a
-# vanilla pause button or the instance panel underneath.
 replace_once(
     mobile,
     '''    pub(super) fn android_pause_click(&mut self) -> bool {
@@ -174,7 +166,9 @@ replace_once(
 
 print("patched Horizon Android in-game touch settings")
 
-# The editor extends this same panel. Chaining here keeps build.sh stable and
-# guarantees the editor sees the settings helpers above before it patches them.
+# Extend the same panel in deterministic order: first the live layout editor,
+# then the remaining Bedrock touch-mode behavior toggles.
 editor = Path(__file__).with_name("patch-touch-editor.py")
 subprocess.run([sys.executable, str(editor), str(root)], check=True)
+parity = Path(__file__).with_name("patch-touch-parity-options.py")
+subprocess.run([sys.executable, str(parity), str(root)], check=True)
