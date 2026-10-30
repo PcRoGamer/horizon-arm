@@ -10,12 +10,12 @@ text = touch.read_text()
 
 start_marker = "// Horizon Android hotbar press haptic"
 if start_marker not in text:
-    old = '''                if let Some(slot) = hotbar_slot(pos, (batch.width, batch.height)) {
+    old = '''                let gesture = if let Some(slot) = hotbar_slot(pos, (batch.width, batch.height)) {
                     self.selected = slot;
                     Gesture::Hotbar
 '''
     new = '''                // Horizon Android hotbar press haptic
-                if let Some(slot) = hotbar_slot(pos, (batch.width, batch.height)) {
+                let gesture = if let Some(slot) = hotbar_slot(pos, (batch.width, batch.height)) {
                     if slot != self.selected && self.touch_ui.settings.button_haptics {
                         crate::android::haptic(crate::android::Haptic::Tap);
                     }
