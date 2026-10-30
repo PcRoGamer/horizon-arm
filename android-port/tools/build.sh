@@ -23,8 +23,11 @@ mkdir -p "$OUT"
 
 # patch-winit operates on Cargo's unpacked registry source. Make the build
 # self-contained: CI workflows, local builds and fresh machines must not depend
-# on a separate `cargo fetch` having happened beforehand.
-( cd "$HORIZON_SRC" && cargo fetch --locked )
+# on a separate `cargo fetch` having happened beforehand. The Android wrapper is
+# injected into a disposable upstream workspace, so Cargo.lock may legitimately
+# gain its Android-only dependency edges here; never write this generated lock
+# back to upstream Git.
+( cd "$HORIZON_SRC" && cargo fetch )
 
 # winit's Android backend needs the controller patch before anything compiles
 # (idempotent; it also drops the crate's artifacts the first time).
