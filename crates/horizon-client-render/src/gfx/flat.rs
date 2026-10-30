@@ -117,7 +117,7 @@ pub struct Flat {
 /// sides it shows the eye (`mesher::Sides`), so it counts sections.
 // Android's explicit Vulkan batching path also benefits at medium distances;
 // small views keep the ordinary draw path. Desktop retains its measured bar.
-const MIN_SECTIONS: usize = if cfg!(target_os = "android") {
+pub const MIN_SECTIONS: usize = if cfg!(target_os = "android") {
     512
 } else {
     1600
@@ -132,12 +132,24 @@ pub fn wanted(adapter: &wgpu::Adapter, device: &wgpu::Device) -> bool {
         Ok("1") => return supported(adapter, device),
         _ => {}
     }
-    let backend = adapter.get_info().backend;
-    (backend == wgpu::Backend::Metal
+    let info = adapter.get_info();
+    (info.backend == wgpu::Backend::Metal
+        || is_broken_intel_vulkan(&info)
         || cfg!(target_os = "android")
-            && backend == wgpu::Backend::Vulkan
+            && info.backend == wgpu::Backend::Vulkan
             && !crate::android_runtime::compatibility())
         && supported(adapter, device)
+}
+
+/// Intel Gen11 (Ice Lake) ANV Vulkan driver has broken `first_instance` for instance-step
+/// vertex attributes (#3529), causing terrain sections to be drawn with another section's origin
+/// and flicker.
+pub fn is_broken_intel_vulkan(info: &wgpu::AdapterInfo) -> bool {
+    info.backend == wgpu::Backend::Vulkan
+        && info.vendor == 0x8086
+        && (info.name.contains("ICL")
+            || info.name.contains("Ice Lake")
+            || (info.device >= 0x8a50 && info.device <= 0x8a71))
 }
 
 fn supported(adapter: &wgpu::Adapter, device: &wgpu::Device) -> bool {
@@ -266,6 +278,7 @@ impl Flat {
         device: &wgpu::Device,
         terrain_layout: &wgpu::BindGroupLayout,
         page_vertices: u64,
+        min_sections: usize,
         pipeline: impl Fn(
             &wgpu::PipelineLayout,
             &str,
@@ -369,11 +382,7 @@ impl Flat {
             phase1_calls: 0,
             solid_calls: 0,
             shadow_calls: [0; 2],
-            min_sections: if std::env::var("HORIZON_FLAT_DRAWS").as_deref() == Ok("1") {
-                0
-            } else {
-                MIN_SECTIONS
-            },
+            min_sections,
             range_align: (u64::from(device.limits().min_storage_buffer_offset_alignment) / 16)
                 .max(1),
         }
