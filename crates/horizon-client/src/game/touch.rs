@@ -1,13 +1,21 @@
 //! Android touchscreen HUD.
 //!
-//! Mobile is deliberately not a virtual keyboard/mouse overlay.  Fingers have
-//! independent jobs: a floating left movement stick, direct camera look on the
-//! rest of the world, mobile-sized action controls and direct hotbar selection.
-//! The default preset keeps the screen quiet (tap/hold the world to attack);
-//! `horizon-touch.txt` containing `classic` restores a separate HIT button.
-use super::{Game, Screen};
-use horizon_client::hud::{HudBatch, rgba};
-use std::{collections::HashMap, time::{Duration, Instant}};
+//! The default presentation follows Bedrock mobile's interaction model rather
+//! than emulating a desktop mouse and keyboard.  Fingers are independent:
+//! movement, camera, hotbar and action touches can all be held at once.
+//!
+//! `horizon-touch.txt` accepts Bedrock-style options (one per line):
+//! `mode=joystick|crosshair|dpad`, `static_joystick=true|false`,
+//! `show_action_buttons=true|false`, `left_handed=true|false`, and
+//! `joystick_visibility=always|touch|hidden`.  The old `mobile` and `classic`
+//! one-word files continue to map to joystick/tap and joystick/crosshair.
+
+use super::{Game, Screen, touch_icons};
+use horizon_client::hud::HudBatch;
+use std::{
+    collections::HashMap,
+    time::{Duration, Instant},
+};
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalPosition,
@@ -27,21 +35,94 @@ const ATTACK_HOLD: Duration = Duration::from_millis(175);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Preset {
-    Mobile,
-    Classic,
+    /// Bedrock "Joystick & tap to interact".
+    JoystickTap,
+    /// Bedrock "Joystick & aim crosshair".
+    JoystickCrosshair,
+    /// Bedrock "D-Pad & tap to interact".
+    DpadTap,
 }
 
-impl Preset {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum JoystickVisibility {
+    Always,
+    WhenTouched,
+    Hidden,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Settings {
+    preset: Preset,
+    static_joystick: bool,
+    show_action_buttons: bool,
+    left_handed: bool,
+    joystick_visibility: JoystickVisibility,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            preset: Preset::JoystickTap,
+            static_joystick: false,
+            show_action_buttons: true,
+            left_handed: false,
+            joystick_visibility: JoystickVisibility::Always,
+        }
+    }
+}
+
+impl Settings {
     fn load() -> Self {
         let configured = std::env::var("HORIZON_TOUCH_PRESET")
             .ok()
             .or_else(|| std::fs::read_to_string("horizon-touch.txt").ok())
             .unwrap_or_default();
-        if configured.trim().eq_ignore_ascii_case("classic") {
-            Self::Classic
-        } else {
-            Self::Mobile
+        let mut out = Self::default();
+        let simple = configured.trim().to_ascii_lowercase();
+        match simple.as_str() {
+            "classic" | "crosshair" => out.preset = Preset::JoystickCrosshair,
+            "dpad" | "d-pad" => out.preset = Preset::DpadTap,
+            "mobile" | "joystick" => out.preset = Preset::JoystickTap,
+            _ => {
+                for raw in configured.lines() {
+                    let Some((key, value)) = raw.split_once('=') else {
+                        continue;
+                    };
+                    let key = key.trim().to_ascii_lowercase();
+                    let value = value.trim().to_ascii_lowercase();
+                    let yes = matches!(value.as_str(), "1" | "true" | "yes" | "on");
+                    match key.as_str() {
+                        "mode" | "control_mode" => {
+                            out.preset = match value.as_str() {
+                                "crosshair" | "joystick_crosshair" | "joystick & aim crosshair" => {
+                                    Preset::JoystickCrosshair
+                                }
+                                "dpad" | "d-pad" | "dpad_tap" | "d-pad & tap to interact" => {
+                                    Preset::DpadTap
+                                }
+                                _ => Preset::JoystickTap,
+                            };
+                        }
+                        "static_joystick" => out.static_joystick = yes,
+                        "show_action_buttons" => out.show_action_buttons = yes,
+                        "left_handed" | "left_handed_inventory" => out.left_handed = yes,
+                        "joystick_visibility" => {
+                            out.joystick_visibility = match value.as_str() {
+                                "hidden" | "never" => JoystickVisibility::Hidden,
+                                "touch" | "when_touched" | "active" => JoystickVisibility::WhenTouched,
+                                _ => JoystickVisibility::Always,
+                            };
+                        }
+                        _ => {}
+                    }
+                }
+            }
         }
+        out
+    }
+
+    fn tap_interaction(self) -> bool {
+        self.preset != Preset::JoystickCrosshair || !self.show_action_buttons
     }
 }
 
@@ -55,75 +136,107 @@ pub(super) enum Control {
     Inventory,
     Chat,
     Pause,
+    Perspective,
 }
 
 impl Control {
     fn label(self) -> &'static str {
         match self {
-            Control::Jump => "JUMP",
-            Control::Sneak => "SNEAK",
-            Control::Sprint => "SPRINT",
-            Control::Attack => "HIT",
-            Control::Use => "USE",
-            Control::Inventory => "ITEMS",
-            Control::Chat => "CHAT",
-            Control::Pause => "MENU",
+            Self::Jump => "jump",
+            Self::Sneak => "sneak",
+            Self::Sprint => "sprint",
+            Self::Attack => "attack",
+            Self::Use => "use",
+            Self::Inventory => "inventory",
+            Self::Chat => "chat",
+            Self::Pause => "pause",
+            Self::Perspective => "perspective",
         }
     }
 
-    /// These are actions, not held keys.  Firing them on touch release as well
-    /// was enough to immediately close screens on some devices.
+    /// These fire once on touch-down.  Releasing them must not reopen/close the
+    /// screen or cycle perspective a second time.
     fn momentary(self) -> bool {
-        matches!(self, Self::Inventory | Self::Chat | Self::Pause)
+        matches!(self, Self::Inventory | Self::Chat | Self::Pause | Self::Perspective)
     }
 }
 
 struct Layout {
     default_stick: (f32, f32),
     stick_radius: f32,
+    dpad_center: (f32, f32),
+    dpad_radius: f32,
     buttons: Vec<(Control, (f32, f32), f32)>,
     width: f32,
     height: f32,
+    settings: Settings,
 }
 
 impl Layout {
-    fn new((w, h): (f32, f32), preset: Preset) -> Self {
+    fn new((w, h): (f32, f32), settings: Settings) -> Self {
         use Control::*;
 
-        // HudBatch dimensions are GUI pixels rather than raw phone pixels.  A
-        // modest scale keeps controls reachable on a small phone without
-        // becoming enormous on tablets.  The side margin also keeps the common
-        // landscape camera-hole / rounded-corner zones clear without requiring
-        // Android-specific inset plumbing in the renderer.
-        let u = (h / 360.0).clamp(0.82, 1.28);
-        let side = (w * 0.025).clamp(8.0, 22.0);
-        let top = (h * 0.025).clamp(7.0, 16.0);
-        let r = 54.0 * u;
-        let action = 27.0 * u;
-        let jump = 32.0 * u;
-        let small = 21.0 * u;
-        let right = w - side;
-        let bottom = h - 14.0 * u;
+        // GUI pixels, not raw display pixels.  These bounds intentionally leave
+        // a generous landscape safe zone for rounded corners / camera holes.
+        let u = (h / 360.0).clamp(0.82, 1.30);
+        let side = (w * 0.026).clamp(9.0, 24.0);
+        let top = (h * 0.026).clamp(8.0, 18.0);
+        let stick_radius = 50.0 * u;
+        let dpad_radius = 49.0 * u;
+        let action = 25.0 * u;
+        let jump = 30.0 * u;
+        let small = 17.0 * u;
+        let bottom = h - 13.0 * u;
+        let action_x = |from_edge: f32| {
+            if settings.left_handed {
+                side + from_edge * u
+            } else {
+                w - side - from_edge * u
+            }
+        };
 
+        // Menu buttons stay on the top edge in every Bedrock touch mode.
         let mut buttons = vec![
-            (Jump, (right - jump, bottom - jump), jump),
-            (Sprint, (right - 140.0 * u, bottom - 30.0 * u), action),
-            (Use, (right - 28.0 * u, bottom - 118.0 * u), action),
-            (Sneak, (right - 116.0 * u, bottom - 114.0 * u), action),
-            (Inventory, (right - small, top + small), small),
-            (Chat, (right - (small * 2.0 + 12.0 * u), top + small), small),
-            (Pause, (right - (small * 4.0 + 24.0 * u), top + small), small),
+            (Pause, (w * 0.5 - 47.0 * u, top + small), small),
+            (Chat, (w * 0.5, top + small), small),
+            (Perspective, (w * 0.5 + 47.0 * u, top + small), small),
         ];
-        if preset == Preset::Classic {
-            buttons.push((Attack, (right - 208.0 * u, bottom - 32.0 * u), action));
+
+        // Inventory access is beside the hotbar rather than mixed into the
+        // top controls.  Left-handed mode mirrors it along with gameplay input.
+        let inventory_x = if settings.left_handed {
+            w * 0.5 - HOTBAR_WIDTH * 0.5 - 25.0 * u
+        } else {
+            w * 0.5 + HOTBAR_WIDTH * 0.5 + 25.0 * u
+        };
+        buttons.push((Inventory, (inventory_x, h - 20.0 * u), small));
+
+        // Common Bedrock action cluster.
+        buttons.push((Jump, (action_x(34.0), bottom - 35.0 * u), jump));
+        buttons.push((Sneak, (action_x(103.0), bottom - 99.0 * u), action));
+        buttons.push((Sprint, (action_x(119.0), bottom - 31.0 * u), action * 0.92));
+
+        if settings.preset == Preset::JoystickCrosshair && settings.show_action_buttons {
+            buttons.push((Use, (action_x(36.0), bottom - 117.0 * u), action));
+            buttons.push((Attack, (action_x(183.0), bottom - 42.0 * u), action));
         }
 
+        let movement_x = if settings.left_handed {
+            w - side - stick_radius
+        } else {
+            side + stick_radius
+        };
+        let movement_y = h - 18.0 * u - stick_radius;
+
         Self {
-            default_stick: (side + r, h - 16.0 * u - r),
-            stick_radius: r,
+            default_stick: (movement_x, movement_y),
+            stick_radius,
+            dpad_center: (movement_x, movement_y),
+            dpad_radius,
             buttons,
             width: w,
             height: h,
+            settings,
         }
     }
 
@@ -139,10 +252,43 @@ impl Layout {
             .map(|(c, _, _)| *c)
     }
 
-    /// Floating joystick activation region.  Starting anywhere in the lower
-    /// left portion places the stick under the player's thumb.
+    /// Floating joystick activation region.  Left-handed mode mirrors it.
     fn on_stick(&self, pos: (f64, f64)) -> bool {
-        pos.0 < f64::from(self.width * 0.46) && pos.1 > f64::from(self.height * 0.40)
+        if self.settings.preset == Preset::DpadTap {
+            return false;
+        }
+        let on_side = if self.settings.left_handed {
+            pos.0 > f64::from(self.width * 0.54)
+        } else {
+            pos.0 < f64::from(self.width * 0.46)
+        };
+        on_side && pos.1 > f64::from(self.height * 0.40)
+    }
+
+    /// Digital D-pad vector in the same coordinate convention as the analog
+    /// stick: +x right, +y forward/up-screen.
+    fn dpad_vector(&self, pos: (f64, f64)) -> Option<[f32; 2]> {
+        if self.settings.preset != Preset::DpadTap {
+            return None;
+        }
+        let dx = pos.0 as f32 - self.dpad_center.0;
+        let dy = pos.1 as f32 - self.dpad_center.1;
+        let reach = self.dpad_radius * 1.18;
+        if dx.abs() > reach || dy.abs() > reach {
+            return None;
+        }
+        let dead = self.dpad_radius * 0.18;
+        let x = if dx > dead { 1.0 } else if dx < -dead { -1.0 } else { 0.0 };
+        let y = if dy > dead { -1.0 } else if dy < -dead { 1.0 } else { 0.0 };
+        if x == 0.0 && y == 0.0 {
+            return Some([0.0, 0.0]);
+        }
+        if x != 0.0 && y != 0.0 {
+            let d = std::f32::consts::FRAC_1_SQRT_2;
+            Some([x * d, y * d])
+        } else {
+            Some([x, y])
+        }
     }
 }
 
@@ -155,18 +301,19 @@ enum Gesture {
         attacking: bool,
     },
     Stick { origin: (f64, f64) },
+    Dpad,
     Button(Control),
     Hotbar,
 }
 
-/// Every finger has an independent role.  This is essential on a phone: moving
-/// must not stop when another thumb looks, jumps, uses an item or changes slot.
+/// Every finger has an independent role.  Moving never stops because another
+/// thumb looks, jumps, changes hotbar slot or presses an action button.
 pub(super) struct Touch {
     fingers: HashMap<u64, Gesture>,
     stick: [f32; 2],
     stick_origin: Option<(f32, f32)>,
     pressed: Vec<Control>,
-    preset: Preset,
+    settings: Settings,
 }
 
 impl Default for Touch {
@@ -176,7 +323,7 @@ impl Default for Touch {
             stick: [0.0; 2],
             stick_origin: None,
             pressed: Vec::new(),
-            preset: Preset::load(),
+            settings: Settings::load(),
         }
     }
 }
@@ -188,8 +335,8 @@ impl Game<'_> {
         window: WindowId,
         touch: &winit::event::Touch,
     ) {
-        // F1 may hide the HUD, but it must not turn a phone's touchscreen into
-        // a menu pointer and strand the player without movement.
+        // F1 may hide the HUD, but it must not turn the touchscreen into a
+        // menu pointer and strand the player without movement.
         let world = self.screen == Screen::Playing && self.title.is_none() && self.player.is_some();
         if world {
             self.touch_world(event_loop, window, touch);
@@ -212,8 +359,8 @@ impl Game<'_> {
         touch: &winit::event::Touch,
     ) {
         let batch = HudBatch::new(self.touch_pixels());
-        let preset = self.touch_ui.preset;
-        let layout = Layout::new((batch.width, batch.height), preset);
+        let settings = self.touch_ui.settings;
+        let layout = Layout::new((batch.width, batch.height), settings);
         let scale = f64::from(batch.scale);
         let pos = (touch.location.x / scale, touch.location.y / scale);
         let id = touch.id;
@@ -227,10 +374,6 @@ impl Game<'_> {
                 if let Some(control) = layout.button_at(pos) {
                     if control.momentary() {
                         self.press(control, true);
-                        // Opening chat/inventory/pause changes screens while the
-                        // movement thumb may still be down.  Release its logical
-                        // keys now; its later Android UP event belongs to the new
-                        // screen and would otherwise leave movement stuck.
                         if self.screen != Screen::Playing {
                             self.release_touch_inputs();
                             return;
@@ -247,6 +390,9 @@ impl Game<'_> {
                 let gesture = if let Some(slot) = hotbar_slot(pos, (batch.width, batch.height)) {
                     self.selected = slot;
                     Gesture::Hotbar
+                } else if let Some(vector) = layout.dpad_vector(pos) {
+                    self.touch_ui.stick = vector;
+                    Gesture::Dpad
                 } else if layout.on_stick(pos)
                     && !self
                         .touch_ui
@@ -254,8 +400,13 @@ impl Game<'_> {
                         .values()
                         .any(|g| matches!(g, Gesture::Stick { .. }))
                 {
-                    self.touch_ui.stick_origin = Some((pos.0 as f32, pos.1 as f32));
-                    Gesture::Stick { origin: pos }
+                    let origin = if settings.static_joystick {
+                        (f64::from(layout.default_stick.0), f64::from(layout.default_stick.1))
+                    } else {
+                        pos
+                    };
+                    self.touch_ui.stick_origin = Some((origin.0 as f32, origin.1 as f32));
+                    Gesture::Stick { origin }
                 } else {
                     look_at(pos)
                 };
@@ -283,6 +434,9 @@ impl Game<'_> {
                             horizon_client::gamepad::move_vector(push, STICK_DEADZONE)
                                 .unwrap_or([0.0; 2]);
                     }
+                    Gesture::Dpad => {
+                        self.touch_ui.stick = layout.dpad_vector(pos).unwrap_or([0.0, 0.0]);
+                    }
                     Gesture::Hotbar => {
                         if let Some(slot) = hotbar_slot(pos, (batch.width, batch.height)) {
                             self.selected = slot;
@@ -297,19 +451,18 @@ impl Game<'_> {
                     return;
                 };
                 match gesture {
-                    Gesture::Look {
-                        travel,
-                        attacking,
-                        ..
-                    } => {
+                    Gesture::Look { travel, attacking, .. } => {
                         if attacking {
                             let _ = self.play_mouse(MouseButton::Left, false);
-                        } else if touch.phase == TouchPhase::Ended && travel < TAP_TRAVEL {
+                        } else if touch.phase == TouchPhase::Ended
+                            && travel < TAP_TRAVEL
+                            && settings.tap_interaction()
+                        {
                             self.touch_click(event_loop, window, touch);
                         }
                     }
                     Gesture::Hotbar => {}
-                    Gesture::Stick { .. } => {
+                    Gesture::Stick { .. } | Gesture::Dpad => {
                         self.touch_ui.stick = [0.0; 2];
                         self.touch_ui.stick_origin = None;
                     }
@@ -329,11 +482,10 @@ impl Game<'_> {
         }
     }
 
-    /// Mobile preset: a stationary world touch becomes held left-click after a
-    /// short delay.  That makes mining natural while a quick tap still attacks
-    /// once and a moving touch remains pure camera look.
+    /// Tap modes: a stationary world touch becomes held left-click after a
+    /// short delay.  A quick tap attacks once; moving remains pure camera look.
     fn update_touch_holds(&mut self) {
-        if self.touch_ui.preset != Preset::Mobile {
+        if !self.touch_ui.settings.tap_interaction() {
             return;
         }
         let now = Instant::now();
@@ -354,7 +506,7 @@ impl Game<'_> {
         }
     }
 
-    fn release_touch_inputs(&mut self) {
+    pub(super) fn release_touch_inputs(&mut self) {
         self.touch_ui.stick = [0.0; 2];
         self.touch_ui.stick_origin = None;
         self.touch_ui.fingers.clear();
@@ -364,7 +516,6 @@ impl Game<'_> {
                 self.press(control, false);
             }
         }
-        // A mobile look-hold is not represented in `pressed`.
         let _ = self.play_mouse(MouseButton::Left, false);
     }
 
@@ -381,11 +532,7 @@ impl Game<'_> {
             button: MouseButton::Left,
         };
         let position: PhysicalPosition<f64> = touch.location;
-        self.window_event(
-            event_loop,
-            window,
-            WindowEvent::CursorMoved { device_id, position },
-        );
+        self.window_event(event_loop, window, WindowEvent::CursorMoved { device_id, position });
         self.window_event(event_loop, window, press(ElementState::Pressed));
         self.window_event(event_loop, window, press(ElementState::Released));
     }
@@ -407,11 +554,7 @@ impl Game<'_> {
         let last = match (touch.phase, self.touch) {
             (TouchPhase::Started, _) => {
                 self.touch = Some((touch.id, (x, y)));
-                self.window_event(
-                    event_loop,
-                    window,
-                    WindowEvent::CursorMoved { device_id, position },
-                );
+                self.window_event(event_loop, window, WindowEvent::CursorMoved { device_id, position });
                 self.window_event(event_loop, window, press(ElementState::Pressed));
                 return;
             }
@@ -426,11 +569,7 @@ impl Game<'_> {
             _ => None,
         };
         if let Some((last_x, last_y)) = last {
-            self.window_event(
-                event_loop,
-                window,
-                WindowEvent::CursorMoved { device_id, position },
-            );
+            self.window_event(event_loop, window, WindowEvent::CursorMoved { device_id, position });
             if touch.phase == TouchPhase::Ended {
                 self.touch = None;
                 self.window_event(event_loop, window, press(ElementState::Released));
@@ -463,18 +602,16 @@ impl Game<'_> {
                 result
             }
             Control::Pause if down => self.key_pressed(KeyCode::Escape),
-            Control::Inventory | Control::Chat | Control::Pause => Ok(()),
+            Control::Perspective if down => self.key_pressed(KeyCode::F5),
+            Control::Inventory | Control::Chat | Control::Pause | Control::Perspective => Ok(()),
         };
         if let Err(e) = result {
             log::warn!("Horizon: on-screen {}: {e}", control.label());
         }
     }
 
-    fn set_soft_keyboard(&self, show: bool) {
+    pub(super) fn set_soft_keyboard(&self, show: bool) {
         if let Some(window) = &self.window {
-            // winit 0.30.6+ maps this to Android's soft keyboard.  Android
-            // key events populate KeyEvent::text, which Horizon's existing
-            // chat editor already consumes (including Unicode/Arabic text).
             window.set_ime_allowed(show);
         }
     }
@@ -491,8 +628,9 @@ impl Game<'_> {
         )
     }
 
-    /// Render a low-obstruction mobile HUD.  The stick base appears under the
-    /// movement thumb and every held action brightens independently.
+    /// Bedrock-style mobile HUD.  The game remains visible and every held
+    /// control has its own visual state.  Menu buttons stay at the top edge,
+    /// inventory sits beside the hotbar, and movement can be joystick or D-pad.
     pub(super) fn draw_touch_controls(&mut self, batch: &mut HudBatch) {
         self.set_soft_keyboard(false);
         self.update_touch_holds();
@@ -500,57 +638,51 @@ impl Game<'_> {
         if self.ui.hide_gui {
             return;
         }
-        let preset = self.touch_ui.preset;
-        let layout = Layout::new((batch.width, batch.height), preset);
+        let settings = self.touch_ui.settings;
+        let layout = Layout::new((batch.width, batch.height), settings);
         let atlas = &self.gui.atlas;
-        let (sx, sy) = self.touch_ui.stick_origin.unwrap_or(layout.default_stick);
-        let r = layout.stick_radius;
 
-        batch.fill(atlas, sx - r, sy - r, r * 2.0, r * 2.0, rgba(8, 8, 12, 52));
-        let knob = r * 0.42;
-        let moving = self.touch_ui.stick != [0.0, 0.0];
-        batch.fill(
-            atlas,
-            sx + self.touch_ui.stick[0] * r - knob,
-            sy - self.touch_ui.stick[1] * r - knob,
-            knob * 2.0,
-            knob * 2.0,
-            rgba(255, 255, 255, if moving { 150 } else { 72 }),
-        );
+        match settings.preset {
+            Preset::DpadTap => touch_icons::dpad(
+                batch,
+                atlas,
+                layout.dpad_center.0,
+                layout.dpad_center.1,
+                layout.dpad_radius,
+                self.touch_ui.stick,
+            ),
+            Preset::JoystickTap | Preset::JoystickCrosshair => {
+                let active = self.touch_ui.stick_origin.is_some();
+                let visible = match settings.joystick_visibility {
+                    JoystickVisibility::Always => true,
+                    JoystickVisibility::WhenTouched => active,
+                    JoystickVisibility::Hidden => false,
+                };
+                if visible {
+                    let (sx, sy) = if settings.static_joystick {
+                        layout.default_stick
+                    } else {
+                        self.touch_ui.stick_origin.unwrap_or(layout.default_stick)
+                    };
+                    touch_icons::joystick(batch, atlas, sx, sy, layout.stick_radius, self.touch_ui.stick);
+                }
+            }
+        }
 
         for (control, (cx, cy), r) in &layout.buttons {
             let down = self.touch_ui.pressed.contains(control);
-            batch.fill(
-                atlas,
-                cx - r,
-                cy - r,
-                r * 2.0,
-                r * 2.0,
-                rgba(8, 8, 12, if down { 130 } else { 58 }),
-            );
-            let inner = r - 2.0;
-            batch.fill(
-                atlas,
-                cx - inner,
-                cy - inner,
-                inner * 2.0,
-                inner * 2.0,
-                if down {
-                    rgba(255, 255, 255, 90)
-                } else {
-                    rgba(50, 50, 58, 54)
-                },
-            );
-            let label = control.label();
-            let width = HudBatch::text_width(atlas, label);
-            batch.text(
-                atlas,
-                label,
-                (cx - width / 2.0).floor(),
-                (cy - 4.0).floor(),
-                rgba(255, 255, 255, if down { 255 } else { 210 }),
-                true,
-            );
+            let icon = match control {
+                Control::Jump => touch_icons::Icon::Jump,
+                Control::Sneak => touch_icons::Icon::Sneak,
+                Control::Sprint => touch_icons::Icon::Sprint,
+                Control::Attack => touch_icons::Icon::Attack,
+                Control::Use => touch_icons::Icon::Use,
+                Control::Inventory => touch_icons::Icon::Inventory,
+                Control::Chat => touch_icons::Icon::Chat,
+                Control::Pause => touch_icons::Icon::Pause,
+                Control::Perspective => touch_icons::Icon::Perspective,
+            };
+            touch_icons::button(batch, atlas, icon, *cx, *cy, *r, down);
         }
     }
 }
@@ -566,7 +698,7 @@ fn look_at(pos: (f64, f64)) -> Gesture {
 
 fn hotbar_slot(pos: (f64, f64), (w, h): (f32, f32)) -> Option<usize> {
     let x0 = f64::from(w / 2.0 - HOTBAR_WIDTH / 2.0);
-    let y0 = f64::from(h - 22.0);
+    let y0 = f64::from(h - 25.0);
     if pos.0 >= x0
         && pos.0 < x0 + f64::from(HOTBAR_WIDTH)
         && pos.1 >= y0
