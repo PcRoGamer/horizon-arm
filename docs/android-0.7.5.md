@@ -10,6 +10,7 @@ The published RC is followed by source changes for the next 0.7.5 candidate.
 - Optional ADPF performance hints on supported Android 12+ devices. A session tracks the rendering thread's actual CPU-side frame work including submission waits. It uses the explicitly requested display period, or 60 Hz when System default is chosen. Hints close on focus loss. There is no guaranteed performance gain or change to graphics quality.
 - Detailed GPU profiling: recording switch plus rolling p50/p95/p99 for preparation/uploads, world, and post/hand/HUD stages, correlated with CPU/streaming and native API diagnostics. Timestamp availability depends on the driver. These are not vendor hardware counters, GPU clock readings, or proof of a slowdown's cause. Profiling has overhead and is off by default.
 - Exit reports: Android 11+ historical process exits with OS reasons and available Java/native/ANR traces; a previous-log tail and Rust panic export. Traces are bounded and retained locally. Native crash traces can be binary tombstones. Older firmware or the OS may provide no trace.
+- Launcher recovery: regenerate pending text/corner atlas uploads when Android skips a frame during surface suspension or loss, preventing missing labels after unlocking.
 
 Settings are in Options > Controls > Touch Controls. Existing performance recording in launcher Settings remains available. All new sensor/performance controls default to off and display frequency defaults to System default.
 

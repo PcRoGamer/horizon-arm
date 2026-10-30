@@ -1029,7 +1029,11 @@ impl Launcher {
         crate::documents::draw_ui(&mut ui);
         ui.finish();
 
-        r.render(&game::loading_frame(&b))?;
+        if !r.render(&game::loading_frame(&b))? && !b.patches.is_empty() {
+            // A suspended/lost surface skips the frame, including its glyph
+            // uploads. Rebuild them next time instead of caching invisible text.
+            horizon_client::ui_theme::reset_atlas();
+        }
         Ok(())
     }
     pub(super) fn activate(&mut self, events: &ActiveEventLoop) -> Result<()> {
