@@ -17,7 +17,9 @@ import sys
 root = Path(sys.argv[1])
 game = root / "crates/horizon-client/src/game.rs"
 screens = root / "crates/horizon-client/src/game/screens.rs"
-gfx = root / "crates/horizon-client/src/gfx.rs"
+# Upstream split the renderer out of horizon-client. Keep the Android surface
+# lifecycle hook on the renderer's current home rather than the old gfx.rs path.
+gfx = root / "crates/horizon-client-render/src/gfx.rs"
 touch = root / "crates/horizon-client/src/game/touch.rs"
 
 
