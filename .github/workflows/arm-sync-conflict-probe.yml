@@ -85,6 +85,23 @@ jobs:
                 GIT_EDITOR=true git cherry-pick --continue
                 continue
               fi
+              if [[ "$c" == 8209f74d1cc53b4bfa40800b8b65f249a8f8a2f4 && "$conflicts" == "README.md" ]]; then
+                echo "Resolving docs: keep current upstream README and preserve Android README under android-port"
+                git checkout --ours README.md
+                git show "$c:README.md" > android-port/README.md
+                python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android-port/README.md')
+          s = p.read_text()
+          s = s.replace("Licensed MIT, like upstream — see [LICENSE](LICENSE). Upstream's own README is\n[README.upstream.md](README.upstream.md).",
+                        "Licensed MIT, like upstream — see [LICENSE](LICENSE). Upstream's current README remains at the\n[repository root](../README.md).")
+          p.write_text(s)
+          PY
+                git rm -f README.upstream.md
+                git add README.md android-port/README.md
+                GIT_EDITOR=true git cherry-pick --continue
+                continue
+              fi
               echo "=== CONFLICTED FILES ==="
               printf '%s\n' "$conflicts"
               echo "=== STATUS ==="
