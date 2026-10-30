@@ -60,6 +60,19 @@ pub fn edit_shortcut(
     })
 }
 
+/// Windows reports AltGr as Ctrl plus Alt: the system presses a left Control
+/// in front of the right Alt.
+pub const ALTGR_IS_CTRL_ALT: bool = cfg!(windows);
+
+/// Whether a key's text reaches the screen (`KeyboardHandler.textInput`, then
+/// `charTyped` per code point). The edit modifier's shortcuts type nothing,
+/// but `textInput` takes no modifiers: with AltGr held (Ctrl plus Alt where
+/// `altgr_is_ctrl_alt`) the layout's third-level characters are text, as `/`
+/// on ABNT2, `@`, `{` and `[` on German or the Polish letters.
+pub fn types_text(edit_modifier: bool, alt: bool, altgr_is_ctrl_alt: bool) -> bool {
+    !edit_modifier || (altgr_is_ctrl_alt && alt)
+}
+
 /// `StringUtil.isAllowedChatCharacter`.
 pub fn is_allowed_chat_character(c: char) -> bool {
     c != '§' && c >= ' ' && c != '\u{7f}'
@@ -112,7 +125,6 @@ pub trait Clipboard {
 /// game can still be pasted in the game.
 #[derive(Default)]
 pub struct SystemClipboard {
-    #[cfg(not(target_os = "android"))]
     system: Option<arboard::Clipboard>,
     /// The text Horizon last copied (`horizon-ctl status`).
     copied: Option<String>,
@@ -123,9 +135,6 @@ impl SystemClipboard {
     pub fn copied(&self) -> Option<&str> {
         self.copied.as_deref()
     }
-    /// Android's clipboard is Java's `ClipboardManager`: in-game copy and paste
-    /// work, the system's is not reached yet (no `arboard` backend there).
-    #[cfg(not(target_os = "android"))]
     fn system(&mut self) -> Option<&mut arboard::Clipboard> {
         if self.system.is_none() {
             self.system = arboard::Clipboard::new().ok();
@@ -136,30 +145,24 @@ impl SystemClipboard {
 
 impl Clipboard for SystemClipboard {
     fn get(&mut self) -> String {
-        #[cfg(not(target_os = "android"))]
-        {
-            let Some(system) = self.system() else {
-                return self.copied.clone().unwrap_or_default();
-            };
-            return match system.get_text() {
-                Ok(text) => text,
-                Err(arboard::Error::ContentNotAvailable) => String::new(),
-                Err(_) => {
-                    // A lost connection (a restarted compositor): reconnect next time.
-                    self.system = None;
-                    String::new()
-                }
-            };
+        let Some(system) = self.system() else {
+            return self.copied.clone().unwrap_or_default();
+        };
+        match system.get_text() {
+            Ok(text) => text,
+            Err(arboard::Error::ContentNotAvailable) => String::new(),
+            Err(_) => {
+                // A lost connection (a restarted compositor): reconnect next time.
+                self.system = None;
+                String::new()
+            }
         }
-        #[cfg(target_os = "android")]
-        self.copied.clone().unwrap_or_default()
     }
     fn set(&mut self, text: &str) {
         if text.is_empty() {
             return;
         }
         self.copied = Some(text.to_owned());
-        #[cfg(not(target_os = "android"))]
         if let Some(system) = self.system()
             && system.set_text(text.to_owned()).is_err()
         {
@@ -312,6 +315,22 @@ pub fn append_limited(value: &mut String, text: &str, max_chars: usize) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn altgr_types_text_where_it_is_ctrl_alt() {
+        // Plain keys and Shift type.
+        assert!(types_text(false, false, true));
+        assert!(types_text(false, false, false));
+        // Ctrl (Cmd) shortcuts do not.
+        assert!(!types_text(true, false, true));
+        assert!(!types_text(true, false, false));
+        // AltGr on Windows is Ctrl+Alt: ABNT2 `/`, German `@` type.
+        assert!(types_text(true, true, true));
+        // Where AltGr is its own modifier, Ctrl+Alt is a shortcut.
+        assert!(!types_text(true, true, false));
+        // Alt alone (macOS Option, Linux AltGr) types.
+        assert!(types_text(false, true, false));
+    }
 
     #[test]
     fn shortcuts_need_the_edit_modifier_alone() {
