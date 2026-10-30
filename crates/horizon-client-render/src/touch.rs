@@ -466,11 +466,15 @@ impl TouchControls {
                 },
                 _,
             )) = self.fingers.remove(&id)
-                && !self.crosshair()
+                && (!self.crosshair() || self.settings.mode == Mode::Tap)
                 && !dragged
                 && since.elapsed() < HOLD_DELAY
             {
-                self.tap_aim = Some(start);
+                self.tap_aim = Some(if self.settings.crosshair() {
+                    [0.5, 0.5]
+                } else {
+                    start
+                });
                 self.last_marker = Some((start, Instant::now()));
                 self.pending.triggers[0] = 1.0;
             }
@@ -593,7 +597,7 @@ impl TouchControls {
         self.aim = self.tap_aim.take();
         self.holding_use = false;
         self.holding = false;
-        if !self.crosshair() {
+        if !self.crosshair() || self.settings.mode == Mode::Tap {
             for (role, point) in self.fingers.values_mut() {
                 if let Role::Look {
                     start: _,
@@ -607,7 +611,11 @@ impl TouchControls {
                         *committed = true;
                     }
                     if !*dragged || *committed {
-                        self.aim = Some(*point);
+                        self.aim = Some(if self.settings.crosshair() {
+                            [0.5, 0.5]
+                        } else {
+                            *point
+                        });
                         if *committed {
                             self.holding = true;
                             self.holding_use = *held_use;
@@ -1115,7 +1123,7 @@ mod tests {
             t.settings.split_controls = split;
             assert_eq!(t.settings.mode, mode);
             assert_eq!(t.settings.split_controls, split);
-            assert_eq!(t.settings.crosshair(), i == 0 || i == 3);
+            assert_eq!(t.settings.crosshair(), i == 0 || i == 3 || i == 4);
         }
         t.cancel_editor();
         t.settings.layouts[0][Control::Jump as usize].center = [0.99, 0.99];

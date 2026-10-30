@@ -19,11 +19,12 @@ impl Mode {
             Self::Dpad => "D-Pad & tap to interact",
         }
     }
-    pub const SCHEMES: [(Self, bool, &str); 4] = [
+    pub const SCHEMES: [(Self, bool, &str); 5] = [
         (Self::Crosshair, false, "Joystick & aim crosshair"),
         (Self::Tap, false, "Joystick & tap to interact"),
         (Self::Dpad, false, "D-Pad & tap to interact"),
         (Self::Dpad, true, "D-Pad & aim crosshair"),
+        (Self::Tap, true, "Touch to crosshair without attack buttons"),
     ];
     pub fn index(self) -> usize {
         match self {
@@ -281,7 +282,7 @@ impl Settings {
         std::fs::rename(temp, path)
     }
     pub fn crosshair(&self) -> bool {
-        self.mode == Mode::Crosshair || (self.mode == Mode::Dpad && self.split_controls)
+        self.mode == Mode::Crosshair || self.split_controls
     }
     pub fn visible(&self, c: Control) -> bool {
         match self.button_visibility[c as usize] {
@@ -290,7 +291,9 @@ impl Settings {
             _ => {}
         }
         match c {
-            Control::Attack | Control::Use => self.crosshair(),
+            Control::Attack | Control::Use => {
+                self.crosshair() && !(self.mode == Mode::Tap && self.split_controls)
+            }
             Control::Sprint => {
                 self.sprint_button && self.mode != Mode::Dpad && !self.sprint_with_joystick
             }

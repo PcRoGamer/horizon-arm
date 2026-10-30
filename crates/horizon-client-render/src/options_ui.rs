@@ -416,7 +416,7 @@ impl Opt {
                     .iter()
                     .find(|(mode, split, _)| {
                         *mode == s.touch.mode
-                            && (*mode != crate::touch::Mode::Dpad
+                            && (!matches!(mode, crate::touch::Mode::Dpad | crate::touch::Mode::Tap)
                                 || *split == s.touch.split_controls)
                     })
                     .map_or("Joystick & aim crosshair", |(_, _, label)| *label)
@@ -898,11 +898,12 @@ impl Opt {
                     .iter()
                     .position(|(mode, split, _)| {
                         *mode == s.touch.mode
-                            && (*mode != crate::touch::Mode::Dpad
+                            && (!matches!(mode, crate::touch::Mode::Dpad | crate::touch::Mode::Tap)
                                 || *split == s.touch.split_controls)
                     })
                     .unwrap_or(0);
-                let (mode, split, _) = crate::touch::Mode::SCHEMES[usize::from(next(i as u8, 4))];
+                let (mode, split, _) = crate::touch::Mode::SCHEMES
+                    [usize::from(next(i as u8, crate::touch::Mode::SCHEMES.len() as u8))];
                 s.touch.mode = mode;
                 s.touch.split_controls = split;
             }
@@ -4995,10 +4996,10 @@ mod tests {
     #[test]
     fn touch_options_cycle_four_schemes_and_adjust_circle_and_sensitivity() {
         let mut settings = Settings::default();
-        for i in 0..4 {
+        for i in 0..crate::touch::Mode::SCHEMES.len() {
             let (mode, split, _) = crate::touch::Mode::SCHEMES[i];
             assert_eq!(settings.touch.mode, mode);
-            assert_eq!(settings.touch.crosshair(), i == 0 || i == 3);
+            assert_eq!(settings.touch.crosshair(), i == 0 || i == 3 || i == 4);
             if mode == crate::touch::Mode::Dpad {
                 assert_eq!(settings.touch.split_controls, split);
             }
