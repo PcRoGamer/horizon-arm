@@ -1738,7 +1738,7 @@ impl Game<'_> {
                     event @ (HostEvent::Chat { .. } | HostEvent::Warn(_) | HostEvent::Error(_)) => {
                         self.lan_log_event(event);
                     }
-                    HostEvent::PlayerChat { sender, .. } => {
+                    HostEvent::PlayerChat { sender, text } => {
                         if let Some(conn) = host
                             .hub
                             .guests
@@ -1748,6 +1748,7 @@ impl Game<'_> {
                         {
                             self.detect_rate_spam(&mut host, conn, false);
                         }
+                        self.mod_player_chat(super::server_mods::Who::Uuid(sender), &text);
                     }
                     HostEvent::Joined(conn) => {
                         self.lan_guest_joined(&mut host, conn, state.as_ref(), entities, spawn);

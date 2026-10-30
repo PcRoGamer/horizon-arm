@@ -17,4 +17,4 @@ Reports are accessible through the Android Files app under Horizon Android > Rep
 
 Device support is detected at runtime. Old Android releases retain normal startup without linking newer performance/frequency symbols at load time.
 
-Mod compatibility work is in progress: this candidate is not yet a finished release for both sandboxed .hmod code mods and source-built .hnmod mods.
+Sandboxed .hmod execution is retained in this Android fork alongside native hooks. ARM64 type-checking and 32 runtime sandbox tests pass. Source-built .hnmod Android integration and final device tests remain in progress; this candidate is not yet a finished release for both paths.

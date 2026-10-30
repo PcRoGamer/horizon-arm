@@ -841,6 +841,9 @@ impl Game<'_> {
                 focused,
             );
         }
+        if self.mods.running() {
+            self.mods_chat(&text);
+        }
         if let Some(r) = self.remote.as_mut() {
             r.chat.push((text, Instant::now()));
             r.chat_received += 1;
@@ -3274,6 +3277,7 @@ impl Game<'_> {
                 if let Some(r) = self.remote.as_mut() {
                     r.commands = Some(tree);
                 }
+                self.merge_remote_tree();
             }
             C::Cooldown(p) => {
                 // ClientPacketListener.handleItemCooldown: the server starts
@@ -4259,8 +4263,8 @@ impl Game<'_> {
     pub(super) fn tick_remote(&mut self) -> Result<()> {
         self.tick_remote_level()?;
         // Client mods tick on any server, single player's own included.
+        self.tick_mods();
         self.native_tick();
-        self.tell_native_now();
         // Minecraft.tick sends this even when the player cannot tick yet,
         // including while waiting for chunks. Keep it outside early returns.
         if self.remote.as_ref().is_some_and(|r| r.joined) {

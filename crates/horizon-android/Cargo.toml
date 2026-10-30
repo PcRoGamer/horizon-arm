@@ -66,9 +66,10 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 rustix = { version = "1", default-features = false, features = ["std", "time", "fs"] }
 
 [features]
-default = ["audio"]
+default = ["mods", "audio"]
 audio = ["horizon-client/audio"]
 controllers = []
+mods = ["horizon-client/mods", "horizon-mods/runtime"]
 
 [lints]
 workspace = true

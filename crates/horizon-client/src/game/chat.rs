@@ -20,12 +20,13 @@ use std::{
 
 /// The tree the chat parses and completes with: a server's, once it has
 /// sent one (ClientPacketListener.commands), else the game's own.
-pub(super) fn chat_tree(
-    remote: &Option<super::remote::Remote>,
-) -> &horizon_client::command::Dispatcher {
+pub(super) fn chat_tree<'a>(
+    remote: &'a Option<super::remote::Remote>,
+    mods: &'a super::mods::ModsState,
+) -> &'a horizon_client::command::Dispatcher {
     match remote.as_ref().and_then(|r| r.commands.as_ref()) {
-        Some(tree) => tree,
-        None => horizon_client::command::vanilla::game_dispatcher(),
+        Some(tree) => mods.remote_dispatcher().unwrap_or(tree),
+        None => mods.dispatcher(),
     }
 }
 use winit::{
@@ -503,7 +504,7 @@ impl Game<'_> {
         let b = HudBatch::new(size);
         let m = Measure(&self.gui.atlas.font);
         let c = Commands {
-            dispatcher: chat_tree(&self.remote),
+            dispatcher: chat_tree(&self.remote, &self.mods),
             registries: &self.ui.registries,
         };
         let mut screen = ChatScreen::new(
@@ -625,12 +626,13 @@ impl Game<'_> {
         }
     }
     /// A line on the window's own chat when the Chat option lets `source`
-    /// through.
+    /// through; running mods hear it.
     fn local_chat_line(&mut self, text: Text, indicator: Option<u32>, source: ChatSource) {
         if !self.ui.chat.shows(source) {
             return;
         }
         let focused = self.screen == Screen::Chat;
+        let heard = self.mods.running().then(|| text.plain());
         self.ui.chat.add(
             &self.gui.atlas,
             text,
@@ -639,13 +641,16 @@ impl Game<'_> {
             self.ticks,
             focused,
         );
+        if let Some(line) = heard {
+            self.mods_chat(&line);
+        }
     }
     /// Keys while the chat screen is open.
     pub(super) fn chat_key(&mut self, event: &KeyEvent) {
         if let Some(shortcut) = self.edit_shortcut(event) {
             let m = Measure(&self.gui.atlas.font);
             let c = Commands {
-                dispatcher: chat_tree(&self.remote),
+                dispatcher: chat_tree(&self.remote, &self.mods),
                 registries: &self.ui.registries,
             };
             if let Some(screen) = self.ui.chat_screen.as_mut() {
@@ -691,7 +696,7 @@ impl Game<'_> {
         };
         let m = Measure(&self.gui.atlas.font);
         let c = Commands {
-            dispatcher: chat_tree(&self.remote),
+            dispatcher: chat_tree(&self.remote, &self.mods),
             registries: &self.ui.registries,
         };
         match screen.key(&m, &c, &self.ui.chat.recent, key, shift, ctrl) {
@@ -737,7 +742,7 @@ impl Game<'_> {
     ) {
         let m = Measure(&self.gui.atlas.font);
         let c = Commands {
-            dispatcher: chat_tree(&self.remote),
+            dispatcher: chat_tree(&self.remote, &self.mods),
             registries: &self.ui.registries,
         };
         if let Some(screen) = self.ui.chat_screen.as_mut() {
@@ -748,7 +753,7 @@ impl Game<'_> {
     pub(super) fn chat_type(&mut self, text: &str) {
         let m = Measure(&self.gui.atlas.font);
         let c = Commands {
-            dispatcher: chat_tree(&self.remote),
+            dispatcher: chat_tree(&self.remote, &self.mods),
             registries: &self.ui.registries,
         };
         if let Some(screen) = self.ui.chat_screen.as_mut() {
@@ -775,8 +780,8 @@ impl Game<'_> {
             return;
         }
         if let Some(command) = message.strip_prefix('/') {
-            // A native mod's command first.
-            if !self.client_mod_command(command) {
+            // A client mod's command first, then a server mod's, as on a server.
+            if !self.client_mod_command(command) && !self.local_server_mod_command(command) {
                 self.run_command(command);
             }
         } else {
@@ -785,6 +790,7 @@ impl Game<'_> {
                 &[self.player_display_name(), Text::literal(message)],
             );
             let focused = self.screen == Screen::Chat;
+            let heard = self.mods.running().then(|| line.plain());
             self.ui.chat.add(
                 &self.gui.atlas,
                 line,
@@ -793,7 +799,11 @@ impl Game<'_> {
                 self.ticks,
                 focused,
             );
+            if let Some(line) = heard {
+                self.mods_chat(&line);
+            }
             self.lan_host_chat(message);
+            self.mod_player_chat(super::server_mods::Who::Local, message);
         }
     }
     pub(super) fn chat_scroll(&mut self, amount: f32) {
@@ -820,7 +830,7 @@ impl Game<'_> {
         });
         let m = Measure(&self.gui.atlas.font);
         let c = Commands {
-            dispatcher: chat_tree(&self.remote),
+            dispatcher: chat_tree(&self.remote, &self.mods),
             registries: &self.ui.registries,
         };
         if self.ui.in_bed_chat && self.sleeping.is_some() {
@@ -965,7 +975,7 @@ impl Game<'_> {
         }
         if self.remote.is_some() {
             self.send_chat(&format!("/{command}"));
-        } else {
+        } else if !self.local_server_mod_command(command) {
             self.run_command(command);
         }
     }
@@ -1020,7 +1030,7 @@ impl Game<'_> {
         };
         let m = Measure(&self.gui.atlas.font);
         let c = Commands {
-            dispatcher: chat_tree(&self.remote),
+            dispatcher: chat_tree(&self.remote, &self.mods),
             registries: &self.ui.registries,
         };
         screen.resize(&m, &c, batch.width as i32, batch.height as i32);

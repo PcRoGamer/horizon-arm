@@ -339,10 +339,13 @@ impl Game<'_> {
                         self.debug_key(key, KeyAction::Release);
                     }
                 }
-                // Native mods see the key as the keyboard hook does.
+                // Mods' keys (capability `input`) see the key as the keyboard
+                // hook does.
                 let action = arg(2)?;
+                self.mod_key(physical, action != "up", action == "repeat");
                 self.native_key_event(physical, action != "up", action == "repeat");
                 if action == "tap" {
+                    self.mod_key(physical, false, false);
                     self.native_key_event(physical, false, false);
                 }
                 // Text screens consume raw presses; releases follow key binds.
@@ -422,15 +425,19 @@ impl Game<'_> {
                 match arg(2)? {
                     "down" => {
                         self.extras_mouse(button, true);
+                        self.mod_mouse_key(button, true);
                         self.play_mouse(button, true)?
                     }
                     "up" => {
                         self.extras_mouse(button, false);
+                        self.mod_mouse_key(button, false);
                         self.play_mouse(button, false)?
                     }
                     "click" => {
                         self.extras_mouse(button, true);
+                        self.mod_mouse_key(button, true);
                         self.extras_mouse(button, false);
+                        self.mod_mouse_key(button, false);
                         self.play_mouse(button, true)?;
                         self.play_mouse(button, false)?;
                     }
@@ -897,6 +904,7 @@ impl Game<'_> {
             Screen::DialogWarning => "dialog-warning",
             Screen::CommandBlock => "command-block",
             Screen::Win => "win",
+            Screen::Mod => "mod",
         }
     }
 
