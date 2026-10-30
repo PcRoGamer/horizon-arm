@@ -449,8 +449,19 @@ impl Ui {
                     "(Landroid/graphics/Rect;)V",
                     &[JValue::Object(&rect)],
                 )?;
-                self.bottom
-                    .store(env.get_field(rect, "bottom", "I")?.i()?, Ordering::Release);
+                let location = env.new_int_array(2)?;
+                env.call_method(
+                    &self.native,
+                    "getLocationOnScreen",
+                    "([I)V",
+                    &[JValue::Object(&location)],
+                )?;
+                let mut window_origin = [0; 2];
+                env.get_int_array_region(location, 0, &mut window_origin)?;
+                self.bottom.store(
+                    (env.get_field(rect, "bottom", "I")?.i()? - window_origin[1]).max(0),
+                    Ordering::Release,
+                );
                 let mut safe = [0; 4];
                 if self.avoid_cutout.load(Ordering::Acquire) {
                     let result = (|| -> jni::errors::Result<()> {

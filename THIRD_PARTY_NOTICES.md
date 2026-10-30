@@ -25,3 +25,33 @@ the same grid.
 `third_party/winit` is [winit](https://github.com/rust-windowing/winit) 0.30.13,
 licensed under Apache-2.0 (see `third_party/winit/LICENSE`). The Android backend
 has local mouse and modifier-event fixes described in `third_party/winit/PATCHES.md`.
+
+## AMD FidelityFX SDK (FSR 3.1 frame generation)
+
+`crates/horizon-client-render/src/gfx/frame_gen/optical_flow.wgsl` is a port to WGSL of the
+optical flow shaders of the [AMD FidelityFX SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK)
+1.1.4 (`sdk/include/FidelityFX/gpu/opticalflow`, at commit
+[c6efa6bf7f20](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/tree/c6efa6bf7f2027b3ec94f28578bb5965eabb9e55)),
+and `optical_flow.rs` follows the SDK's `sdk/src/components/opticalflow/ffx_opticalflow.cpp`
+(its passes, their order and their dispatch sizes). Copyright (C) 2024 Advanced Micro Devices,
+Inc., under the MIT license, whose text heads both files. AMD and FidelityFX are AMD's
+trademarks; Horizon is not affiliated with AMD.
+
+## Mod loader logos
+
+The launcher shows the logo of the mod loader an instance plays with.
+
+- `launcher/assets/logos/quilt.png` is the Quilt mini icon (`brand/128png/quilt_mini_icon_transparent.png`)
+  from [QuiltMC/art](https://github.com/QuiltMC/art), by the Quilt Project, dedicated to the public
+  domain under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
+- `launcher/assets/logos/neoforge.png` is NeoForged's icon (`art/neoforged_icon_16x16.png`) from
+  [neoforged/.github](https://github.com/neoforged/.github/tree/main/art), © the NeoForged team,
+  created by Ridanisaurus, under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). It is
+  unmodified (the launcher scales it up by whole pixels).
+- Fabric's and Forge's icons are not shipped: neither publishes a license for its logo. The launcher
+  fetches them from their own sites when an instance needs them
+  ([fabric-loader's icon](https://github.com/FabricMC/fabric-loader/blob/master/src/main/resources/assets/fabricloader/icon.png),
+  [files.minecraftforge.net's](https://files.minecraftforge.net/)).
+
+Each logo belongs to its project. Showing it says which loader an instance runs; it does not mean
+the project endorses Horizon.

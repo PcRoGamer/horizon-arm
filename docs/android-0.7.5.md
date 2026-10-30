@@ -27,3 +27,5 @@ Sandboxed `.hmod` execution is retained in this Android fork alongside the upstr
 Skin/cape management and native `.hnmod` engine experiments are excluded from this candidate. The existing four schemes, resource-pack imports, Android storage integration and renderer selection remain available.
 
 Source checks and focused input tests cover gesture ownership, cancellation, mouse dragging and settings migration. A complete on-device playthrough of the final source is still required before publication. Compilation checks are not APK startup tests or a performance benchmark.
+
+The screen adapter and viewport changes pass ARM64/ARMv7 source checks and standalone geometry tests. The minimal x86_64 screen probe builds, but this host's emulator exits with Windows error `0xC0000005` before the application can run; native window behavior and final game presentation still need device testing.

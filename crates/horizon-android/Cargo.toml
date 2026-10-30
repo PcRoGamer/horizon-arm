@@ -9,6 +9,8 @@ path = "../horizon-client/src/android_main.rs"
 crate-type = ["cdylib"]
 
 [dependencies]
+horizon-client-input = { path = "../horizon-client-input" }
+horizon-anticheat = { path = "../horizon-anticheat" }
 horizon-client = { path = "../horizon-client", default-features = false }
 android_logger = "0.15"
 horizon-hdr = { path = "../horizon-hdr" }
