@@ -3,7 +3,10 @@ use crate::{
     hud::{HudAtlas, HudBatch, rgba},
     osk::{Keyboard, Output},
 };
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    time::{Duration, Instant},
+};
 use winit::{event::TouchPhase, keyboard::KeyCode};
 
 #[derive(Default)]
@@ -11,11 +14,21 @@ pub struct TouchUi {
     pub expanded: bool,
     pub virtual_mouse: bool,
     pub virtual_mouse_button: bool,
+    relative: Option<RelativeTouch>,
+    relative_click: Option<bool>,
     pub keyboard: Option<Keyboard>,
     gesture: Option<(u64, [f32; 2], [f32; 2], bool)>,
     pointer_drag: Option<u64>,
     held_keys: BTreeMap<u64, KeyCode>,
     pub f3_latched: bool,
+}
+struct RelativeTouch {
+    id: u64,
+    origin: [f32; 2],
+    last: [f32; 2],
+    since: Instant,
+    dragged: bool,
+    right_sent: bool,
 }
 pub enum Gesture {
     None,
@@ -92,6 +105,73 @@ impl TouchUi {
     pub fn cancel(&mut self) {
         self.gesture = None;
         self.pointer_drag = None;
+        self.relative = None;
+        self.relative_click = None;
+    }
+    pub fn cancel_relative(&mut self) {
+        self.relative = None;
+        self.relative_click = None;
+    }
+    /// Relative motion: touching down does not teleport the inventory cursor.
+    pub fn relative_touch(
+        &mut self,
+        id: u64,
+        point: [f32; 2],
+        phase: TouchPhase,
+        cursor: [f32; 2],
+        size: [f32; 2],
+        sensitivity: f32,
+        clicks: bool,
+    ) -> [f32; 2] {
+        if phase == TouchPhase::Cancelled {
+            self.cancel();
+            return cursor;
+        }
+        if phase == TouchPhase::Started && self.relative.is_none() {
+            self.relative = Some(RelativeTouch {
+                id,
+                origin: point,
+                last: point,
+                since: Instant::now(),
+                dragged: false,
+                right_sent: false,
+            });
+        }
+        let Some(touch) = self.relative.as_mut().filter(|t| t.id == id) else {
+            return cursor;
+        };
+        touch.dragged |= (point[0] - touch.origin[0]).hypot(point[1] - touch.origin[1]) > 3.0;
+        let position = [0, 1].map(|i| {
+            (cursor[i] + (point[i] - touch.last[i]) * sensitivity)
+                .clamp(0.0, (size[i] - 1.0).max(0.0))
+        });
+        touch.last = point;
+        if phase == TouchPhase::Ended {
+            if clicks && !touch.dragged && !touch.right_sent {
+                self.relative_click = Some(touch.since.elapsed() >= Duration::from_millis(500));
+            }
+            self.relative = None;
+        }
+        position
+    }
+    /// false = LMB, true = RMB. A stationary hold clicks once, even before release.
+    pub fn relative_click(&mut self, clicks: bool) -> Option<bool> {
+        if !clicks {
+            self.relative_click = None;
+            return None;
+        }
+        if let Some(right) = self.relative_click.take() {
+            return Some(right);
+        }
+        let touch = self.relative.as_mut()?;
+        if !touch.dragged
+            && !touch.right_sent
+            && touch.since.elapsed() >= Duration::from_millis(500)
+        {
+            touch.right_sent = true;
+            return Some(true);
+        }
+        None
     }
     /// Sliders retain mouse dragging; list rows use scroll-or-tap gestures.
     pub fn direct_pointer(&mut self, id: u64, p: [f32; 2], phase: TouchPhase) -> bool {
@@ -283,6 +363,59 @@ fn button(b: &mut HudBatch, a: &HudAtlas, label: &str, x: f32, y: f32, w: f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn virtual_mouse_moves_relatively_and_dragging_never_clicks() {
+        let mut ui = TouchUi::default();
+        let cursor = [100.0, 80.0];
+        let size = [400.0, 240.0];
+        assert_eq!(
+            ui.relative_touch(
+                1,
+                [300.0, 200.0],
+                TouchPhase::Started,
+                cursor,
+                size,
+                2.0,
+                true
+            ),
+            cursor
+        );
+        let p = ui.relative_touch(
+            1,
+            [310.0, 195.0],
+            TouchPhase::Moved,
+            cursor,
+            size,
+            2.0,
+            true,
+        );
+        assert_eq!(p, [120.0, 70.0]);
+        ui.relative_touch(1, [310.0, 195.0], TouchPhase::Ended, p, size, 2.0, true);
+        assert_eq!(ui.relative_click(true), None);
+    }
+    #[test]
+    fn virtual_mouse_tap_hold_cancel_and_click_preference() {
+        let mut ui = TouchUi::default();
+        let p = [100.0, 80.0];
+        let size = [400.0, 240.0];
+        ui.relative_touch(1, p, TouchPhase::Started, p, size, 1.0, true);
+        ui.relative_touch(1, p, TouchPhase::Ended, p, size, 1.0, true);
+        assert_eq!(ui.relative_click(true), Some(false));
+        assert_eq!(ui.relative_click(true), None);
+        ui.relative_touch(2, p, TouchPhase::Started, p, size, 1.0, true);
+        ui.relative.as_mut().unwrap().since = Instant::now() - Duration::from_secs(1);
+        assert_eq!(ui.relative_click(true), Some(true));
+        assert_eq!(ui.relative_click(true), None);
+        ui.relative_touch(2, p, TouchPhase::Ended, p, size, 1.0, true);
+        assert_eq!(ui.relative_click(true), None);
+        ui.relative_touch(3, p, TouchPhase::Started, p, size, 1.0, false);
+        ui.relative_touch(3, p, TouchPhase::Ended, p, size, 1.0, false);
+        assert_eq!(ui.relative_click(false), None);
+        ui.relative_touch(4, p, TouchPhase::Started, p, size, 1.0, true);
+        ui.cancel_relative();
+        ui.relative_touch(4, p, TouchPhase::Ended, p, size, 1.0, true);
+        assert_eq!(ui.relative_click(true), None);
+    }
     #[test]
     fn simultaneous_f3_f4_and_f6_release_independently() {
         let mut ui = TouchUi::default();

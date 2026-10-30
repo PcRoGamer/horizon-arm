@@ -19,12 +19,11 @@ impl Mode {
             Self::Dpad => "D-Pad & tap to interact",
         }
     }
-    pub const SCHEMES: [(Self, bool, &str); 5] = [
+    pub const SCHEMES: [(Self, bool, &str); 4] = [
         (Self::Crosshair, false, "Joystick & aim crosshair"),
         (Self::Tap, false, "Joystick & tap to interact"),
         (Self::Dpad, false, "D-Pad & tap to interact"),
         (Self::Dpad, true, "D-Pad & aim crosshair"),
-        (Self::Tap, true, "Touch to crosshair without attack buttons"),
     ];
     pub fn index(self) -> usize {
         match self {
@@ -140,6 +139,9 @@ pub struct Settings {
     pub sprint_toggle: bool,
     pub inventory_controls: bool,
     pub virtual_mouse: bool,
+    pub virtual_mouse_sensitivity: f32,
+    pub virtual_mouse_clicks: bool,
+    pub crosshair_gestures: bool,
     pub gyroscope: bool,
     pub gyro_sensitivity: f32,
     pub display_hz: u16,
@@ -203,6 +205,9 @@ impl Default for Settings {
             sprint_toggle: false,
             inventory_controls: false,
             virtual_mouse: false,
+            virtual_mouse_sensitivity: 1.0,
+            virtual_mouse_clicks: true,
+            crosshair_gestures: false,
             gyroscope: false,
             gyro_sensitivity: 1.0,
             display_hz: 0,
@@ -250,6 +255,16 @@ impl Settings {
         s
     }
     pub fn sanitize(&mut self) {
+        if self.mode == Mode::Tap && self.split_controls {
+            self.mode = Mode::Crosshair;
+            self.split_controls = false;
+            self.crosshair_gestures = true;
+        }
+        self.virtual_mouse_sensitivity = if self.virtual_mouse_sensitivity.is_finite() {
+            self.virtual_mouse_sensitivity.clamp(0.25, 3.0)
+        } else {
+            1.0
+        };
         self.gyro_sensitivity = if self.gyro_sensitivity.is_finite() {
             self.gyro_sensitivity.clamp(0.1, 3.0)
         } else {
@@ -309,9 +324,7 @@ impl Settings {
             _ => {}
         }
         match c {
-            Control::Attack | Control::Use => {
-                self.crosshair() && !(self.mode == Mode::Tap && self.split_controls)
-            }
+            Control::Attack | Control::Use => self.crosshair(),
             Control::Sprint => {
                 self.sprint_button && self.mode != Mode::Dpad && !self.sprint_with_joystick
             }

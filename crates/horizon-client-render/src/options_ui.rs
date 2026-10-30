@@ -93,6 +93,9 @@ pub(crate) const ACCESSIBILITY_OPTIONS: &[Opt] = &[
 /// other platforms just as `InputQuirks.EMULATE_RIGHT_CLICK_WITH_CTRL_KEY`
 /// does in Java.
 pub(crate) fn vanilla_control_options() -> Vec<Opt> {
+    if cfg!(target_os = "android") {
+        return vec![Opt::ToggleCrouch, Opt::ToggleSprint, Opt::AutoJump];
+    }
     let mut options = vec![
         Opt::ToggleCrouch,
         Opt::ToggleSprint,
@@ -190,6 +193,9 @@ impl Opt {
     pub(crate) fn caption(self) -> &'static str {
         match self {
             Opt::TouchMode => "Control scheme",
+            Opt::TouchCrosshairGestures => "Touch gestures with crosshair",
+            Opt::TouchMouseSensitivity => "Virtual mouse sensitivity",
+            Opt::TouchMouseClicks => "Mouse tap / hold clicks",
             Opt::TouchAnalog => "360-degree movement",
             Opt::TouchCircleSize => "Touch circle size",
             Opt::TouchAttackSide => "Attack indicator side",
@@ -345,6 +351,7 @@ impl Opt {
             Opt::DebugGuiScale => unit(s.file.int("debugGuiScale").max(0) as f32, 0.0, 6.0),
             Opt::AndroidGyroSensitivity => unit(s.touch.gyro_sensitivity, 0.1, 3.0),
             Opt::TouchSensitivity => unit(s.touch.sensitivity, 0.1, 3.0),
+            Opt::TouchMouseSensitivity => unit(s.touch.virtual_mouse_sensitivity, 0.25, 3.0),
             Opt::TouchButtonScale => unit(s.touch.button_scale, 0.5, 2.0),
             Opt::Fov => unit(s.fov, 30.0, 110.0),
             Opt::RenderDistance => unit(
@@ -462,6 +469,25 @@ impl Opt {
             ),
             Opt::AndroidGpuProfile => Some(if s.touch.gpu_profile { "ON" } else { "OFF" }.into()),
             Opt::TouchSensitivity => Some(format!("{:.0}%", s.touch.sensitivity * 100.0)),
+            Opt::TouchMouseSensitivity => {
+                Some(format!("{:.0}%", s.touch.virtual_mouse_sensitivity * 100.0))
+            }
+            Opt::TouchMouseClicks => Some(
+                if s.touch.virtual_mouse_clicks {
+                    "ON"
+                } else {
+                    "OFF"
+                }
+                .into(),
+            ),
+            Opt::TouchCrosshairGestures => Some(
+                if s.touch.crosshair_gestures {
+                    "ON"
+                } else {
+                    "OFF"
+                }
+                .into(),
+            ),
             Opt::TouchButtonScale => Some(format!("{:.0}%", s.touch.button_scale * 100.0)),
             Opt::TouchAnalog => Some(if s.touch.analog_movement { "ON" } else { "OFF" }.into()),
             Opt::TouchInteract => Some(
@@ -832,6 +858,7 @@ impl Opt {
             ),
             Opt::AndroidGyroSensitivity => s.touch.gyro_sensitivity = 0.1 + v * 2.9,
             Opt::TouchSensitivity => s.touch.sensitivity = 0.1 + v * 2.9,
+            Opt::TouchMouseSensitivity => s.touch.virtual_mouse_sensitivity = 0.25 + v * 2.75,
             Opt::TouchButtonScale => s.touch.button_scale = 0.5 + v * 1.5,
             Opt::FovEffects | Opt::DarknessPulsing => s.file.set(
                 self.file_key().unwrap(),
@@ -948,6 +975,8 @@ impl Opt {
             Opt::TouchSprintToggle => s.touch.sprint_toggle ^= true,
             Opt::TouchInventoryControls => s.touch.inventory_controls ^= true,
             Opt::TouchVirtualMouse => s.touch.virtual_mouse ^= true,
+            Opt::TouchMouseClicks => s.touch.virtual_mouse_clicks ^= true,
+            Opt::TouchCrosshairGestures => s.touch.crosshair_gestures ^= true,
             Opt::AndroidInputMode => {
                 let all = crate::android_gamepad::InputMode::ALL;
                 let i = all
@@ -1458,6 +1487,8 @@ fn option_widget(s: &Settings, opt: Opt, x: f32, y: f32, w: f32) -> Widget {
             s.touch.mode != crate::touch::Mode::Dpad && !s.touch.sprint_with_joystick
         }
         Opt::TouchInteract => !s.touch.crosshair(),
+        Opt::TouchCrosshairGestures => s.touch.crosshair(),
+        Opt::TouchMouseSensitivity | Opt::TouchMouseClicks => s.touch.virtual_mouse,
         Opt::TouchSwapJumpSneak => s.touch.mode == crate::touch::Mode::Dpad,
         _ => true,
     };
@@ -1979,6 +2010,7 @@ impl OptionsUi {
             Page::Touch => {
                 let mut rows = vec![Row::Big(Opt::TouchMode)];
                 rows.extend(pairs(&[
+                    Opt::TouchCrosshairGestures,
                     Opt::TouchSensitivity,
                     Opt::TouchButtonScale,
                     Opt::TouchCircleSize,
@@ -1989,6 +2021,8 @@ impl OptionsUi {
                     Opt::TouchSprintToggle,
                     Opt::TouchInventoryControls,
                     Opt::TouchVirtualMouse,
+                    Opt::TouchMouseSensitivity,
+                    Opt::TouchMouseClicks,
                     Opt::AndroidGyroscope,
                     Opt::AndroidGyroSensitivity,
                     Opt::AndroidDisplayHz,
@@ -5096,7 +5130,7 @@ mod tests {
         for i in 0..crate::touch::Mode::SCHEMES.len() {
             let (mode, split, _) = crate::touch::Mode::SCHEMES[i];
             assert_eq!(settings.touch.mode, mode);
-            assert_eq!(settings.touch.crosshair(), i == 0 || i == 3 || i == 4);
+            assert_eq!(settings.touch.crosshair(), i == 0 || i == 3);
             if mode == crate::touch::Mode::Dpad {
                 assert_eq!(settings.touch.split_controls, split);
             }

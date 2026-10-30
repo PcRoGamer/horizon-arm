@@ -123,7 +123,8 @@ impl Pads {
 impl Game<'_> {
     #[cfg(target_os = "android")]
     pub(super) fn android_inventory_controls(&self) -> bool {
-        self.settings.touch.inventory_controls
+        (self.settings.touch.inventory_controls
+            || (self.settings.touch.virtual_mouse && self.pad.touch_ui.virtual_mouse))
             && matches!(self.screen, Screen::Inventory | Screen::Creative)
     }
     /// Once per loop iteration: read the pads and act on button changes.
@@ -145,6 +146,9 @@ impl Game<'_> {
                 &crate::backend::game_home(),
             );
             self.pad.touch.inventory_mode = self.android_inventory_controls();
+            self.pad.touch.virtual_mouse_controls =
+                self.settings.touch.virtual_mouse && self.pad.touch_ui.virtual_mouse;
+            self.android_virtual_mouse_clicks(event_loop);
             let active = horizon_client::android_runtime::active_input();
             if self.pad.last_input_mode.replace(active).is_some_and(|old| {
                 old == horizon_client::android_gamepad::InputMode::KeyboardMouse && old != active

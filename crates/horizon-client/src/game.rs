@@ -14213,6 +14213,10 @@ impl ApplicationHandler for Game<'_> {
                     self.android_menu_touch(touch, event_loop, id);
                     return;
                 }
+                if self.settings.touch.virtual_mouse && self.pad.touch_ui.virtual_mouse {
+                    self.android_virtual_touch(touch, event_loop, id);
+                    return;
+                }
                 self.window_event(
                     event_loop,
                     id,
@@ -14221,11 +14225,6 @@ impl ApplicationHandler for Game<'_> {
                         position: touch.location,
                     },
                 );
-                if self.settings.touch.virtual_mouse && self.pad.touch_ui.virtual_mouse {
-                    // Inventories have their own direct-touch path, separate
-                    // from android_menu_touch. Hover must suppress clicks here too.
-                    return;
-                }
                 if touch.phase != TouchPhase::Moved {
                     self.window_event(
                         event_loop,

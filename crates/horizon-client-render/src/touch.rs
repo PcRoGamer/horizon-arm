@@ -85,6 +85,7 @@ pub struct TouchControls {
     pub auxiliary_only: bool,
     /// Inventory utility buttons emit real modifier/mouse events, never movement.
     pub inventory_mode: bool,
+    pub virtual_mouse_controls: bool,
     pub editor: Option<editor::Editor>,
     fingers: BTreeMap<u64, (Role, [f32; 2])>,
     custom_fingers: BTreeMap<u64, String>,
@@ -182,6 +183,11 @@ impl TouchControls {
     fn visible(&self, c: Control) -> bool {
         if self.auxiliary_only && !Self::auxiliary_control(c) {
             return false;
+        }
+        if (self.virtual_mouse_controls && self.inventory_mode)
+            && matches!(c, Control::Attack | Control::Use)
+        {
+            return true;
         }
         if self.force_crosshair
             && matches!(c, Control::Attack | Control::Use)
@@ -485,7 +491,7 @@ impl TouchControls {
                 },
                 _,
             )) = self.fingers.remove(&id)
-                && (!self.crosshair() || self.settings.mode == Mode::Tap)
+                && (!self.crosshair() || self.settings.crosshair_gestures)
                 && !dragged
                 && since.elapsed() < HOLD_DELAY
             {
@@ -616,7 +622,7 @@ impl TouchControls {
         self.aim = self.tap_aim.take();
         self.holding_use = false;
         self.holding = false;
-        if !self.crosshair() || self.settings.mode == Mode::Tap {
+        if !self.crosshair() || self.settings.crosshair_gestures {
             for (role, point) in self.fingers.values_mut() {
                 if let Role::Look {
                     start: _,
@@ -954,7 +960,9 @@ mod tests {
     fn use_items_keep_tap_attack_and_hold_use() {
         use super::*;
         for (mode, split, _) in Mode::SCHEMES {
-            if mode == Mode::Crosshair || (mode == Mode::Dpad && split) { continue; }
+            if mode == Mode::Crosshair || (mode == Mode::Dpad && split) {
+                continue;
+            }
             let mut t = TouchControls::default();
             t.settings.mode = mode;
             t.settings.split_controls = split;
@@ -1160,13 +1168,31 @@ mod tests {
             t.settings.split_controls = split;
             assert_eq!(t.settings.mode, mode);
             assert_eq!(t.settings.split_controls, split);
-            assert_eq!(t.settings.crosshair(), i == 0 || i == 3 || i == 4);
+            assert_eq!(t.settings.crosshair(), i == 0 || i == 3);
         }
         t.cancel_editor();
         t.settings.layouts[0][Control::Jump as usize].center = [0.99, 0.99];
         t.settings.layouts[0][Control::Jump as usize].size = 0.4;
         let r = t.placement(Control::Jump).rect(t.aspect());
         assert!(r[0] >= 0.0 && r[1] >= 0.0 && r[0] + r[2] <= 1.00001 && r[1] + r[3] <= 1.00001);
+    }
+    #[test]
+    fn optional_crosshair_gestures_target_center_for_both_movement_schemes() {
+        for (mode, split) in [(Mode::Crosshair, false), (Mode::Dpad, true)] {
+            let mut t = TouchControls::default();
+            t.settings.mode = mode;
+            t.settings.split_controls = split;
+            t.settings.crosshair_gestures = true;
+            t.update(1, [0.6, 0.4], true, false);
+            t.update(1, [0.6, 0.4], false, true);
+            assert_eq!(t.poll_state().triggers[0], 1.0);
+            assert_eq!(t.aim, Some([0.5, 0.5]));
+            t.virtual_mouse_controls = true;
+            t.inventory_mode = true;
+            t.settings.button_visibility[Control::Attack as usize] = 2;
+            assert!(t.visible(Control::Attack));
+            assert!(t.visible(Control::Use));
+        }
     }
     #[test]
     fn quick_tap_survives_one_poll_and_shared_buttons_release_independently() {

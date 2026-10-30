@@ -511,6 +511,10 @@ impl Game<'_> {
         }
     }
     pub(super) fn android_menu_touch(&mut self, t: &Touch, events: &ActiveEventLoop, id: WindowId) {
+        if self.settings.touch.virtual_mouse && self.pad.touch_ui.virtual_mouse {
+            self.android_virtual_touch(t, events, id);
+            return;
+        }
         let Some(b) = self.gui_scale() else {
             return;
         };
@@ -524,10 +528,6 @@ impl Game<'_> {
                 position: t.location,
             },
         );
-        if self.pad.touch_ui.virtual_mouse {
-            // Hover only; existing inventory attack/use controls provide clicks.
-            return;
-        }
         if direct {
             if t.phase != TouchPhase::Moved {
                 self.window_event(
@@ -578,6 +578,78 @@ impl Game<'_> {
                 },
             ),
             Gesture::None => {}
+        }
+    }
+    pub(super) fn android_virtual_touch(
+        &mut self,
+        t: &Touch,
+        events: &ActiveEventLoop,
+        id: WindowId,
+    ) {
+        let Some(b) = self.gui_scale() else {
+            return;
+        };
+        let position = self.pad.touch_ui.relative_touch(
+            t.id,
+            [t.location.x as f32 / b.scale, t.location.y as f32 / b.scale],
+            t.phase,
+            [self.cursor.0, self.cursor.1],
+            [b.width, b.height],
+            self.settings.touch.virtual_mouse_sensitivity,
+            self.settings.touch.virtual_mouse_clicks,
+        );
+        self.window_event(
+            events,
+            id,
+            WindowEvent::CursorMoved {
+                device_id: t.device_id,
+                position: winit::dpi::PhysicalPosition::new(
+                    f64::from(position[0] * b.scale),
+                    f64::from(position[1] * b.scale),
+                ),
+            },
+        );
+    }
+    pub(super) fn android_virtual_mouse_clicks(&mut self, events: &ActiveEventLoop) {
+        if !self.focused
+            || !self.pad_in_menu()
+            || !self.settings.touch.virtual_mouse
+            || !self.pad.touch_ui.virtual_mouse
+        {
+            self.pad.touch_ui.cancel_relative();
+            return;
+        }
+        let Some(right) = self
+            .pad
+            .touch_ui
+            .relative_click(self.settings.touch.virtual_mouse_clicks)
+        else {
+            return;
+        };
+        let button = if right {
+            MouseButton::Right
+        } else {
+            MouseButton::Left
+        };
+        if matches!(self.screen, Screen::Inventory | Screen::Creative) {
+            if let Err(e) = self
+                .android_custom_mouse(button, true)
+                .and_then(|()| self.android_custom_mouse(button, false))
+            {
+                log::warn!("Virtual mouse click: {e}");
+            }
+        } else if let Some(id) = self.window.as_ref().map(|w| w.id()) {
+            for state in [ElementState::Pressed, ElementState::Released] {
+                self.window_event(
+                    events,
+                    id,
+                    WindowEvent::MouseInput {
+                        device_id: DeviceId::dummy(),
+                        state,
+                        button,
+                    },
+                );
+            }
         }
     }
 }

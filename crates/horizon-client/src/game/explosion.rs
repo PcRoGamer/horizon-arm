@@ -342,7 +342,7 @@ impl Game<'_> {
                         .indicate_damage(center[0] - feet[0], center[2] - feet[2], p.yaw);
                 }
             }
-            if !spectator && !(creative && flying) {
+            if !(spectator || creative && flying) {
                 let push = [dir[0] * power, dir[1] * power, dir[2] * power];
                 p.velocity = Vec3::new(
                     p.velocity.x + push[0],
