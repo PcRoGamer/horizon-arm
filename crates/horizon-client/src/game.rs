@@ -51,6 +51,7 @@ mod banners;
 mod beacon;
 mod beds;
 mod beehives;
+mod block_editor;
 mod block_entity_anims;
 mod block_entity_ticks;
 mod block_items;
@@ -122,6 +123,8 @@ mod integrated;
 mod interactions;
 mod item_draw;
 mod item_particles;
+mod jigsaw_blocks;
+mod jigsaw_edit;
 mod jukebox;
 mod lan;
 mod lan_actions;
@@ -241,9 +244,15 @@ mod stations;
 mod stats;
 mod stats_screen;
 mod storage;
+mod structure_blocks;
+mod structure_edit;
 mod structures;
 mod subtitle_hud;
 mod sulfur_cubes;
+mod test_block_edit;
+mod test_blocks;
+mod test_instance_edit;
+mod test_instances;
 mod text_displays;
 mod titles;
 mod tnt;
@@ -680,6 +689,8 @@ enum Screen {
     Friends,
     /// CommandBlockEditScreen (game/command_blocks.rs).
     CommandBlock,
+    /// A game master block's edit screen (game/block_editor.rs).
+    BlockEditor,
     /// ServerLinksDialogScreen: a server's links (game/server_links.rs).
     ServerLinks,
     /// ConfirmLinkScreen for a server link (game/server_links.rs).
@@ -2196,6 +2207,12 @@ struct Game<'a> {
     /// Chat Settings opened from RestrictionsScreen: Done returns to World Options.
     options_to_world_options: bool,
     command_block_screen: Option<command_blocks::CommandBlockScreen>,
+    block_editor: Option<block_editor::BlockEditScreen>,
+    /// `StructureTemplateManager.structureRepository`: the templates in memory
+    /// by id, a miss included (game/structure_blocks.rs).
+    structure_templates: HashMap<String, Option<structure_blocks::TemplateEntry>>,
+    /// The game tests read so far, by id (the test instance registry).
+    test_defs: std::cell::RefCell<HashMap<String, Option<test_instances::TestDef>>>,
     /// KeyboardHandler's debug key state (game/debug_keys.rs), the physical
     /// keys held, and the debug renderers F3+B and F3+G switch on.
     debug_keys: horizon_client::debug_keys::DebugKeys,
@@ -4218,6 +4235,11 @@ impl Game<'_> {
                 } => self.command_block_tick(pos),
                 LevelEvent::BlockEvent {
                     pos,
+                    kind: "structure_block",
+                    ..
+                } => self.structure_block_neighbor_changed((pos.x, pos.y, pos.z)),
+                LevelEvent::BlockEvent {
+                    pos,
                     kind: "brushable",
                     ..
                 } => self.brushable_tick([pos.x, pos.y, pos.z]),
@@ -4359,6 +4381,17 @@ impl Game<'_> {
         }
         if horizon_client::command_block::Mode::of_block(&name).is_some() {
             self.open_command_block(key);
+            return;
+        }
+        // The game master blocks' screens open on the player's own client
+        // (`BlockEntity.usedBy`); the server has nothing to open.
+        if matches!(
+            &*name,
+            "minecraft:structure_block"
+                | "minecraft:jigsaw"
+                | "minecraft:test_block"
+                | "minecraft:test_instance_block"
+        ) {
             return;
         }
         // SignBlock.useWithoutItem: the text editor, not a container.
@@ -5351,6 +5384,9 @@ impl Game<'_> {
                     });
                     self.command_block_placed(key, !data);
                 }
+                Some(BlockEntity::StructureBlock(_)) => self.structure_block_placed(key),
+                Some(BlockEntity::JigsawBlock(_)) => self.jigsaw_block_placed(key),
+                Some(BlockEntity::TestBlock(_)) => self.test_block_placed(key),
                 Some(BlockEntity::Sign(sign)) if !sign.waxed => self.open_sign_editor(key, true),
                 _ => {}
             }
@@ -6987,6 +7023,14 @@ impl Game<'_> {
         }
         if let Some(title) = &mut self.title {
             title.poll_backup();
+            if std::mem::take(&mut title.onboarding_finished) {
+                // Options.onboardingAccessibilityFinished.
+                self.settings.file.set(
+                    "onboardAccessibility",
+                    horizon_client::options_file::V::Bool(false),
+                );
+                self.settings.save(&Self::options_path());
+            }
             if let Some(sound) = title.update_toast(self.settings.notification_display_time) {
                 self.audio.play(sound, None, 1.0, 1.0);
             }
@@ -7274,6 +7318,7 @@ impl Game<'_> {
             Screen::ConfirmLink => self.draw_confirm_link(&mut batch),
             Screen::DialogWarning => self.draw_dialog_warning(&mut batch),
             Screen::CommandBlock => self.draw_command_block(&mut batch),
+            Screen::BlockEditor => self.draw_block_editor(&mut batch),
             Screen::Inventory => {
                 self.draw_inventory(&mut batch);
                 self.draw_mod_browser(&mut batch);
@@ -7373,7 +7418,10 @@ impl Game<'_> {
                 | BlockEntity::Shelf(_)
                 | BlockEntity::Mod(_)
                 | BlockEntity::PotentSulfur(_)
-                | BlockEntity::StructureBlock(_),
+                | BlockEntity::StructureBlock(_)
+                | BlockEntity::JigsawBlock(_)
+                | BlockEntity::TestBlock(_)
+                | BlockEntity::TestInstanceBlock(_),
             ) => {}
             None => {
                 v.extend((0..self.craft_size * self.craft_size).map(|i| 100 + i));
@@ -7668,7 +7716,10 @@ impl Game<'_> {
                     | BlockEntity::Shelf(_)
                     | BlockEntity::Mod(_)
                     | BlockEntity::PotentSulfur(_)
-                    | BlockEntity::StructureBlock(_),
+                    | BlockEntity::StructureBlock(_)
+                    | BlockEntity::JigsawBlock(_)
+                    | BlockEntity::TestBlock(_)
+                    | BlockEntity::TestInstanceBlock(_),
                 ) => {}
                 None if self.mount_active() => self.draw_mount_background(batch, ox, oy),
                 None => {
@@ -10099,6 +10150,7 @@ impl Game<'_> {
             Action::Language => {
                 self.open_options_at(true, horizon_client::options_ui::Page::Language)
             }
+            Action::Sounds => self.open_options_at(true, horizon_client::options_ui::Page::Sound),
             Action::Credits => {
                 self.open_options_at(true, horizon_client::options_ui::Page::Credits)
             }
@@ -13147,12 +13199,9 @@ impl Game<'_> {
         // FishingHookRenderer's line, then DebugRenderer: chunk borders and
         // hitboxes (F3+G, F3+B).
         let mut lines = self.fishing_line(alpha, size);
-        let mut on_top = Vec::new();
-        if self.show_hitboxes || self.show_chunk_borders {
-            let g = self.debug_gizmos(alpha as f32);
-            lines.extend(g.lines);
-            on_top = g.on_top;
-        }
+        let g = self.debug_gizmos(alpha as f32, camera.to_array());
+        lines.extend(g.lines);
+        let on_top = g.on_top;
         let view = horizon_client::camera::view_matrix(view_yaw, view_pitch);
         let at = camera.to_array();
         // GameRenderer.render3dHud: the debug crosshair, first person with the HUD shown.
@@ -13668,6 +13717,7 @@ impl Game<'_> {
                 Screen::Advancements => self.close_advancements(),
                 Screen::WorldOptions => self.world_options_escape(),
                 Screen::CommandBlock => self.close_command_block(),
+                Screen::BlockEditor => self.close_block_editor(),
                 Screen::Chat => self.close_chat(),
                 Screen::Win => self.close_win_screen()?,
                 Screen::Mod => self.close_mod_screen(true),
@@ -14111,7 +14161,6 @@ impl Game<'_> {
                 let meshes = horizon_client::spans::time("lod_update", || {
                     lod.update(
                         [player.position.x, player.position.y, player.position.z],
-                        self.yaw,
                         self.streaming.radius,
                         lod_distance,
                         covered,
@@ -14779,6 +14828,9 @@ impl ApplicationHandler for Game<'_> {
                         if self.dialog_open() {
                             self.dialog_drag();
                         }
+                        if self.screen == Screen::BlockEditor {
+                            self.block_editor_drag();
+                        }
                         if self.screen == Screen::Advancements {
                             self.advancements_drag();
                         }
@@ -15125,6 +15177,12 @@ impl ApplicationHandler for Game<'_> {
                         Screen::CommandBlock if pressed && button == MouseButton::Left => {
                             self.command_block_click()
                         }
+                        Screen::BlockEditor if pressed && button == MouseButton::Left => {
+                            self.block_editor_click()
+                        }
+                        Screen::BlockEditor if button == MouseButton::Left => {
+                            self.block_editor_release()
+                        }
                         Screen::Dead if pressed && button == MouseButton::Left => {
                             self.death_click()?
                         }
@@ -15274,6 +15332,9 @@ impl ApplicationHandler for Game<'_> {
                 }
                 WindowEvent::KeyboardInput { event, .. } if self.screen == Screen::CommandBlock => {
                     self.command_block_key(&event)
+                }
+                WindowEvent::KeyboardInput { event, .. } if self.screen == Screen::BlockEditor => {
+                    self.block_editor_key(&event)
                 }
                 // Options consumes presses; releases still reach the bound
                 // gameplay mapping below, including sneak/sprint toggles.
@@ -16135,6 +16196,9 @@ impl<'a> Game<'a> {
             world_options: None,
             options_to_world_options: false,
             command_block_screen: None,
+            block_editor: None,
+            structure_templates: HashMap::new(),
+            test_defs: std::cell::RefCell::new(HashMap::new()),
             friends: None,
             debug_keys: Default::default(),
             debug_charts: Default::default(),
@@ -17256,6 +17320,10 @@ fn start_game<'a>(
             );
             title.last_server = game.settings.file.string("lastServer");
             title.skip_multiplayer_warning = game.settings.file.bool("skipMultiplayerWarning");
+            // Gui.addInitialScreens: the accessibility onboarding comes first.
+            if game.settings.file.bool("onboardAccessibility") {
+                title.start_onboarding();
+            }
             game.title = Some(title);
         }
     }

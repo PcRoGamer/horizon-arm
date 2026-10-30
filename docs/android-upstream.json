@@ -7,11 +7,11 @@
   "compared_source_files": 3147,
   "modified_existing_files": 41,
   "branch": "android",
-  "merged_upstream_commit": "ab9202435",
-  "merged_upstream_commits": 5697,
+  "merged_upstream_commit": "f4a81d27e",
+  "merged_upstream_commits": 5753,
   "last_reviewed_date": "2026-10-31",
-  "last_update_commits": 341,
-  "latest_fetched_commit": "ab9202435",
-  "review": "Reviewed stable upstream main through ab9202435: gameplay and server packet fixes, native mod hooks and catalog metadata, prepared output version 3. Preserved Android input routing, sandbox hmod placement events and command dispatch. Adapted modifier-independent key labels to Android API availability and reconciled new host dependencies. Upstream deployment workflows remain inactive. ARM64 and ARMv7 cargo checks and strict ARM64 Clippy passed. Screen geometry tests and Python Android tests passed. The standalone x86_64 screen probe compiled; its runtime test could not start because the Windows emulator crashed with 0xC0000005 before application launch. Final gameplay validation remains with the repository owner.",
+  "last_update_commits": 56,
+  "latest_fetched_commit": "f4a81d27e",
+  "review": "Reviewed stable main through f4a81d27e: bounded region-writer helpers, far-terrain cache/meshing/fading, sculk portal batching, remote sprint-hit slowdown, vanilla structure/jigsaw/test block interfaces and desktop video options. Preserved Android keypad and shared presentation bounds; deployment workflows stay inactive. Authentication recovery is covered by isolated mock tests, not a live Microsoft login. ARM64 strict Clippy and ARMv7 cargo check passed after integration. Screen preference tests passed; the final immersive status/navigation split has not been device-tested.",
   "pending_review_commits": 0
 }
