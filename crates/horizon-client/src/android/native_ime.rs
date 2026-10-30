@@ -33,6 +33,7 @@ enum Command {
     Capture(bool),
     Bounds,
     ImportDocument,
+    Screen(bool, bool),
 }
 struct Ui {
     vm: JavaVM,
@@ -51,6 +52,8 @@ struct Ui {
     bottom: AtomicI32,
     failed: AtomicBool,
     keyboard_request: Mutex<Option<std::time::Instant>>,
+    last_bounds: Mutex<Option<std::time::Instant>>,
+    avoid_cutout: AtomicBool,
 }
 static UI: OnceLock<Arc<Ui>> = OnceLock::new();
 
@@ -159,6 +162,8 @@ pub unsafe fn initialize(
         bottom: AtomicI32::new(0),
         failed: AtomicBool::new(false),
         keyboard_request: Mutex::new(None),
+        last_bounds: Mutex::new(None),
+        avoid_cutout: AtomicBool::new(false),
     });
     let looper = unsafe { ALooper_forThread() };
     if looper.is_null() {
@@ -237,8 +242,84 @@ impl Ui {
         }
         Ok(())
     }
+    fn apply_screen(&self, env: &mut JNIEnv<'_>, immersive: bool) -> jni::errors::Result<()> {
+        let window = env
+            .call_method(&self.activity, "getWindow", "()Landroid/view/Window;", &[])?
+            .l()?;
+        let decor = env
+            .call_method(&window, "getDecorView", "()Landroid/view/View;", &[])?
+            .l()?;
+        // Layout always occupies the native surface. Cutout avoidance is handled
+        // by the shared rendering/input viewport, including Android 15+.
+        let sdk = env
+            .get_static_field("android/os/Build$VERSION", "SDK_INT", "I")?
+            .i()?;
+        if sdk >= 28 {
+            let attrs = env
+                .call_method(
+                    &window,
+                    "getAttributes",
+                    "()Landroid/view/WindowManager$LayoutParams;",
+                    &[],
+                )?
+                .l()?;
+            env.set_field(&attrs, "layoutInDisplayCutoutMode", "I", JValue::Int(1))?;
+            env.call_method(
+                &window,
+                "setAttributes",
+                "(Landroid/view/WindowManager$LayoutParams;)V",
+                &[JValue::Object(&attrs)],
+            )?;
+        }
+        if sdk >= 30 {
+            env.call_method(
+                &window,
+                "setDecorFitsSystemWindows",
+                "(Z)V",
+                &[JValue::Bool(u8::from(!immersive))],
+            )?;
+            let controller = env
+                .call_method(
+                    &window,
+                    "getInsetsController",
+                    "()Landroid/view/WindowInsetsController;",
+                    &[],
+                )?
+                .l()?;
+            if !controller.is_null() {
+                env.call_method(
+                    &controller,
+                    "setSystemBarsBehavior",
+                    "(I)V",
+                    &[JValue::Int(2)],
+                )?;
+                env.call_method(
+                    &controller,
+                    if immersive { "hide" } else { "show" },
+                    "(I)V",
+                    &[JValue::Int(7)],
+                )?;
+            }
+        } else {
+            env.call_method(
+                decor,
+                "setSystemUiVisibility",
+                "(I)V",
+                &[JValue::Int(if immersive { 0x1706 } else { 0 })],
+            )?;
+        }
+        Ok(())
+    }
     fn apply(&self, env: &mut JNIEnv<'_>, c: Command) -> jni::errors::Result<()> {
         match c {
+            Command::Screen(immersive, avoid) => {
+                self.avoid_cutout.store(avoid, Ordering::Release);
+                if let Err(error) = self.apply_screen(env, immersive) {
+                    let _ = env.exception_clear();
+                    log::warn!("Android screen preferences: {error}");
+                }
+                self.enqueue(Command::Bounds);
+            }
             Command::ImportDocument => {
                 let result = (|| -> jni::errors::Result<()> {
                     let action =
@@ -370,6 +451,90 @@ impl Ui {
                 )?;
                 self.bottom
                     .store(env.get_field(rect, "bottom", "I")?.i()?, Ordering::Release);
+                let mut safe = [0; 4];
+                if self.avoid_cutout.load(Ordering::Acquire) {
+                    let result = (|| -> jni::errors::Result<()> {
+                        let insets = env
+                            .call_method(
+                                &self.native,
+                                "getRootWindowInsets",
+                                "()Landroid/view/WindowInsets;",
+                                &[],
+                            )?
+                            .l()?;
+                        if !insets.is_null() {
+                            let cutout = env
+                                .call_method(
+                                    insets,
+                                    "getDisplayCutout",
+                                    "()Landroid/view/DisplayCutout;",
+                                    &[],
+                                )?
+                                .l()?;
+                            if !cutout.is_null() {
+                                for (i, method) in [
+                                    "getSafeInsetLeft",
+                                    "getSafeInsetTop",
+                                    "getSafeInsetRight",
+                                    "getSafeInsetBottom",
+                                ]
+                                .into_iter()
+                                .enumerate()
+                                {
+                                    safe[i] =
+                                        env.call_method(&cutout, method, "()I", &[])?.i()?.max(0)
+                                            as u32;
+                                }
+                            }
+                        }
+                        Ok(())
+                    })();
+                    if result.is_err() {
+                        let _ = env.exception_clear();
+                    }
+                }
+                if safe != [0; 4] {
+                    let location = env.new_int_array(2)?;
+                    env.call_method(
+                        &self.native,
+                        "getLocationOnScreen",
+                        "([I)V",
+                        &[JValue::Object(&location)],
+                    )?;
+                    let mut origin = [0; 2];
+                    env.get_int_array_region(location, 0, &mut origin)?;
+                    let width = env
+                        .call_method(&self.native, "getWidth", "()I", &[])?
+                        .i()?
+                        .max(0);
+                    let height = env
+                        .call_method(&self.native, "getHeight", "()I", &[])?
+                        .i()?
+                        .max(0);
+                    let metrics = env
+                        .call_method(
+                            &self.activity,
+                            "getResources",
+                            "()Landroid/content/res/Resources;",
+                            &[],
+                        )?
+                        .l()?;
+                    let metrics = env
+                        .call_method(
+                            metrics,
+                            "getDisplayMetrics",
+                            "()Landroid/util/DisplayMetrics;",
+                            &[],
+                        )?
+                        .l()?;
+                    let dw = env.get_field(&metrics, "widthPixels", "I")?.i()?;
+                    let dh = env.get_field(&metrics, "heightPixels", "I")?.i()?;
+                    safe[0] = safe[0].saturating_sub(origin[0].max(0) as u32);
+                    safe[1] = safe[1].saturating_sub(origin[1].max(0) as u32);
+                    safe[2] = safe[2].saturating_sub((dw - origin[0] - width).max(0) as u32);
+                    safe[3] = safe[3].saturating_sub((dh - origin[1] - height).max(0) as u32);
+                }
+                winit::platform::android::set_native_content_insets(safe);
             }
             Command::Capture(capture) => {
                 env.call_method(
@@ -489,8 +654,11 @@ pub fn viewport_bottom() -> Option<u32> {
         ui.enqueue(Command::Bounds);
     }
     let bottom = ui.bottom.load(Ordering::Acquire);
-    (bottom > 0)
-        .then(|| (bottom as f64 * winit::platform::android::native_input_scale()[1]).round() as u32)
+    (bottom > 0).then(|| {
+        ((bottom - winit::platform::android::native_content_origin()[1] as i32).max(0) as f64
+            * winit::platform::android::native_input_scale()[1])
+            .round() as u32
+    })
 }
 pub fn pick_document() -> bool {
     let Some(ui) = UI.get().filter(|ui| !ui.failed.load(Ordering::Acquire)) else {
@@ -498,4 +666,27 @@ pub fn pick_document() -> bool {
     };
     ui.enqueue(Command::ImportDocument);
     true
+}
+
+pub fn configure_screen(immersive: bool, avoid_cutout: bool) {
+    if let Some(ui) = UI.get() {
+        ui.enqueue(Command::Screen(immersive, avoid_cutout));
+    }
+}
+pub fn refresh_bounds() {
+    if let Some(ui) = UI
+        .get()
+        .filter(|ui| ui.avoid_cutout.load(Ordering::Acquire))
+    {
+        let mut last = ui
+            .last_bounds
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if last.is_none_or(|t| t.elapsed() >= std::time::Duration::from_millis(250))
+            && !ui.bounds_pending.swap(true, Ordering::AcqRel)
+        {
+            *last = Some(std::time::Instant::now());
+            ui.enqueue(Command::Bounds);
+        }
+    }
 }

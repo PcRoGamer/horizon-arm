@@ -47,6 +47,10 @@ pub(super) enum Action {
     ChooseRenderer(crate::catalog::RendererMode),
     ChooseProfile(u32),
     Dismiss,
+    Immersive,
+    Cutout,
+    Aspect,
+    ChooseAspect(crate::display::Aspect),
     DisplayHz,
     ChooseDisplayHz(u16),
     PerformanceHints,
@@ -772,11 +776,11 @@ impl Launcher {
             self.catalog.scroll = self
                 .catalog
                 .scroll
-                .clamp(0.0, (11.0 * row_height - (h - 130.0 - 195.0)).max(0.0));
+                .clamp(0.0, (14.0 * row_height - (h - 130.0 - 195.0)).max(0.0));
             self.list_view = Some([
                 195.0,
                 h - 130.0,
-                (11.0 * row_height - (h - 130.0 - 195.0)).max(0.0),
+                (14.0 * row_height - (h - 130.0 - 195.0)).max(0.0),
             ]);
             for (i, (title, value, action)) in [
                 ("Rendering", c.renderer.label().to_owned(), Action::Renderer),
@@ -796,6 +800,17 @@ impl Launcher {
                     Action::Orientation,
                 ),
                 ("Input", c.input_host.label().to_owned(), Action::InputHost),
+                (
+                    "Immersive fullscreen",
+                    if c.immersive { "On" } else { "Off" }.into(),
+                    Action::Immersive,
+                ),
+                (
+                    "Avoid camera cutout",
+                    if c.avoid_cutout { "On" } else { "Off" }.into(),
+                    Action::Cutout,
+                ),
+                ("Aspect ratio", c.aspect.label().into(), Action::Aspect),
                 (
                     "Display refresh rate",
                     c.device.display_label(),
@@ -870,7 +885,13 @@ impl Launcher {
                     color::MUTED,
                     title,
                 );
-                if matches!(action, Action::PerformanceHints | Action::GpuProfile) {
+                if matches!(
+                    action,
+                    Action::PerformanceHints
+                        | Action::GpuProfile
+                        | Action::Immersive
+                        | Action::Cutout
+                ) {
                     toggle(
                         &mut ui,
                         &mut self.targets,
@@ -880,10 +901,11 @@ impl Launcher {
                             if compact { w - 64.0 } else { w * 0.64 - 32.0 },
                             46.0,
                         ],
-                        if action == Action::PerformanceHints {
-                            c.device.performance_hints
-                        } else {
-                            c.device.gpu_profile
+                        match action {
+                            Action::PerformanceHints => c.device.performance_hints,
+                            Action::Immersive => c.immersive,
+                            Action::Cutout => c.avoid_cutout,
+                            _ => c.device.gpu_profile,
                         },
                         action,
                     );
@@ -903,6 +925,7 @@ impl Launcher {
                             if matches!(
                                 action,
                                 Action::Renderer
+                                    | Action::Aspect
                                     | Action::DisplayHz
                                     | Action::RenderScale
                                     | Action::Profile
@@ -1137,6 +1160,23 @@ impl Launcher {
             audio.play_button_click();
         }
         match action {
+            Some(Action::Immersive) => {
+                self.catalog.config.immersive ^= true;
+                self.catalog.config.save(&self.home)?;
+                self.configure_screen();
+            }
+            Some(Action::Cutout) => {
+                self.catalog.config.avoid_cutout ^= true;
+                self.catalog.config.save(&self.home)?;
+                self.configure_screen();
+            }
+            Some(Action::Aspect) => self.open_chooser(chooser::Kind::Aspect),
+            Some(Action::ChooseAspect(aspect)) => {
+                self.catalog.config.aspect = aspect;
+                self.catalog.config.save(&self.home)?;
+                self.configure_screen();
+                self.chooser = None;
+            }
             Some(Action::DisplayHz) => self.open_chooser(chooser::Kind::DisplayHz),
             Some(Action::ChooseDisplayHz(hz)) => {
                 self.catalog.config.device.display_hz = hz;

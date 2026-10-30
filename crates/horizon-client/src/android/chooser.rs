@@ -7,6 +7,7 @@ use crate::catalog::RendererMode;
 use horizon_client::ui_theme::{Face, Ui, color};
 
 pub(super) enum Kind {
+    Aspect,
     DisplayHz,
     Renderer,
     RenderScale,
@@ -37,6 +38,26 @@ impl Launcher {
         };
         let c = &self.catalog.config;
         let (title, help, choices) = match kind {
+            Kind::Aspect => (
+                "Aspect ratio",
+                "Fits the entire picture without stretching. Touch coordinates follow the picture. Portrait swaps width and height.",
+                [
+                    crate::display::Aspect::Native,
+                    crate::display::Aspect::Wide,
+                    crate::display::Aspect::Classic,
+                    crate::display::Aspect::Square,
+                ]
+                .into_iter()
+                .map(|a| {
+                    (
+                        a.label().into(),
+                        String::new(),
+                        Action::ChooseAspect(a),
+                        c.aspect == a,
+                    )
+                })
+                .collect(),
+            ),
             Kind::DisplayHz => (
                 "Display refresh rate",
                 "An Android display preference, not a game FPS cap. Unsupported rates may be ignored.",

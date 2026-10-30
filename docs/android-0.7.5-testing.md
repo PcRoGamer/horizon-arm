@@ -109,8 +109,18 @@ Both are in launcher Settings and default off.
   should appear inside the Android game.
 - System preferences belong to the launcher; gyro/mouse options belong to Touch
   Controls. Existing values should survive restarting and legacy migration.
-- New Skins & Capes, aspect-ratio and cutout controls are not included in this
-  candidate. Do not report those deferred features as tested or released.
+- Launcher Settings: toggle Immersive fullscreen. Navigation bars should hide;
+  an edge swipe temporarily reveals system bars. Recheck after Home, screen lock,
+  keyboard use and opening the system file picker.
+- Toggle Avoid camera cutout with a real or emulated cutout. The full picture
+  should fit in the safe region. Without a cutout this need not visibly change.
+- Select Native, 16:9, 4:3 and 1:1 aspect ratios, then rotate the device and try
+  100% and 50% client resolution. Portrait uses the corresponding portrait ratio.
+  The picture must fit without stretching; unused space is black. Touch every
+  corner button, drag inventory items, use the virtual mouse and a physical mouse.
+  Starting a touch in a black bar must not activate a game control. Check screenshots
+  and HDR/shader output too: emulator window checks do not validate game rendering.
+- New Skins & Capes is not included in this candidate.
 
 For a failure provide reproduction steps, expected/actual behavior, build
 commit and a new report from that run. For crashes also attach the exit report

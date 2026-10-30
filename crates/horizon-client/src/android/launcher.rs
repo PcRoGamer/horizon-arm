@@ -140,6 +140,13 @@ impl Launcher {
             events.exit();
         }
     }
+    pub(super) fn configure_screen(&self) {
+        crate::native_ime::configure_screen(
+            self.catalog.config.immersive,
+            self.catalog.config.avoid_cutout,
+        );
+        winit::platform::android::set_native_content_aspect(self.catalog.config.aspect.ratio());
+    }
     fn fail(&mut self, error: impl std::fmt::Display) {
         log::error!("{error}");
         self.error = Some(error.to_string());
@@ -148,6 +155,7 @@ impl Launcher {
 
     fn open(&mut self, events: &ActiveEventLoop) -> Result<()> {
         crate::platform::set_orientation(self.catalog.config.orientation);
+        self.configure_screen();
         crate::display::set_scale(self.catalog.config.render_scale);
         horizon_client::android_runtime::configure_gpu(false);
         if let Some(renderer) = &mut self.renderer {
@@ -314,6 +322,7 @@ impl Launcher {
 
 impl ApplicationHandler for Launcher {
     fn resumed(&mut self, events: &ActiveEventLoop) {
+        self.configure_screen();
         if let Some(game) = &mut self.game {
             return game.resumed(events);
         }
@@ -337,6 +346,9 @@ impl ApplicationHandler for Launcher {
         }
         if matches!(event, WindowEvent::Resized(_)) {
             let _ = crate::native_ime::viewport_bottom();
+        }
+        if matches!(event, WindowEvent::Focused(true)) {
+            self.configure_screen();
         }
         if let Some(game) = &mut self.game {
             game.window_event(events, id, event);

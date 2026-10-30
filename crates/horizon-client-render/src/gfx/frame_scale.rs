@@ -52,7 +52,15 @@ impl FrameScale {
                 format: Some(self.format),
                 ..Default::default()
             });
-            self.post.finish_with(encoder, &view, group);
+            self.post.finish_in_rect(
+                encoder,
+                &view,
+                group,
+                Some(winit::platform::android::native_content_rect([
+                    output.width(),
+                    output.height(),
+                ])),
+            );
         }
     }
 }

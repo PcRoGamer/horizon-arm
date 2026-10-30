@@ -56,16 +56,15 @@ pub fn set_scale(scale: RenderScale) {
 #[cfg(target_os = "android")]
 fn desired(window: &winit::window::Window) -> Option<[u32; 2]> {
     let scale = RenderScale::new(REQUESTED_SCALE.load(std::sync::atomic::Ordering::Relaxed));
-    let input = winit::platform::android::native_input_scale();
-    if scale.percent() == 100 && input == [1.0, 1.0] {
-        return None;
-    }
+    crate::native_ime::refresh_bounds();
     let current = window.inner_size();
     let physical = window.outer_size();
     if physical.width == 0 || physical.height == 0 {
         return None;
     }
-    let view = [physical.width, physical.height];
+    let [_, _, width, height] =
+        winit::platform::android::native_content_rect([physical.width, physical.height]);
+    let view = [width, height];
     let size = scale.buffer_size(view);
     if size == [current.width, current.height] {
         winit::platform::android::set_native_input_scale([
@@ -82,7 +81,13 @@ fn desired(window: &winit::window::Window) -> Option<[u32; 2]> {
 fn set_render_size(window: &winit::window::Window, size: [u32; 2]) -> Result<[u32; 2], String> {
     use winit::platform::android::WindowExtAndroid;
     let native = REQUESTED_SCALE.load(std::sync::atomic::Ordering::Relaxed) == 100;
-    let target = if native { [0, 0] } else { size };
+    let physical = window.outer_size();
+    let rect = winit::platform::android::native_content_rect([physical.width, physical.height]);
+    let target = if native && rect == [0, 0, physical.width, physical.height] {
+        [0, 0]
+    } else {
+        size
+    };
     let actual = window
         .set_render_size(winit::dpi::PhysicalSize::new(target[0], target[1]))
         .map_err(|e| e.to_string())?;
@@ -149,5 +154,34 @@ mod tests {
             serde_json::from_str::<RenderScale>("0").unwrap().percent(),
             25
         );
+    }
+}
+
+/// Fixed presentation ratios; logical rendering and input share the same bounds.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Aspect {
+    #[default]
+    Native,
+    Wide,
+    Classic,
+    Square,
+}
+impl Aspect {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Native => "Native",
+            Self::Wide => "16:9",
+            Self::Classic => "4:3",
+            Self::Square => "1:1",
+        }
+    }
+    pub fn ratio(self) -> [u32; 2] {
+        match self {
+            Self::Native => [0, 0],
+            Self::Wide => [16, 9],
+            Self::Classic => [4, 3],
+            Self::Square => [1, 1],
+        }
     }
 }

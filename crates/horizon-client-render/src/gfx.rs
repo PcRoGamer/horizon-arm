@@ -4135,22 +4135,31 @@ impl Renderer {
             self.acquire_validation_failures = 0;
         }
         let size = [self.config.width, self.config.height];
+        #[cfg(target_os = "android")]
+        let scaled_presentation = surface_frame.as_ref().is_some_and(|f| {
+            let physical = [f.texture.width(), f.texture.height()];
+            physical != size
+                || winit::platform::android::native_content_rect(physical)
+                    != [0, 0, physical[0], physical[1]]
+        });
+        #[cfg(not(target_os = "android"))]
+        let scaled_presentation = false;
         let target_texture = match (&surface_frame, &mut self.hdr) {
             (Some(_), Some(hdr)) => hdr.frame(&self.device, size),
             // A screenshot of a swapchain without COPY_SRC (OpenGL) draws
             // into a texture that has it, then onto the swapchain.
             (Some(f), None) => self
                 .readback
-                .target(&self.device, &f.texture, self.screenshot.is_some())
+                .target(
+                    &self.device,
+                    &f.texture,
+                    self.screenshot.is_some() && !scaled_presentation,
+                )
                 .unwrap_or_else(|| f.texture.clone()),
             (None, _) => self.offscreen.clone().ok_or("no offscreen target")?,
         };
         #[cfg(target_os = "android")]
-        let target_texture = if self.hdr.is_none()
-            && surface_frame
-                .as_ref()
-                .is_some_and(|f| [f.texture.width(), f.texture.height()] != size)
-        {
+        let target_texture = if self.hdr.is_none() && scaled_presentation {
             self.frame_scale
                 .get_or_insert_with(|| {
                     frame_scale::FrameScale::new(

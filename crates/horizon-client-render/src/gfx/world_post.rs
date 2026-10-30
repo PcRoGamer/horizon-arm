@@ -474,6 +474,15 @@ impl Post {
         screen: &wgpu::TextureView,
         group: &wgpu::BindGroup,
     ) {
+        self.finish_in_rect(encoder, screen, group, None);
+    }
+    pub fn finish_in_rect(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        screen: &wgpu::TextureView,
+        group: &wgpu::BindGroup,
+        rect: Option<[u32; 4]>,
+    ) {
         let attachments = [Some(wgpu::RenderPassColorAttachment {
             view: screen,
             resolve_target: None,
@@ -488,6 +497,10 @@ impl Post {
             color_attachments: &attachments,
             ..Default::default()
         });
+        if let Some([x, y, w, h]) = rect {
+            pass.set_viewport(x as f32, y as f32, w as f32, h as f32, 0.0, 1.0);
+            pass.set_scissor_rect(x, y, w, h);
+        }
         pass.set_pipeline(if self.antialias {
             &self.fxaa
         } else {

@@ -11,6 +11,7 @@ The published RC is followed by source changes for the next 0.7.5 candidate.
 - Optional ADPF performance hints on supported Android 12+ devices. A session tracks the rendering thread's actual CPU-side frame work including submission waits. It uses the explicitly requested display period, or 60 Hz when System default is chosen. Hints close on focus loss. There is no guaranteed performance gain or change to graphics quality.
 - Detailed GPU profiling: recording switch plus rolling p50/p95/p99 for preparation/uploads, world, and post/hand/HUD stages, correlated with CPU/streaming and native API diagnostics. Timestamp availability depends on the driver. These are not vendor hardware counters, GPU clock readings, or proof of a slowdown's cause. Profiling has overhead and is off by default.
 - Exit reports: Android 11+ historical process exits with OS reasons and available Java/native/ANR traces; a previous-log tail and Rust panic export. Traces are bounded and retained locally. Native crash traces can be binary tombstones. Older firmware or the OS may provide no trace.
+- Screen presentation: optional immersive system-bar hiding, camera-cutout avoidance and Native/16:9/4:3/1:1 fitting. Rendering and absolute input share physical content bounds; portrait swaps the ratio. These settings belong to the launcher.
 - Launcher recovery: regenerate pending text/corner atlas uploads when Android skips a frame during surface suspension or loss, preventing missing labels after unlocking.
 
 Virtual mouse, gyroscope and crosshair gestures are in Options > Controls > Touch Controls. Display refresh rate, Performance hints (ADPF), GPU profiling and existing performance recording are in launcher Settings. Earlier system preferences are migrated from the touch file without overriding choices already saved by the client. Sensor/performance controls default to off and display frequency defaults to System default.
@@ -23,6 +24,6 @@ Sandboxed `.hmod` execution is retained in this Android fork alongside the upstr
 
 ## Release scope and verification
 
-Skin/cape management, cutout/aspect-ratio changes and native `.hnmod` engine experiments are excluded from this candidate. The existing four schemes, resource-pack imports, Android storage integration and renderer selection remain available.
+Skin/cape management and native `.hnmod` engine experiments are excluded from this candidate. The existing four schemes, resource-pack imports, Android storage integration and renderer selection remain available.
 
 Source checks and focused input tests cover gesture ownership, cancellation, mouse dragging and settings migration. A complete on-device playthrough of the final source is still required before publication. Compilation checks are not APK startup tests or a performance benchmark.
