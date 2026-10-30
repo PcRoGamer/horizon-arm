@@ -87,10 +87,14 @@ replace_once(
     'let hardware = self.pad.read_all();',
 )
 
+# Keep this hook anchored only to Game's ApplicationHandler method signature.
+# The first statements in device_event change frequently upstream (offscreen,
+# focus, save-state checks), but Android controller events must always be
+# consumed before whatever mouse-motion handling follows. Anchoring to those
+# statements made the overlay needlessly brittle.
 replace_once(
     game,
     '''    fn device_event(&mut self, _: &ActiveEventLoop, _: DeviceId, event: DeviceEvent) {
-        if self.pending_save.is_none()
 ''',
     '''    fn device_event(&mut self, _: &ActiveEventLoop, _: DeviceId, event: DeviceEvent) {
         // Android's patched winit backend emits controller buttons/axes as raw
@@ -99,7 +103,6 @@ replace_once(
         if self.pad_device_event(&event) {
             return;
         }
-        if self.pending_save.is_none()
 ''',
     'if self.pad_device_event(&event)',
 )
