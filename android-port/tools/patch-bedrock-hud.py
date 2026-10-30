@@ -34,7 +34,8 @@ replace_once(
 
 # Bedrock tap modes do not show a crosshair. Crosshair mode does. The atomic is
 # initialised lazily from the per-instance touch config and can then be updated
-# live by the in-game Android Touch Controls panel.
+# live by the in-game Android Touch Controls panel. D-pad + Split Controls is
+# also a crosshair scheme and must survive a process/activity restart.
 replace_once(
     '''pub fn crosshair(w: i32, h: i32, attack: Option<f32>, full: bool) -> Vec<GuiDraw> {
     crosshair_draws(w, h, attack, full)
@@ -59,13 +60,21 @@ fn android_touch_crosshair() -> bool {
                 .unwrap_or_default()
                 .to_ascii_lowercase();
             let simple = configured.trim();
-            let enabled = matches!(simple, "classic" | "crosshair")
-                || configured.lines().any(|line| {
-                    line.split_once('=').is_some_and(|(key, value)| {
-                        matches!(key.trim(), "mode" | "control_mode")
-                            && matches!(value.trim(), "crosshair" | "joystick_crosshair" | "joystick & aim crosshair")
-                    })
-                });
+            let mut crosshair = matches!(simple, "classic" | "crosshair");
+            let mut dpad = matches!(simple, "dpad" | "d-pad");
+            let mut split = false;
+            for line in configured.lines() {
+                let Some((key, value)) = line.split_once('=') else { continue };
+                let key = key.trim();
+                let value = value.trim();
+                if matches!(key, "mode" | "control_mode") {
+                    crosshair = matches!(value, "crosshair" | "joystick_crosshair" | "joystick & aim crosshair");
+                    dpad = matches!(value, "dpad" | "d-pad" | "dpad_tap" | "d-pad & tap to interact");
+                } else if key == "split_controls" {
+                    split = matches!(value, "1" | "true" | "yes" | "on");
+                }
+            }
+            let enabled = crosshair || (dpad && split);
             ANDROID_TOUCH_CROSSHAIR.store(u8::from(enabled), Ordering::Relaxed);
             enabled
         }
