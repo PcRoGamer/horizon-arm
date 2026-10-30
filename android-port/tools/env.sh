@@ -2,6 +2,16 @@
 # The environment every Android build here uses. Source it: `. tools/env.sh`.
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TC="$REPO/.toolchain"
+# android-port/.toolchain is a tracked relative symlink to a shared cache.
+# Resolve it before exporting SDK/NDK/compiler paths; otherwise disposable
+# upstream trees point cc-rs/ring at a non-existent path through the symlink.
+if [ -L "$TC" ]; then
+  TC_LINK="$(readlink "$TC")"
+  case "$TC_LINK" in
+    /*) TC="$TC_LINK" ;;
+    *) TC="$(dirname "$TC")/$TC_LINK" ;;
+  esac
+fi
 export ANDROID_HOME="$TC/android-sdk"
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
 export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018"
