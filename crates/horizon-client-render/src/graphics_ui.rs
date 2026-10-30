@@ -538,7 +538,14 @@ impl H {
             }
             H::Hdr => g.hdr = !g.hdr,
             H::BatteryMode => g.battery = !g.battery,
-            H::GraphicsApi => g.api = step(GraphicsApi::choices(), g.api, back),
+            H::GraphicsApi => {
+                // Android selects the backend before creating the renderer in
+                // launcher Settings. Stale/programmatic menu actions must not
+                // save a competing backend preference for the next launch.
+                if !cfg!(target_os = "android") {
+                    g.api = step(GraphicsApi::choices(), g.api, back);
+                }
+            }
             H::Pacing => {
                 g.pacing = match g.pacing {
                     Pacing::Efficient => Pacing::Precise,
