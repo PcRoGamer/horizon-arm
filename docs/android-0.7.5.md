@@ -17,4 +17,4 @@ Reports are accessible through the Android Files app under Horizon Android > Rep
 
 Device support is detected at runtime. Old Android releases retain normal startup without linking newer performance/frequency symbols at load time.
 
-Sandboxed .hmod execution is retained in this Android fork alongside native hooks. ARM64 type-checking and 32 runtime sandbox tests pass. Source-built .hnmod Android integration and final device tests remain in progress; this candidate is not yet a finished release for both paths.
+Sandboxed `.hmod` execution is retained in this Android fork alongside the upstream native hooks. Source-only `.hnmod` entries remain visible in the catalog with an unsupported status; compiling and running them on Android is deferred. Native-engine experiments are excluded from this release.

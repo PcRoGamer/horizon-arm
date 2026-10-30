@@ -221,7 +221,7 @@ fn kind_of(kind: &index::Kind) -> Option<Kind> {
         index::Kind::Modpack => Some(Kind::Modpack),
         index::Kind::Shader => Some(Kind::Shader),
         // Mixin mods: installed beside the others, compiled into the game by `native_mods`.
-        index::Kind::NativeMod => (!cfg!(target_os = "android")).then_some(Kind::Mod),
+        index::Kind::NativeMod => Some(Kind::Mod),
         index::Kind::Other(_) => None,
     }
 }
@@ -298,7 +298,15 @@ fn project_of(p: &index::Project) -> Option<Project> {
         license: p.license.clone(),
         kind: kind_of(&p.kind)?,
         game_versions,
-        loaders: vec![LOADER.into()],
+        loaders: {
+            let mut loaders = vec![LOADER.into()];
+            if cfg!(target_os = "android") && p.kind == index::Kind::NativeMod {
+                // Keep source-only mods visible, without implying Android can
+                // install a source bundle into its already-built game library.
+                loaders.push("hnmod".into());
+            }
+            loaders
+        },
     })
 }
 

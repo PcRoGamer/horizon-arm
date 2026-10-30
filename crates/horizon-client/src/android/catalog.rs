@@ -5,6 +5,10 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, Mutex, mpsc},
 };
+pub fn source_only_mod(project: &Project) -> bool {
+    project.source == browser::SourceId::Horizon
+        && project.loaders.iter().any(|loader| loader == "hnmod")
+}
 
 /// Temporary dev registration published as Minecraft Nintendo Switch by PrismarineJS.
 /// Account tokens and client secrets are never bundled.
@@ -420,6 +424,13 @@ impl Catalog {
                 "{} Java mods - browsing only; this Rust client cannot run Java loaders",
                 items.len()
             )
+        } else if self.page == Page::Mods {
+            let native = items.iter().filter(|p| source_only_mod(p)).count();
+            format!(
+                "{} .hmod / {} source-only .hnmod (not supported yet)",
+                items.len() - native,
+                native
+            )
         } else {
             format!(
                 "{} results - select Install to check compatibility",
@@ -463,11 +474,11 @@ impl Catalog {
     pub fn import_native(&mut self, home: &Path) {
         let url = self.query.trim().to_owned();
         let game = self.config.game_home(home);
-        self.job("Downloading native .hmod over HTTPS...",move||{
+        self.job("Downloading sandboxed .hmod over HTTPS...",move||{
             use std::io::Read;
             let mut bytes=Vec::new();
             ureq::AgentBuilder::new().https_only(true).timeout_connect(std::time::Duration::from_secs(20)).timeout_read(std::time::Duration::from_secs(90)).build().get(&url).call().map_err(|e|e.to_string())?.into_reader().take(32*1024*1024+1).read_to_end(&mut bytes).map_err(|e|e.to_string())?;
-            if bytes.len()>32*1024*1024 {return Err("Native mod exceeds 32 MiB".into());}
+            if bytes.len()>32*1024*1024 {return Err("Horizon mod exceeds 32 MiB".into());}
             let dir=game.join("horizon-mods");std::fs::create_dir_all(&dir).map_err(|e|e.to_string())?;
             let stage=dir.join("import.partial");std::fs::write(&stage,bytes).map_err(|e|e.to_string())?;
             let result=(||{
@@ -484,6 +495,10 @@ impl Catalog {
         let Some(project) = self.results.get(index).cloned() else {
             return;
         };
+        if source_only_mod(&project) {
+            self.status = "This .hnmod needs a separately compiled client. Android support is planned; sandboxed .hmod mods can be installed now.".into();
+            return;
+        }
         if self.busy() || self.download_label(&project).is_some() {
             return;
         }
@@ -549,7 +564,7 @@ impl Catalog {
         match item.kind {
             horizon_client::content_files::Kind::Mods => {
                 if !cfg!(target_pointer_width = "64") {
-                    self.status = "Native mod execution requires a 64-bit APK".into();
+                    self.status = "Sandboxed code mods require a 64-bit APK".into();
                     return;
                 }
                 let mut on = horizon_client::mod_list::ModList::load(&game);

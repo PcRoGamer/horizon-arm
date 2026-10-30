@@ -3,7 +3,7 @@
 A native Android port of [Horizon](https://github.com/ludovic111/horizon), the
 Rust engine for Minecraft Java 26.3. Unofficial and in active development.
 
-**Android 9+ · Vulkan · Four touch schemes · Native `.hmod` mods**
+**Android 9+ · Vulkan · Four touch schemes · Sandboxed `.hmod` mods**
 
 [Download APK](https://github.com/Vasysik/horizon-android/releases) · [Build & play](docs/android.md) · [Contribute](CONTRIBUTING_ANDROID.md) ·
 [Report an Android bug](https://github.com/Vasysik/horizon-android/issues/new?template=android-bug.yml)
@@ -20,8 +20,10 @@ Rust engine for Minecraft Java 26.3. Unofficial and in active development.
 - Account status and Android Keystore storage; the current sign-in configuration
   is still for development. [Feature support and remaining work](docs/android-features.md).
 
-The engine targets Minecraft Java **26.3**. Mods use Horizon's native `.hmod`
-format; Fabric/Forge Java code does not run in this client. Server and anticheat
+The engine targets Minecraft Java **26.3**. Sandboxed `.hmod`
+code mods run on 64-bit APKs. Source-only `.hnmod` mods require a separately
+compiled client and are not supported on Android yet. Fabric/Forge Java code
+does not run in this client. Server and anticheat
 compatibility requires testing on the actual server.
 
 ## On Android

@@ -546,6 +546,7 @@ impl Launcher {
                 let y = top + i as f32 * 78.0 - self.catalog.scroll;
                 let download = self.catalog.download_label(p);
                 if download.is_none()
+                    && !crate::catalog::source_only_mod(p)
                     && !(p.kind == crate::browser::Kind::Mod
                         && p.source == crate::browser::SourceId::Modrinth)
                 {
@@ -572,7 +573,17 @@ impl Launcher {
                         color::MUTED,
                         "Java mod",
                     );
-                } else if p.kind == crate::browser::Kind::Mod && !cfg!(target_pointer_width = "64") {
+                } else if crate::catalog::source_only_mod(p) {
+                    ui.text(
+                        Face::Regular,
+                        14.0,
+                        w - 150.0,
+                        y + 12.0,
+                        color::MUTED,
+                        ".hnmod: later",
+                    );
+                } else if p.kind == crate::browser::Kind::Mod && !cfg!(target_pointer_width = "64")
+                {
                     ui.text(
                         Face::Regular,
                         14.0,

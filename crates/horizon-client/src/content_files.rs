@@ -58,12 +58,13 @@ pub fn validate(
 ) -> crate::Result<bool> {
     if !plain_name(name) || !kind.accepts(name) {
         return Err(
-            "Choose a ZIP pack, .hshader shader pack or native .hmod matching this folder".into(),
+            "Choose a ZIP pack, .hshader shader pack or sandboxed .hmod matching this folder"
+                .into(),
         );
     }
     let file = std::fs::File::open(path)?;
     if kind == Kind::Mods && file.metadata()?.len() > 32 << 20 {
-        return Err("Native mod exceeds 32 MiB".into());
+        return Err("Horizon mod exceeds 32 MiB".into());
     }
     if file.metadata()?.len() > MAX_INPUT {
         return Err("Import exceeds 256 MiB".into());

@@ -39,7 +39,7 @@ refreshes its query. Changing tabs does not unpack installed `.hmod` WASM files.
 
 Supported files:
 
-- Mods: native `.hmod` archives; Java `.jar` mods are not accepted. Executing
+- Mods: sandboxed `.hmod` archives; Java `.jar` mods are not accepted. Executing
   `.hmod` mods requires a 64-bit APK, but the files can be managed on 32-bit builds.
 - Resource packs: ZIPs with valid `pack.mcmeta` at the archive root.
 - Shaders: native `.hshader` packs, native shader ZIPs with `horizon-shaders.toml`
@@ -55,7 +55,7 @@ its browser record and its enabled selection; worlds are not touched.
 Imports copy the granted content URI to a temporary Android cache file and validate
 it before committing. Existing files are never silently replaced: **Keep both**
 chooses a new filename, **Replace** explicitly replaces the selected collision,
-and **Cancel** leaves the existing file intact. A native mod with the same manifest
+and **Cancel** leaves the existing file intact. A Horizon mod with the same manifest
 ID must be replaced rather than loaded twice. Cancel is checked between copy and
 validation blocks; a document provider may delay an in-flight read.
 
@@ -95,3 +95,5 @@ Transfer the resulting file to the phone, import it under Shaders, then enable i
 in Installed before Play, or in the game's Shader Packs settings. It changes the
 sky and adds two post-processing passes; it is a functional example, not an
 Android performance benchmark.
+
+The Horizon catalog also lists source-only `.hnmod` mods so their availability is visible. These require rebuilding the game and cannot be installed into the current Android client; the list marks them as unsupported. `.hmod` file and HTTPS imports remain available.
