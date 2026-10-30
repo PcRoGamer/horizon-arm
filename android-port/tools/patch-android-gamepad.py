@@ -4,6 +4,8 @@
 Upstream Horizon's controller stack uses gilrs on desktop. gilrs has no Android
 backend, so the APK keeps the upstream controller semantics/settings while raw
 Android pad events are translated into the same PadState in an additive module.
+The Game hook is intentionally tied only to the stable ApplicationHandler
+method signature so unrelated upstream mouse/focus refactors do not break it.
 """
 from pathlib import Path
 import shutil
