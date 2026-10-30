@@ -23,7 +23,7 @@ jobs:
           set -euo pipefail
           git diff --check
           cargo metadata --no-deps --format-version 1 >/dev/null
-          cargo check -p horizon-client --lib
+          cargo check -p horizon-client --lib --no-default-features
 
       - name: Set up Java 25 for fact generation
         uses: actions/setup-java@v5
