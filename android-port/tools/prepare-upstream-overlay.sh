@@ -123,6 +123,38 @@ mod mobile_ui; // Horizon Android launcherless manager
         raise SystemExit("prepare-upstream-overlay: game module anchor missing")
     text = text.replace(anchor, addition + anchor, 1)
 
+# Fresh upstream has no mobile touch dispatcher. Inject the smallest possible
+# hook into Game::window_event. Manager text input gets first refusal, then raw
+# touch events are handed to the Android-owned touch module. Non-Android builds
+# compile these branches out and keep the upstream path byte-for-byte in logic.
+if 'self.android_manager_key(event)' not in text:
+    anchor = '''        if self.window.as_ref().is_none_or(|w| w.id() != id) {
+            return;
+        }
+        follow_keymap(&mut event);
+        if let WindowEvent::KeyboardInput { event, .. } = &event {
+'''
+    replacement = '''        if self.window.as_ref().is_none_or(|w| w.id() != id) {
+            return;
+        }
+        #[cfg(target_os = "android")]
+        if let WindowEvent::KeyboardInput { event, .. } = &event
+            && self.android_manager_key(event)
+        {
+            return;
+        }
+        #[cfg(target_os = "android")]
+        if let WindowEvent::Touch(touch) = &event {
+            self.touch(event_loop, id, touch);
+            return;
+        }
+        follow_keymap(&mut event);
+        if let WindowEvent::KeyboardInput { event, .. } = &event {
+'''
+    if anchor not in text:
+        raise SystemExit("prepare-upstream-overlay: Game::window_event anchor changed")
+    text = text.replace(anchor, replacement, 1)
+
 # NativeActivity has no meaningful process command line. Preserve upstream's
 # parser unchanged on every non-Android target.
 old = 'let Some(mut o) = Self::parse(std::env::args().skip(1))\n            .map_err(|e| launch_api::UsageError(e.to_string()))?'
