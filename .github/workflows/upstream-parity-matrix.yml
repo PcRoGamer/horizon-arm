@@ -12,6 +12,7 @@ on:
       - 'crates/horizon-client/src/game/touch.rs'
       - 'crates/horizon-client/src/game/touch_icons.rs'
       - 'crates/horizon-client/src/game/mobile_ui.rs'
+      - 'crates/horizon-client/src/game/touch_settings.rs'
       - '.github/workflows/upstream-parity-matrix.yml'
 
 permissions:
@@ -40,6 +41,7 @@ jobs:
             ':!crates/horizon-client/src/game/touch.rs' \
             ':!crates/horizon-client/src/game/touch_icons.rs' \
             ':!crates/horizon-client/src/game/mobile_ui.rs' \
+            ':!crates/horizon-client/src/game/touch_settings.rs' \
             ':!crates/horizon-client/src/android.rs' \
             ':!crates/horizon-client/src/android/**'
           python3 - <<'PY'
