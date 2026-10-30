@@ -3,8 +3,10 @@
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TC="$REPO/.toolchain"
 # android-port/.toolchain is a tracked relative symlink to a shared cache.
-# Resolve it before exporting SDK/NDK/compiler paths; otherwise disposable
-# upstream trees point cc-rs/ring at a non-existent path through the symlink.
+# Resolve it for the local fallback/JDK, but prefer an already configured SDK
+# when it actually contains the pinned NDK. Hosted CI installs r27c into its
+# runner SDK, so forcing the shared-cache SDK would point cc-rs/ring at a path
+# that does not exist.
 if [ -L "$TC" ]; then
   TC_LINK="$(readlink "$TC")"
   case "$TC_LINK" in
@@ -12,10 +14,28 @@ if [ -L "$TC" ]; then
     *) TC="$(dirname "$TC")/$TC_LINK" ;;
   esac
 fi
-export ANDROID_HOME="$TC/android-sdk"
-export ANDROID_SDK_ROOT="$ANDROID_HOME"
-export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018"
-export JAVA_HOME="$TC/jdk"
+
+NDK_VERSION="27.2.12479018"
+SDK_ROOT=""
+if [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/linux-x86_64" ]; then
+  SDK_ROOT="$ANDROID_HOME"
+elif [ -n "${ANDROID_SDK_ROOT:-}" ] && [ -d "$ANDROID_SDK_ROOT/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/linux-x86_64" ]; then
+  SDK_ROOT="$ANDROID_SDK_ROOT"
+else
+  SDK_ROOT="$TC/android-sdk"
+fi
+
+export ANDROID_HOME="$SDK_ROOT"
+export ANDROID_SDK_ROOT="$SDK_ROOT"
+export ANDROID_NDK_HOME="$SDK_ROOT/ndk/$NDK_VERSION"
+# fetch-toolchain.sh installs this private JDK for local reproducibility. If it
+# is absent but a valid JAVA_HOME was already provided (for example by CI), keep
+# the existing one rather than manufacturing a dead path.
+if [ -x "$TC/jdk/bin/java" ]; then
+  export JAVA_HOME="$TC/jdk"
+elif [ -z "${JAVA_HOME:-}" ] || [ ! -x "$JAVA_HOME/bin/java" ]; then
+  export JAVA_HOME="$TC/jdk"
+fi
 export PATH="$HOME/.cargo/bin:$JAVA_HOME/bin:$ANDROID_HOME/emulator:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0:$PATH"
 # The game itself: this checkout's root, one level above android-port/.
 export HORIZON_SRC="${HORIZON_SRC:-$(cd "$REPO/.." && pwd)}"
