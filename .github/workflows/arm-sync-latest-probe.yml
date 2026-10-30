@@ -43,16 +43,7 @@ jobs:
                 if [[ "${#unresolved[@]}" -eq 1 && "${unresolved[0]}" == "crates/horizon-client/src/main.rs" ]]; then
                   echo "Resolving client library move against modern startup/error handling"
                   git checkout --ours -- crates/horizon-client/src/main.rs
-                  python3 - <<'PY'
-from pathlib import Path
-p = Path('crates/horizon-client/src/main.rs')
-s = p.read_text()
-s = s.replace('mod game;\n', '', 1)
-s = s.replace('game::run()', 'horizon_client::game::run()')
-s = s.replace('game::UsageError', 'horizon_client::game::UsageError')
-s = s.replace('game::exit_code::', 'horizon_client::game::exit_code::')
-p.write_text(s)
-PY
+                  sed -i '/^mod game;$/d; s/game::run()/horizon_client::game::run()/g; s/game::UsageError/horizon_client::game::UsageError/g; s/game::exit_code::/horizon_client::game::exit_code::/g' crates/horizon-client/src/main.rs
                   git add crates/horizon-client/src/main.rs crates/horizon-client/src/lib.rs
                   GIT_EDITOR=true git cherry-pick --continue
                   return 0
