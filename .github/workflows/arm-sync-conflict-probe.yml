@@ -89,16 +89,22 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - name: Install host packages
+      - name: Install Rust Android target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - name: Install host packages and pinned Android NDK
         shell: bash
         run: |
           sudo apt-get update
           sudo apt-get install -y curl unzip zip patch
-      - name: Fetch Android toolchain
-        shell: bash
-        run: |
-          cd "$RUNNER_TEMP/horizon"
-          android-port/tools/fetch-toolchain.sh
+          : "${ANDROID_HOME:=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          export ANDROID_HOME ANDROID_SDK_ROOT="$ANDROID_HOME"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platforms;android-34' 'build-tools;34.0.0' 'ndk;27.2.12479018'
+          test -x "$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang"
       - name: Fetch Rust dependencies
         shell: bash
         run: |
