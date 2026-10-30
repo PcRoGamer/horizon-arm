@@ -6,6 +6,17 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TC="$REPO/.toolchain"
+# android-port/.toolchain is intentionally a relative symlink so developer
+# checkouts can share downloads with the sibling horizon-android worktree.
+# A pristine disposable upstream checkout starts with that symlink dangling;
+# resolve its target first instead of asking mkdir to replace the symlink.
+if [ -L "$TC" ]; then
+  TC_LINK="$(readlink "$TC")"
+  case "$TC_LINK" in
+    /*) TC="$TC_LINK" ;;
+    *) TC="$(dirname "$TC")/$TC_LINK" ;;
+  esac
+fi
 mkdir -p "$TC"
 
 ANDROID_HOME="${ANDROID_HOME:-$TC/android-sdk}"

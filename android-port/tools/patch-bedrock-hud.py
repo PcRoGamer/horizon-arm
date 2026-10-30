@@ -10,7 +10,9 @@ from pathlib import Path
 import sys
 
 root = Path(sys.argv[1])
-hud = root / "crates/horizon-client/src/hud_layout.rs"
+# HUD layout moved into Horizon's renderer split. Patch the current renderer
+# crate in the disposable Android tree; never resurrect the old client copy.
+hud = root / "crates/horizon-client-render/src/hud_layout.rs"
 
 
 def replace_once(old: str, new: str, marker: str) -> None:
