@@ -6,6 +6,24 @@ use std::{
     time::{Duration, Instant},
 };
 const HOLD_DELAY: Duration = Duration::from_millis(350);
+/// Items whose use action belongs to a world hold in tap control modes.
+pub fn item_uses_hold(name: &str, consumable: bool, equippable: bool) -> bool {
+    consumable
+        || equippable
+        || matches!(
+            name,
+            "minecraft:fishing_rod"
+                | "minecraft:wind_charge"
+                | "minecraft:firework_rocket"
+                | "minecraft:bow"
+                | "minecraft:crossbow"
+                | "minecraft:trident"
+                | "minecraft:spyglass"
+                | "minecraft:shield"
+                | "minecraft:goat_horn"
+                | "minecraft:brush"
+        )
+}
 mod custom;
 mod editor;
 pub use custom::CustomButton;
@@ -462,6 +480,7 @@ impl TouchControls {
                     start,
                     since,
                     dragged,
+                    held_use,
                     ..
                 },
                 _,
@@ -476,7 +495,7 @@ impl TouchControls {
                     start
                 });
                 self.last_marker = Some((start, Instant::now()));
-                self.pending.triggers[0] = 1.0;
+                self.pending.triggers[usize::from(held_use)] = 1.0;
             }
             return [0.0; 2];
         }
@@ -932,6 +951,24 @@ fn line(
 #[cfg(test)]
 mod tests {
     #[test]
+    fn use_items_keep_tap_attack_and_hold_use() {
+        use super::*;
+        for (mode, split, _) in Mode::SCHEMES {
+            if mode == Mode::Crosshair || (mode == Mode::Dpad && split) { continue; }
+            let mut t = TouchControls::default();
+            t.settings.mode = mode;
+            t.settings.split_controls = split;
+            t.hold_uses_item = true;
+            t.update(99, [0.6, 0.4], true, false);
+            t.update(99, [0.6, 0.4], false, true);
+            assert_eq!(t.poll_state().triggers, [0.0, 1.0]);
+            assert_eq!(t.poll_state().triggers, [0.0, 0.0]);
+        }
+        assert!(item_uses_hold("minecraft:fishing_rod", false, false));
+        assert!(item_uses_hold("test:armor", false, true));
+        assert!(!item_uses_hold("minecraft:stone", false, false));
+    }
+    #[test]
     fn sprint_toggle_survives_finger_release_and_clears_on_focus_loss() {
         let mut t = TouchControls {
             loaded: true,
@@ -1189,6 +1226,7 @@ mod tests {
         t.update(2, [0.7, 0.4], false, true);
         assert_eq!(t.poll_state().triggers, [0.0; 2]);
     }
+
     #[test]
     fn long_hold_keeps_mining_while_the_camera_turns() {
         let mut t = TouchControls::default();
