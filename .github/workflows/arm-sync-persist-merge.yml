@@ -1,0 +1,49 @@
+name: ARM sync persist latest merge
+
+on:
+  pull_request:
+    types: [reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  persist:
+    if: github.event.pull_request.head.ref == 'sync/trigger-conflict-probe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: sync/candidate-2026-10-30
+          fetch-depth: 0
+
+      - name: Replay proven Android delta and persist as merge commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          SCRIPT=$(mktemp)
+          git show origin/main:.github/workflows/arm-sync-latest-probe.yml \
+            | sed -n '/^          set -euo pipefail$/,/^          git push --force origin HEAD:refs\/heads\/sync\/candidate-latest-2026-10-31$/p' \
+            | sed '$d;s/^          //' > "$SCRIPT"
+          test -s "$SCRIPT"
+          bash "$SCRIPT"
+
+          UPSTREAM=$(git rev-parse upstream/main)
+          BASE_PARENT=$(git rev-parse origin/main)
+
+          # Keep the fork's workflow files unchanged so GitHub's Actions token does
+          # not need workflow-write permission. Source/content comes from the replay.
+          git checkout "$BASE_PARENT" -- .github/workflows
+          git add .github/workflows
+          TREE=$(git write-tree)
+          MERGE=$(printf '%s\n' \
+            'Merge current upstream into Horizon ARM while preserving Android port' \
+            '' \
+            "Upstream: $UPSTREAM" \
+            'Android/ARM delta replayed and validated with cargo metadata.' \
+            | git commit-tree "$TREE" -p "$BASE_PARENT" -p "$UPSTREAM")
+
+          echo "merge=$MERGE"
+          git push --force origin "$MERGE":refs/heads/sync/candidate-latest-2026-10-31
