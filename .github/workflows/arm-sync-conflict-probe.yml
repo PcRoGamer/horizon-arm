@@ -33,8 +33,26 @@ jobs:
           for c in "${commits[@]}"; do
             echo "=== CHERRY-PICK $c $(git show -s --format=%s "$c") ==="
             if ! git cherry-pick "$c"; then
+              conflicts=$(git diff --name-only --diff-filter=U)
+              if [[ "$c" == 5f145ed3c9ff54f74f83f2b7584dddedda63170b && "$conflicts" == "Cargo.toml" ]]; then
+                echo "Resolving workspace split: keep horizon-client-render and add horizon-android"
+                git checkout --ours Cargo.toml
+                python3 - <<'PY'
+          from pathlib import Path
+          p = Path('Cargo.toml')
+          s = p.read_text()
+          needle = '    "crates/horizon-client-render",\n'
+          assert needle in s
+          if '    "crates/horizon-android",\n' not in s:
+              s = s.replace(needle, needle + '    "crates/horizon-android",\n', 1)
+          p.write_text(s)
+          PY
+                git add Cargo.toml
+                GIT_EDITOR=true git cherry-pick --continue
+                continue
+              fi
               echo "=== CONFLICTED FILES ==="
-              git diff --name-only --diff-filter=U
+              printf '%s\n' "$conflicts"
               echo "=== STATUS ==="
               git status --short
               echo "=== CONFLICT DIFF ==="
