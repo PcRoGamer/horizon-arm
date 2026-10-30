@@ -16,7 +16,7 @@ jobs:
         with:
           ref: sync/upstream-2026-10-30
           fetch-depth: 0
-      - name: Probe original Android PR replay
+      - name: Replay Android foundation and fork-only ARM work
         shell: bash
         run: |
           set -euo pipefail
@@ -24,14 +24,16 @@ jobs:
           git config user.email "arm-sync-probe@users.noreply.github.com"
           git remote add upstream https://github.com/horizon-rust/horizon.git || true
           git fetch upstream refs/pull/3676/head:refs/remotes/upstream/android-3676
+          git fetch origin backup/pre-upstream-sync-2026-10-30
+
           base=$(git merge-base HEAD refs/remotes/upstream/android-3676)
           echo "CURRENT=$(git rev-parse HEAD)"
           echo "ANDROID_HEAD=$(git rev-parse refs/remotes/upstream/android-3676)"
           echo "MERGE_BASE=$base"
           mapfile -t commits < <(git rev-list --reverse "$base"..refs/remotes/upstream/android-3676)
-          printf 'COMMITS=%s\n' "${#commits[@]}"
+          printf 'FOUNDATION_COMMITS=%s\n' "${#commits[@]}"
           for c in "${commits[@]}"; do
-            echo "=== CHERRY-PICK $c $(git show -s --format=%s "$c") ==="
+            echo "=== FOUNDATION $c $(git show -s --format=%s "$c") ==="
             if ! git cherry-pick "$c"; then
               conflicts=$(git diff --name-only --diff-filter=U)
               if [[ "$c" == 5f145ed3c9ff54f74f83f2b7584dddedda63170b && "$conflicts" == "Cargo.toml" ]]; then
@@ -102,13 +104,37 @@ jobs:
                 GIT_EDITOR=true git cherry-pick --continue
                 continue
               fi
-              echo "=== CONFLICTED FILES ==="
+              echo "=== FOUNDATION CONFLICTED FILES ==="
               printf '%s\n' "$conflicts"
-              echo "=== STATUS ==="
               git status --short
-              echo "=== CONFLICT DIFF ==="
               git diff --cc || true
               exit 23
             fi
           done
           echo "ANDROID_FOUNDATION_REPLAY_OK=$(git rev-parse HEAD)"
+
+          echo "=== replaying fork-only commits after stale snapshot restore ==="
+          snapshot=319e087ee9d4601c4466223a64580a71c3772dfd
+          fork_head=695cfe884739eaf79f6438b63c06bfc007f7c8f7
+          mapfile -t later < <(git rev-list --reverse --ancestry-path "$snapshot..$fork_head")
+          printf 'FORK_ONLY_COMMITS=%s\n' "${#later[@]}"
+          for c in "${later[@]}"; do
+            echo "=== FORK-ONLY $c $(git show -s --format=%s "$c") ==="
+            parent_count=$(git rev-list --parents -n 1 "$c" | awk '{print NF-1}')
+            if (( parent_count > 1 )); then
+              pick=(git cherry-pick -m 1 "$c")
+            else
+              pick=(git cherry-pick "$c")
+            fi
+            if ! "${pick[@]}"; then
+              echo "CONFLICT_COMMIT=$c"
+              echo "=== FORK-ONLY CONFLICTED FILES ==="
+              git diff --name-only --diff-filter=U
+              echo "=== STATUS ==="
+              git status --short
+              echo "=== CONFLICT DIFF ==="
+              git diff --cc || true
+              exit 24
+            fi
+          done
+          echo "FULL_ARM_REPLAY_OK=$(git rev-parse HEAD)"
