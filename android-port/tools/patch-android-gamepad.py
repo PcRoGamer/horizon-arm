@@ -9,6 +9,7 @@ method signature so unrelated upstream mouse/focus refactors do not break it.
 """
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 
 root = Path(sys.argv[1])
@@ -107,6 +108,13 @@ replace_once(
         }
 ''',
     'if self.pad_device_event(&event)',
+)
+
+# The same Android input compatibility stage also supplies a portable key-label
+# learning fallback because winit's modifier_supplement extension is desktop-only.
+subprocess.run(
+    [sys.executable, str(port / "tools/patch-android-keybinds.py"), str(root)],
+    check=True,
 )
 
 print("patched Horizon Android controller adapter")
