@@ -4,6 +4,7 @@ members = [
     "crates/horizon-core",
     "crates/horizon-android",
     "crates/horizon-clipboard",
+    "crates/horizon-winit",
     "crates/horizon-dualsense",
     "crates/horizon-threads",
     "crates/horizon-hdr",
