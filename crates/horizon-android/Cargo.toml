@@ -33,7 +33,10 @@ horizon-theme = { path = "../horizon-theme" }
 horizon-telemetry = { path = "../horizon-telemetry", default-features = false, features = ["live"] }
 horizon-bench = { path = "../horizon-bench" }
 android_logger = "0.15"
-winit_real = { package = "winit", version = "0.30.13", features = ["android-game-activity"] }
+# This is deliberately named `winit`: upstream game.rs and all of game/* keep
+# their ordinary imports. The shim re-exports real winit and changes only the
+# Android EventLoop constructor/modifier helper.
+winit = { package = "horizon-winit", path = "../horizon-winit" }
 wgpu = { version = "30.0.1", default-features = false, features = ["std", "parking_lot", "vulkan", "gles", "wgsl", "naga-ir"] }
 pollster = "0.4"
 bytemuck = { version = "1.24", features = ["derive"] }
@@ -61,9 +64,6 @@ rustix = { version = "1", default-features = false, features = ["std", "time", "
 default = []
 audio = ["horizon-client/audio", "horizon-client-render/audio"]
 controllers = ["horizon-client/controllers", "horizon-client-input/controllers"]
-# The clean Android build intentionally does not enable Horizon's native mod runtime.
-# Keep the feature name as a compatibility no-op so shared cfg(feature = "mods") code
-# can compile without depending on an upstream feature that no longer exists.
 mods = []
 rng-trace = ["horizon-core/rng-trace"]
 
