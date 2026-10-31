@@ -1,3 +1,32 @@
+# Horizon Android — development fork
+
+An unofficial Android port of [Horizon by Ludovic and contributors](https://github.com/ludovic111/horizon).
+The Rust engine implements Minecraft Java 26.3; this is not an arbitrary-version
+Java launcher or a Fabric/Forge loader. Original MIT copyright and third-party
+notices are retained in [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+Android adds a native launcher and verified resource downloads, three touch
+control schemes with a layout editor, system keyboard/clipboard, AAudio sound,
+phone vibration and Vulkan rendering modes. See [Android build/use](docs/android.md),
+[feature support](docs/android-features.md) and [fork publication](docs/android-publication.md).
+No Minecraft JARs, assets, prepared tables, APKs or signing keys belong in Git.
+
+The Android branch preserves upstream history from
+[`d65282fb0f0f`](https://github.com/ludovic111/horizon/commit/d65282fb0f0fd7ba57876aef87dc4c6c2b5fa04b).
+The public fork is [Vasysik/horizon-android](https://github.com/Vasysik/horizon-android).
+Upstream release/runner workflows are retained as inactive references; the
+Android source check is manual. See [provenance](docs/android-upstream.json).
+
+Original Bedrock touch textures are prepared from Mojang's pinned sample
+repository into private `.local/` files. They are not included in this Git
+repository or licensed under Horizon's MIT license. Local development APKs
+include them with their original license/provenance.
+---
+
+The following is the upstream desktop project description. Its download links,
+CI badges and parity claims describe upstream Horizon, not validation of this
+Android fork.
+
 <p align="center">
   <img src="docs/media/banner.webp" alt="Horizon: Minecraft: Java Edition 26.3, rewritten in Rust and checked against vanilla by 281 differential harnesses" width="100%">
 </p>

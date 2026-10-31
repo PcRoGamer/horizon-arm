@@ -593,10 +593,8 @@ fn as_data(kind: &str, p: &Value, data: &ProcessorData) -> Option<Vec<Value>> {
                 |s| config(s.get("ominous") == Some(&"true")),
             )]
         }
-        _ if ns == "betterdeserttemples"
-            && let Some(processor) = desert_temple(kind) =>
-        {
-            vec![processor]
+        _ if ns == "betterdeserttemples" && desert_temple(kind).is_some() => {
+            vec![desert_temple(kind)?]
         }
         "lithostitched:block_swap" => {
             // The same map; the game's swap keeps the properties both have.

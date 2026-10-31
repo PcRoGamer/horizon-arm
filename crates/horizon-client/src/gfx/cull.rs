@@ -364,10 +364,10 @@ impl Cull {
             let mapped = r.buffer.slice(..r.slots.len() as u64 * 4);
             if let Ok(data) = mapped.get_mapped_range() {
                 // The mapping isn't guaranteed to be 4-byte aligned (a Vega 11
-                // on Windows panicked in cast_slice), so copy the words out.
-                let results: Vec<u32> = bytemuck::pod_collect_to_vec(&data);
+                // on Windows panicked in cast_slice), so decode without casting.
+                let results = readback_words(&data);
                 let (mut hidden, mut indices) = (0, 0u64);
-                for (&result, &n) in results.iter().zip(&r.indices) {
+                for (result, &n) in results.clone().zip(&r.indices) {
                     if result != r.stamp {
                         hidden += 1;
                         indices += u64::from(n);
@@ -375,7 +375,7 @@ impl Cull {
                 }
                 let share = indices as f32 / r.total.max(1) as f32;
                 self.hidden = ([hidden, results.len()], share);
-                for (&slot, &result) in r.slots.iter().zip(&results) {
+                for (&slot, result) in r.slots.iter().zip(results) {
                     let slot = slot as usize;
                     if slot >= self.seen.len() {
                         self.seen.resize(slot + 1, false);
@@ -640,6 +640,14 @@ impl Cull {
     }
 }
 
+/// Mapped memory may be unaligned. Decode words directly without allocating
+/// and copying the whole readback. Cloning this iterator only copies a slice.
+fn readback_words(bytes: &[u8]) -> impl ExactSizeIterator<Item = u32> + Clone {
+    bytes
+        .chunks_exact(4)
+        .map(|b| u32::from_ne_bytes([b[0], b[1], b[2], b[3]]))
+}
+
 /// The test's shader for `depth_test`.
 fn source(depth_test: DepthTest) -> String {
     let common = include_str!("cull.wgsl");
@@ -652,6 +660,20 @@ fn source(depth_test: DepthTest) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn readback_handles_unaligned_memory_and_repeat_scans() {
+        let words = [0u32, 1, u32::MAX, 123456789];
+        let mut bytes = vec![0xAA];
+        for word in words {
+            bytes.extend(word.to_ne_bytes());
+        }
+        let results = readback_words(&bytes[1..]);
+        assert_eq!(results.len(), words.len());
+        assert_eq!(results.clone().collect::<Vec<_>>(), words);
+        assert_eq!(results.collect::<Vec<_>>(), words);
+        assert_eq!(readback_words(&[]).len(), 0);
+    }
 
     #[test]
     fn shaders_validate() {

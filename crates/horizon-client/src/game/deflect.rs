@@ -3,7 +3,7 @@
 //! `ProjectileDeflection.AIM_DEFLECT` instead of hurting anything. It flies on
 //! along the player's view and is the player's now (`Projectile.deflect`
 //! sets the owner), so a ghast it meets dies of it (`Ghast.isReflectedFireball`).
-use super::{Game, ray_box, view_vector};
+use super::{Game, ray_box};
 use horizon_client::{
     mobs::Who,
     projectiles::{Projectile, ProjectileKind},
@@ -52,7 +52,7 @@ impl Game<'_> {
     /// reach, and how far along the view it is.
     pub(super) fn redirectable_hit(&self) -> Option<(usize, f64)> {
         let eye = self.eye_position()?;
-        let dir = view_vector(self.yaw, self.pitch);
+        let dir = self.interaction_direction();
         let reach: f64 = if self.creative { 5.0 } else { 3.0 };
         self.creatures
             .projectiles
@@ -109,7 +109,7 @@ impl Game<'_> {
 
     /// `Projectile.deflect(AIM_DEFLECT, player, player, true)`.
     pub(super) fn deflect(&mut self, i: usize) {
-        let dir = view_vector(self.yaw, self.pitch);
+        let dir = self.interaction_direction();
         let guest = self.lan_acting;
         let p = &mut self.creatures.projectiles[i];
         p.velocity = Vec3::new(dir[0], dir[1], dir[2]);

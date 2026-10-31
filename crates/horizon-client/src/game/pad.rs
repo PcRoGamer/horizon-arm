@@ -25,8 +25,15 @@ pub(super) const HELP: &[&str] = &[
 /// The controllers and the state the game last acted on.
 #[derive(Default)]
 pub(super) struct Pads {
+    #[cfg(target_os = "android")]
+    pub(super) touch: horizon_client::touch::TouchControls,
+    /// Keep a released tap's ray until the tick consumed its queued click.
+    #[cfg(target_os = "android")]
+    pub(super) touch_aim: Option<[f32; 2]>,
+    #[cfg(target_os = "android")]
+    pub(super) touch_ui: horizon_client::touch_ui::TouchUi,
     /// The real controllers and the DualSense's output.
-    #[cfg(feature = "controllers")]
+    #[cfg(all(feature = "controllers", not(target_os = "android")))]
     devices: hardware::Devices,
     /// The virtual pad of `horizon-ctl pad`.
     injected: PadState,
@@ -53,12 +60,12 @@ pub(super) struct Pads {
     health: HealthWatch,
 }
 
-#[cfg(feature = "controllers")]
+#[cfg(all(feature = "controllers", not(target_os = "android")))]
 mod hardware;
 
 /// A build without the `controllers` feature (the server build, which must not need libudev): no
 /// hardware pads, only `horizon-ctl pad`'s virtual one.
-#[cfg(not(feature = "controllers"))]
+#[cfg(any(not(feature = "controllers"), target_os = "android"))]
 mod hardware {
     use super::{super::Game, Pads};
     use horizon_client::gamepad::{PadState, Pulse, Rumble};
@@ -71,10 +78,25 @@ mod hardware {
     }
 
     impl Game<'_> {
-        pub(super) fn pad_output_off(&mut self) {}
-        pub(super) fn pad_output_frame(&mut self) {}
-        pub(in crate::game) fn pad_close_output(&mut self) {}
-        pub(super) fn pad_vibrate(&mut self, _: Rumble, _: Pulse) {}
+        pub(super) fn pad_output_off(&mut self) {
+            #[cfg(target_os = "android")]
+            crate::platform::cancel_vibration();
+        }
+        pub(super) fn pad_output_frame(&mut self) {
+            #[cfg(target_os = "android")]
+            if !self.settings.controller.vibration {
+                crate::platform::cancel_vibration();
+            }
+        }
+        pub(in crate::game) fn pad_close_output(&mut self) {
+            self.pad_output_off();
+        }
+        pub(super) fn pad_vibrate(&mut self, _: Rumble, pulse: Pulse) {
+            #[cfg(target_os = "android")]
+            crate::platform::vibrate(pulse);
+            #[cfg(not(target_os = "android"))]
+            let _ = pulse;
+        }
         pub(super) fn pad_devices_status(&self) -> Value {
             json!({ "backend": false, "controllers": [] })
         }
@@ -92,8 +114,16 @@ impl Pads {
 impl Game<'_> {
     /// Once per loop iteration: read the pads and act on button changes.
     pub(super) fn poll_pads(&mut self, event_loop: &ActiveEventLoop) {
+        #[cfg(target_os = "android")]
+        if self.screen != Screen::Playing && self.pad.touch.editor.is_some() {
+            self.pad.touch.cancel_editor();
+        }
+        #[cfg(target_os = "android")]
+        if self.pad_in_menu() || !self.focused {
+            self.pad.touch.clear();
+        }
         let settings = &self.settings.controller;
-        if !settings.enabled {
+        if !settings.enabled && !cfg!(target_os = "android") {
             self.pad_output_off();
             if self.pad.state != PadState::default() {
                 self.pad.state = PadState::default();
@@ -106,6 +136,23 @@ impl Game<'_> {
         let hardware = self.pad.read();
         self.ui.options.pad_style = self.settings.controller.glyphs.resolve(self.pad.style);
         let state = hardware.merge(&self.pad.injected);
+        #[cfg(target_os = "android")]
+        let state = {
+            let mut touch = self.pad.touch.poll_state();
+            if let Some(point) = self.pad.touch.aim {
+                self.pad.touch_aim = Some(point);
+            }
+            if self.pad.touch.aim.is_some() && touch.triggers[1] > 0.0 && self.touch_item_held_use()
+            {
+                touch.triggers = [1.0, 0.0];
+            } else if self.pad.touch.aim.is_some()
+                && touch.triggers[0] > 0.0
+                && self.entity_targeted()
+            {
+                touch.triggers = [0.0, 1.0];
+            }
+            state.merge(&touch)
+        };
         self.pad.virtual_input = self.pad.injected != PadState::default();
         for button in std::mem::take(&mut self.pad.taps) {
             self.pad.injected.set(button, false);
@@ -140,6 +187,10 @@ impl Game<'_> {
             self.pad_edge(event_loop, button, down);
         }
         self.pad_menu_frame(event_loop);
+        #[cfg(target_os = "android")]
+        if state.triggers == [0.0; 2] && self.pad.late_releases.is_empty() {
+            self.pad.touch_aim = None;
+        }
     }
 
     fn pad_edge(&mut self, event_loop: &ActiveEventLoop, button: Button, down: bool) {
@@ -263,7 +314,10 @@ impl Game<'_> {
     /// The left stick as the move vector, while playing.
     pub(super) fn pad_move(&self) -> Option<[f32; 2]> {
         let settings = &self.settings.controller;
-        if !settings.enabled || self.pad_in_menu() || !self.pad_focused() {
+        if (!settings.enabled && !cfg!(target_os = "android"))
+            || self.pad_in_menu()
+            || !self.pad_focused()
+        {
             return None;
         }
         gamepad::move_vector(self.pad.state.left, settings.move_deadzone)
@@ -300,7 +354,10 @@ impl Game<'_> {
     /// playing (a pad lying idle while the mouse plays stays still).
     pub(super) fn pad_rumble(&mut self, rumble: Rumble) {
         let settings = &self.settings.controller;
-        if !settings.enabled || !settings.vibration || !self.pad.in_use {
+        if (!settings.enabled && !cfg!(target_os = "android"))
+            || !settings.vibration
+            || !self.pad.in_use
+        {
             return;
         }
         let Some(pulse) = rumble.pulse() else {

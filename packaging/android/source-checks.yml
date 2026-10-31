@@ -1,0 +1,17 @@
+# The source exporter installs this as the fork's only active workflow.
+name: Android source checks
+on: [workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HORIZON_TELEMETRY_URL: "off"
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - run: python3 tools/check_public_tree.py --history
+      - run: python3 -m unittest discover -s tests -p test_android_source_export.py
+      - run: rustup target add aarch64-linux-android
+      - run: python3 tools/android_build.py --abi arm64-v8a --check --sdk "$ANDROID_HOME" --java-home "$JAVA_HOME_17_X64"

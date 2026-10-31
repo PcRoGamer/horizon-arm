@@ -99,6 +99,7 @@ impl Game<'_> {
             || self.screen != Screen::Playing
             || self.sign_edit.is_some()
             || self.book.is_some()
+            || self.touch_editing()
     }
 
     pub(super) fn gui_scale(&self) -> Option<HudBatch> {
@@ -739,7 +740,9 @@ impl Game<'_> {
                 self.pad_step(event_loop, button);
             }
         }
-        self.pad_auto_keyboard();
+        if !cfg!(target_os = "android") {
+            self.pad_auto_keyboard();
+        }
         self.pad_show_os_pointer(self.pad.menu.pos.is_none());
     }
 
@@ -898,7 +901,7 @@ impl Game<'_> {
 
     /// What a key of the on-screen keyboard does: the same as a typed key in
     /// the field that has focus.
-    fn pad_osk_output(&mut self, out: osk::Output) {
+    pub(super) fn pad_osk_output(&mut self, out: osk::Output) {
         use osk::Output;
         let (key, text) = match &out {
             Output::Text(t) => (None, Some(t.as_str())),

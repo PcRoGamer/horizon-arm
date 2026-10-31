@@ -2,7 +2,7 @@
 //! `ItemFrame.survives`, `interact` (put an item in, then rotate it),
 //! `hurtServer` (take the item out, then break the frame) and
 //! `ItemFrameRenderer` (the frame model and the item at a 45 degree step).
-use super::{Game, Hit, view_vector};
+use super::{Game, Hit};
 use horizon_assets::{bake::bake_model, model::CuboidModel, resolve::ModelLibrary};
 use horizon_client::{entities::ItemFrame, items::ItemStack, mesher::Vertex};
 use horizon_core::{
@@ -160,7 +160,7 @@ impl Game<'_> {
     /// The frame under the crosshair within reach and its distance.
     pub(super) fn frame_hit(&self) -> Option<(usize, f64)> {
         let eye = self.eye_position()?;
-        let dir = view_vector(self.yaw, self.pitch);
+        let dir = self.interaction_direction();
         let reach: f64 = if self.creative { 5.0 } else { 3.0 };
         let mut best: Option<(usize, f64)> = None;
         for (i, f) in self.item_frames.iter().enumerate() {

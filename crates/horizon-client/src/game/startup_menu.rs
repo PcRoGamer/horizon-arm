@@ -9,6 +9,8 @@ use winit::{event::KeyEvent, keyboard::ModifiersState};
 
 #[derive(Default)]
 pub(super) struct StartupMenu {
+    #[cfg(target_os = "android")]
+    touch: horizon_client::touch_ui::TouchUi,
     title: Option<Title>,
     options: OptionsUi,
     options_open: bool,
@@ -422,11 +424,183 @@ impl Loading {
         self.save_menu_address();
     }
 
+    #[cfg(target_os = "android")]
+    pub(super) fn menu_android_keyboard(&mut self) {
+        use horizon_client::osk::Output;
+        for out in crate::platform::poll() {
+            match out {
+                Output::Text(s) => {
+                    if self.menu.options_open {
+                        self.menu
+                            .options
+                            .type_text(&self.gui.as_ref().unwrap().atlas, &s);
+                    } else if let Some(t) = &mut self.menu.title {
+                        t.type_text(&s);
+                    }
+                }
+                Output::Backspace => {
+                    if self.menu.options_open {
+                        let e = self.menu.options.key(
+                            &mut self.settings,
+                            &self.gui.as_ref().unwrap().atlas,
+                            KeyCode::Backspace,
+                            None,
+                        );
+                        self.menu_option_events(e);
+                    } else if let Some(t) = &mut self.menu.title {
+                        t.backspace();
+                    }
+                }
+                Output::Enter | Output::Close => {
+                    crate::platform::hide();
+                    if let Some(t) = &mut self.menu.title {
+                        t.confirm_edit();
+                    }
+                }
+            }
+            self.save_menu_address();
+        }
+    }
     pub(super) fn menu_event(
         &mut self,
         event_loop: &ActiveEventLoop,
         event: WindowEvent,
     ) -> Result<()> {
+        #[cfg(target_os = "android")]
+        if matches!(&event,WindowEvent::KeyboardInput {event,..} if event.state==ElementState::Pressed && event.logical_key==winit::keyboard::Key::Named(winit::keyboard::NamedKey::BrowserBack))
+        {
+            if crate::platform::active() {
+                crate::platform::hide();
+                return Ok(());
+            }
+            crate::platform::hide();
+            if self.menu.options_open {
+                let e = self.menu.options.key(
+                    &mut self.settings,
+                    &self.gui.as_ref().unwrap().atlas,
+                    KeyCode::Escape,
+                    None,
+                );
+                self.menu_option_events(e);
+            } else if let Some(t) = &mut self.menu.title {
+                t.escape();
+            }
+            return Ok(());
+        }
+        #[cfg(target_os = "android")]
+        if let WindowEvent::Touch(touch) = &event {
+            use horizon_client::touch_ui::{Action, Gesture};
+            use winit::event::TouchPhase;
+            let b = HudBatch::new(self.menu_size());
+            let p = [
+                touch.location.x as f32 / b.scale,
+                touch.location.y as f32 / b.scale,
+            ];
+            if let Some(action) = self.menu.touch.action(b.width, p, true) {
+                if touch.phase == TouchPhase::Started {
+                    match action {
+                        Action::More => self.menu.touch.expanded = !self.menu.touch.expanded,
+                        Action::Keyboard => {
+                            if crate::platform::active() {
+                                crate::platform::hide();
+                            } else {
+                                let initial = self
+                                    .menu
+                                    .title
+                                    .as_mut()
+                                    .and_then(|t| {
+                                        t.field_key(KeyCode::End, false, false);
+                                        t.focused_field().map(|(_, s, _)| s.to_owned())
+                                    })
+                                    .unwrap_or_default();
+                                crate::platform::show(&initial);
+                            }
+                        }
+                        Action::Key(KeyCode::Escape) => {
+                            crate::platform::hide();
+                            if self.menu.options_open {
+                                let events = self.menu.options.key(
+                                    &mut self.settings,
+                                    &self.gui.as_ref().unwrap().atlas,
+                                    KeyCode::Escape,
+                                    None,
+                                );
+                                self.menu_option_events(events);
+                            } else if let Some(t) = &mut self.menu.title {
+                                t.escape();
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                return Ok(());
+            }
+            self.menu_event(
+                event_loop,
+                WindowEvent::CursorMoved {
+                    device_id: touch.device_id,
+                    position: touch.location,
+                },
+            )?;
+            if self.menu.touch.direct_pointer(touch.id, p, touch.phase) {
+                if touch.phase != TouchPhase::Moved {
+                    self.menu_event(
+                        event_loop,
+                        WindowEvent::MouseInput {
+                            device_id: touch.device_id,
+                            button: MouseButton::Left,
+                            state: if touch.phase == TouchPhase::Started {
+                                ElementState::Pressed
+                            } else {
+                                ElementState::Released
+                            },
+                        },
+                    )?;
+                }
+                return Ok(());
+            }
+            match self.menu.touch.gesture(
+                touch.id,
+                [touch.location.x as f32, touch.location.y as f32],
+                touch.phase,
+            ) {
+                Gesture::Tap => {
+                    let field = crate::platform::field_at(p);
+                    for state in [ElementState::Pressed, ElementState::Released] {
+                        self.menu_event(
+                            event_loop,
+                            WindowEvent::MouseInput {
+                                device_id: touch.device_id,
+                                button: MouseButton::Left,
+                                state,
+                            },
+                        )?;
+                    }
+                    if field {
+                        let initial = self
+                            .menu
+                            .title
+                            .as_mut()
+                            .and_then(|t| {
+                                t.field_key(KeyCode::End, false, false);
+                                t.focused_field().map(|(_, s, _)| s.to_owned())
+                            })
+                            .unwrap_or_default();
+                        crate::platform::show(&initial);
+                    }
+                }
+                Gesture::Scroll(y) => self.menu_event(
+                    event_loop,
+                    WindowEvent::MouseWheel {
+                        device_id: touch.device_id,
+                        delta: MouseScrollDelta::LineDelta(0.0, y),
+                        phase: TouchPhase::Moved,
+                    },
+                )?,
+                Gesture::None => {}
+            }
+            return Ok(());
+        }
         if let WindowEvent::KeyboardInput { event, .. } = &event
             && let PhysicalKey::Code(key) = event.physical_key
         {
@@ -624,6 +798,10 @@ impl Loading {
                 self.menu.cursor,
                 self.settings.file.bool("hideSplashTexts"),
             );
+        }
+        #[cfg(target_os = "android")]
+        {
+            self.menu.touch.draw(batch, &gui.atlas, true);
         }
     }
 

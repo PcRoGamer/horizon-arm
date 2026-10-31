@@ -873,6 +873,7 @@ impl Game<'_> {
                     wgpu::DeviceType::Other => "other",
                 },
                 "backend": format!("{:?}", r.info.backend),
+                "world_render_size": r.world_render_size(),
                 "size": [r.config.width, r.config.height],
                 "present_mode": format!("{:?}", r.config.present_mode),
                 "drawn_sections": r.drawn_sections,

@@ -1,5 +1,5 @@
 //! Downloads that reach the game folder only when their checksum matches the source's.
-use super::{safe_name, FileRef};
+use super::{FileRef, safe_name};
 use sha1::Sha1;
 use sha2::{Digest, Sha512};
 use std::fs;
@@ -20,7 +20,7 @@ pub(super) fn agent() -> ureq::Agent {
     ureq::AgentBuilder::new()
         .user_agent(&format!(
             "ludovic111/horizon horizon-launcher/{} (github.com/ludovic111/horizon)",
-            crate::backend::VERSION
+            env!("CARGO_PKG_VERSION")
         ))
         .timeout_connect(std::time::Duration::from_secs(15))
         .timeout_read(std::time::Duration::from_secs(60))

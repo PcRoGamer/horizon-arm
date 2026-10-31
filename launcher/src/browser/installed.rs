@@ -4,7 +4,7 @@
 //! and each Java mod it ported into `horizon-mods/`: where it came from, its version and its
 //! checksum. Files the player put there themselves are never touched: the browser only replaces
 //! or removes what it lists.
-use super::{pick, safe_name, Kind, Project, Source, SourceId, Support, Version};
+use super::{Kind, Project, Source, SourceId, Support, Version, pick, safe_name};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -208,10 +208,8 @@ pub fn install(
         let line = format!("{} {}", p.title, step.version.number);
         let path = source.fetch(file, &home.join(folder_name), &|f| progress(&line, f))?;
         let (algo, hash) = file.checksum().expect("fetch checks for one");
-        if let Some(old) = &old {
-            if old.file != relative {
-                let _ = fs::remove_file(home.join(&old.file));
-            }
+        if let Some(old) = old.as_ref().filter(|old| old.file != relative) {
+            let _ = fs::remove_file(home.join(&old.file));
         }
         let entry = Entry {
             source: p.source,

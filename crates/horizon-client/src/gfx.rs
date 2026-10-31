@@ -800,11 +800,28 @@ async fn open_device(
         }
         // Mappable primary buffers: section pages that no longer fit in
         // video memory go to system memory.
+        // Mobile drivers can advertise indirect draws/early depth tests while
+        // dropping terrain. Use direct per-section draws on Android until
+        // those paths have been validated on physical GPUs (not a host emulator).
+        let mobile = cfg!(target_os = "android");
+        let compatibility = crate::android_runtime::compatibility();
         let features = timing::GpuTimer::features(&adapter)
-            | cull::Cull::features(&adapter)
+            | if compatibility {
+                wgpu::Features::empty()
+            } else {
+                cull::Cull::features(&adapter)
+            }
             | (adapter.features()
-                & (wgpu::Features::INDIRECT_FIRST_INSTANCE
-                    | wgpu::Features::MAPPABLE_PRIMARY_BUFFERS));
+                & if compatibility {
+                    wgpu::Features::empty()
+                } else {
+                    wgpu::Features::INDIRECT_FIRST_INSTANCE
+                        | if mobile {
+                            wgpu::Features::empty()
+                        } else {
+                            wgpu::Features::MAPPABLE_PRIMARY_BUFFERS
+                        }
+                });
         let driver = format!("{} {}", info.driver, info.driver_info);
         startup_step(format_args!(
             "requesting the device (driver {}) with features [{features}] and the adapter's \
@@ -2147,6 +2164,7 @@ impl Renderer {
         // the shader as on Metal (A/B checks).
         let cull_env = std::env::var("HORIZON_GPU_CULL");
         let cull = cull::Cull::supported(&adapter, &device)
+            .filter(|_| !crate::android_runtime::compatibility())
             .filter(|_| cull_env.as_deref() != Ok("0"))
             .map(|depth_test| match cull_env.as_deref() {
                 Ok("shader") => cull::DepthTest::InShader,
@@ -2717,6 +2735,10 @@ impl Renderer {
     pub fn set_world_post(&mut self, scale: f32, antialias: bool) {
         self.world_post.scale = scale.clamp(0.25, 2.0);
         self.world_post.antialias = antialias;
+    }
+    pub fn world_render_size(&self) -> [u32; 2] {
+        [self.config.width, self.config.height]
+            .map(|v| ((v as f32 * self.world_post.scale).round() as u32).clamp(1, 8192))
     }
     /// The Mipmap Levels option: block textures sample at most `levels`
     /// reduced copies (0: none).

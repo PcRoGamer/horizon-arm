@@ -368,12 +368,8 @@ impl Game<'_> {
             if self.debug && corner == Corner::TopLeft {
                 continue;
             }
-            let lines: Vec<(&str, u32)> = panel
-                .lines
-                .iter()
-                .map(|l| (l.text.as_str(), l.color))
-                .collect();
-            extras_hud::draw_lines(batch, &self.gui.atlas, corners, corner, &lines);
+            let lines = panel.lines.iter().map(|l| (l.text.as_str(), l.color));
+            extras_hud::draw_lines_iter(batch, &self.gui.atlas, corners, corner, lines);
         }
     }
 }

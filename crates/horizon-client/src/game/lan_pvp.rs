@@ -5,7 +5,7 @@
 //! attack (blocking, armour, knockback), when the `pvp` game rule allows it
 //! (`ServerPlayer.canHarmPlayer`, `isPvpAllowed`). A player's arrow on
 //! another player lands the same way.
-use super::{Game, lan::LanHost, lan_mobs::guest_bounds, ray_box, view_vector};
+use super::{Game, lan::LanHost, lan_mobs::guest_bounds, ray_box};
 
 use horizon_client::{
     Result,
@@ -58,7 +58,7 @@ impl Game<'_> {
     pub(super) fn guest_hit(&self) -> Option<(u32, f64)> {
         let host = self.lan.as_ref()?;
         let eye = self.eye_position()?;
-        let dir = view_vector(self.yaw, self.pitch);
+        let dir = self.interaction_direction();
         let reach = if self.creative { 5.0 } else { 3.0 };
         host.hub
             .guests

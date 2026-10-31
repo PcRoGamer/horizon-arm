@@ -41,7 +41,7 @@ pub(crate) fn set_preference(dir: &Path, key: &str, value: Option<&str>) {
 
 /// The dark palette (`horizon_theme::DARK`) in the HUD's colour encoding, plus the
 /// translucent plates the overlays draw over the game.
-pub(crate) mod color {
+pub mod color {
     use horizon_theme::DARK as P;
     pub const fn hex(c: u32, a: u8) -> u32 {
         (a as u32) << 24 | (c & 0xff) << 16 | (c >> 8 & 0xff) << 8 | (c >> 16 & 0xff)
@@ -76,7 +76,7 @@ pub(crate) const RADIUS: f32 = horizon_theme::RADIUS;
 pub(crate) const RADIUS_PLATE: f32 = horizon_theme::RADIUS_PLATE;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub(crate) enum Face {
+pub enum Face {
     Regular,
     Medium,
 }
@@ -368,7 +368,7 @@ impl<'a> Ui<'a> {
         }
     }
     /// A filled rectangle with rounded corners.
-    pub(crate) fn rounded(&mut self, x: f32, y: f32, w: f32, h: f32, radius: f32, color: u32) {
+    pub fn rounded(&mut self, x: f32, y: f32, w: f32, h: f32, radius: f32, color: u32) {
         if color >> 24 == 0 {
             return;
         }
@@ -497,15 +497,7 @@ impl<'a> Ui<'a> {
         width
     }
     /// Text in a `1.45 × size` line box whose top is `y`.
-    pub(crate) fn text(
-        &mut self,
-        face: Face,
-        size: f32,
-        x: f32,
-        y: f32,
-        color: u32,
-        text: &str,
-    ) -> f32 {
+    pub fn text(&mut self, face: Face, size: f32, x: f32, y: f32, color: u32, text: &str) -> f32 {
         self.text_line(face, size, (size * 1.45).round(), x, y, color, text)
     }
     pub(crate) fn text_centered(

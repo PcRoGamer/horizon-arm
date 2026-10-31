@@ -5,12 +5,19 @@
 //! Offered: Java mods (Fabric, NeoForge, Forge), whose content Horizon ports and whose jar is
 //! checked before install ([`java`]), modpacks (imported and ported) and resource packs
 //! (`resourcepacks/`). Java code itself doesn't run in Horizon (docs/mods.md).
+#[path = "browser/curseforge.rs"]
 pub mod curseforge;
+#[path = "browser/details.rs"]
 pub mod details;
+#[path = "browser/download.rs"]
 pub mod download;
+#[path = "browser/images.rs"]
 pub mod images;
+#[path = "browser/installed.rs"]
 pub mod installed;
+#[path = "browser/java.rs"]
 pub mod java;
+#[path = "browser/modrinth.rs"]
 pub mod modrinth;
 
 use serde::{Deserialize, Serialize};
@@ -349,4 +356,5 @@ pub fn safe_name(name: &str) -> Option<&str> {
 }
 
 #[cfg(test)]
+#[path = "browser/tests.rs"]
 mod tests;
