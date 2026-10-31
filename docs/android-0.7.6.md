@@ -15,6 +15,32 @@ This update targets touch controls, initial menu navigation and diagnostic recor
 
 Native `.hnmod` compilation on Android remains unsupported. Java Fabric, Forge and NeoForge mods are not supported.
 
+The #34 Mali-G52 startup report identified a 1024-layer hardware limit with 1291
+sprites. Renderer construction now selects a supported per-array size and
+regroups the already prepared mip bytes across existing arrays. Shader packs use
+the same actual split. Texture resolution, mipmaps and colors are retained;
+verification on the originally affected phone is still required.
+
+## Crash diagnostics
+
+- Always-on bounded local diagnostic log, independent of performance recording.
+- Current/previous process markers with build/ABI, last startup/game phase,
+  a five-second memory heartbeat and handled game errors. An unclean marker is
+  evidence of interruption, not proof of a crash: Android may kill a process.
+- Android 11+ exit collection runs on a worker. Reports distinguish native/Java
+  crashes, ANR and low-memory kills, retain OS memory samples and explicitly report
+  unavailable/failed collection. Trace availability depends on Android.
+- Settings > Diagnostic report exports a local ZIP and opens Reports. It includes
+  bounded log tails, exit history, available panic reports and readable summaries
+  of the crashed native thread (module/PC/Build ID). Raw tombstone memory/register
+  dumps, accounts and worlds are not included. Redaction is best effort: review
+  before sharing. Nothing is uploaded automatically.
+- Release packaging keeps matching private native symbols under
+  `.local/android/native-symbols/`, outside APKs and release attachments. Final
+  Android libraries carry an ELF Build ID for matching native crash frames.
+
+See [diagnostic collection and limitations](android-diagnostics.md).
+
 ## Validation
 
 Local checks passed: 43 touch tests (including layout migration and per-axis calibration), 8 installer tests, 9 diagnostics/timing tests, 26 content tests (one fixture-dependent test skipped), 13 Android tooling tests, ARM64 Clippy and ARMv7 cargo check. Public-tree and whitespace checks passed.

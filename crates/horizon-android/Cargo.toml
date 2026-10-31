@@ -13,6 +13,7 @@ horizon-client-input = { path = "../horizon-client-input" }
 horizon-anticheat = { path = "../horizon-anticheat" }
 horizon-client = { path = "../horizon-client", default-features = false }
 android_logger = "0.15"
+regex = "1"
 horizon-hdr = { path = "../horizon-hdr" }
 horizon-shader-api = { path = "../horizon-shader-api" }
 jni = "0.21"

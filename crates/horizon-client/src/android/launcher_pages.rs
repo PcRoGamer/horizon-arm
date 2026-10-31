@@ -27,6 +27,7 @@ pub(super) enum Action {
     Logs,
     RecordPerformance,
     ExportPerformance,
+    ExportDiagnostics,
     Account,
     SignIn,
     DeviceSignIn,
@@ -776,11 +777,11 @@ impl Launcher {
             self.catalog.scroll = self
                 .catalog
                 .scroll
-                .clamp(0.0, (14.0 * row_height - (h - 130.0 - 195.0)).max(0.0));
+                .clamp(0.0, (15.0 * row_height - (h - 130.0 - 195.0)).max(0.0));
             self.list_view = Some([
                 195.0,
                 h - 130.0,
-                (14.0 * row_height - (h - 130.0 - 195.0)).max(0.0),
+                (15.0 * row_height - (h - 130.0 - 195.0)).max(0.0),
             ]);
             for (i, (title, value, action)) in [
                 ("Rendering", c.renderer.label().to_owned(), Action::Renderer),
@@ -849,6 +850,11 @@ impl Launcher {
                     }
                     .into(),
                     Action::RecordPerformance,
+                ),
+                (
+                    "Diagnostic report",
+                    "Export ZIP / review before sharing".into(),
+                    Action::ExportDiagnostics,
                 ),
                 (
                     "Performance report",
@@ -963,7 +969,7 @@ impl Launcher {
                 &mut ui,
                 &mut self.targets,
                 [32.0, h - 114.0, w * 0.5 - 38.0, 42.0],
-                "Startup diagnostics",
+                "Diagnostics",
                 Action::Logs,
                 false,
             );
@@ -1365,12 +1371,32 @@ impl Launcher {
             }
             Some(Action::Dismiss) => self.chooser = None,
             Some(Action::Logs) => {
-                self.catalog.status = std::fs::read_to_string(self.home.join("android-error.txt"))
-                    .unwrap_or_else(|_| {
-                        "No startup error. In game: F3 shows device, terrain and frame diagnostics."
-                            .into()
-                    });
+                self.catalog.status = crate::diagnostics::summary(&self.home);
+                if let Ok(error) = std::fs::read_to_string(self.home.join("android-error.txt")) {
+                    self.catalog.status = format!(
+                        "Last handled error: {}. {}",
+                        crate::diagnostics::redact(&error),
+                        self.catalog.status
+                    );
+                }
             }
+            Some(Action::ExportDiagnostics) if self.diagnostic_export.is_none() => {
+                let home = self.home.clone();
+                let (sender, receiver) = mpsc::channel();
+                self.diagnostic_export = Some(receiver);
+                self.catalog.status =
+                    "Preparing local diagnostic ZIP. No upload; review before sharing.".into();
+                std::thread::spawn(move || {
+                    let result = crate::diagnostics::export(&home).map(|p| {
+                        p.file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .into_owned()
+                    });
+                    let _ = sender.send(result);
+                });
+            }
+            Some(Action::ExportDiagnostics) => {}
             Some(Action::RecordPerformance) => {
                 self.catalog.config.record_performance = !self.catalog.config.record_performance;
                 if !self.catalog.config.record_performance {

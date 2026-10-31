@@ -57,6 +57,7 @@ pub(super) struct Launcher {
     session_worker: Option<mpsc::Receiver<std::result::Result<Option<PathBuf>, String>>>,
     session_ready: bool,
     focus: Option<usize>,
+    diagnostic_export: Option<mpsc::Receiver<std::result::Result<String, String>>>,
 }
 
 impl Launcher {
@@ -70,7 +71,10 @@ impl Launcher {
                 log::warn!("Could not clean completed Minecraft downloads: {error}");
             }
         });
-        let catalog = Catalog::new(&home);
+        let mut catalog = Catalog::new(&home);
+        if crate::diagnostics::previous_unclean(&home) {
+            catalog.status = crate::diagnostics::summary(&home);
+        }
         crate::configure_input_mode(catalog.config.input_host);
         crate::device_runtime::configure(catalog.config.device);
         Self {
@@ -99,6 +103,7 @@ impl Launcher {
             session_worker: None,
             session_ready: false,
             focus: None,
+            diagnostic_export: None,
         }
     }
 
@@ -131,6 +136,7 @@ impl Launcher {
         self.catalog.config.input_host = horizon_client::android_runtime::input_mode();
         self.catalog.refresh(&self.home);
         self.login.refresh_status();
+        crate::diagnostics::heartbeat("returned_to_launcher", || serde_json::json!({}));
         self.catalog.page = Page::Play;
         if let Ok(message) = std::fs::read_to_string(self.home.join("android-error.txt")) {
             self.error = Some(message);
@@ -151,6 +157,7 @@ impl Launcher {
     }
     fn fail(&mut self, error: impl std::fmt::Display) {
         log::error!("{error}");
+        crate::diagnostics::record_error(&error.to_string());
         self.error = Some(error.to_string());
         let _ = std::fs::write(self.home.join("android-error.txt"), error.to_string());
     }
@@ -199,6 +206,10 @@ impl Launcher {
         if self.login.pending() {
             return Ok(());
         }
+        crate::diagnostics::heartbeat(
+            "play_requested",
+            || serde_json::json!({"renderer":self.catalog.config.renderer.label(),"resolution_percent":self.catalog.config.render_scale.percent()}),
+        );
         crate::configure_input_mode(self.catalog.config.input_host);
         crate::device_runtime::configure(self.catalog.config.device);
         if horizon_client::official_install::ready(&self.home) {
@@ -336,6 +347,7 @@ impl ApplicationHandler for Launcher {
         }
     }
     fn suspended(&mut self, events: &ActiveEventLoop) {
+        crate::diagnostics::heartbeat("suspended", || serde_json::json!({}));
         if let Some(game) = &mut self.game {
             return game.suspended(events);
         }
@@ -382,6 +394,7 @@ impl ApplicationHandler for Launcher {
             }
             WindowEvent::Touch(touch) => self.touch_event(events, touch),
             WindowEvent::Focused(false) => {
+                crate::diagnostics::heartbeat("launcher_background", || serde_json::json!({}));
                 horizon_client::android_runtime::clear_gamepads();
                 self.controller_repeat = None;
                 self.mouse_down = false;
@@ -457,6 +470,23 @@ impl ApplicationHandler for Launcher {
             game.about_to_wait(events);
             self.restore_launcher(events);
             return;
+        }
+        crate::diagnostics::heartbeat("launcher", || serde_json::json!({}));
+        if let Some(result) = self
+            .diagnostic_export
+            .as_ref()
+            .and_then(|r| r.try_recv().ok())
+        {
+            self.diagnostic_export = None;
+            self.catalog.status = match result {
+                Ok(name) => {
+                    let _ = crate::platform::open_documents("reports");
+                    format!(
+                        "Saved {name} in Reports. Review the ZIP before sharing; nothing was uploaded."
+                    )
+                }
+                Err(error) => format!("Diagnostic export failed: {error}"),
+            };
         }
         crate::platform::poll_gamepad_connections();
         if let Err(error) = self.controller_frame(events) {

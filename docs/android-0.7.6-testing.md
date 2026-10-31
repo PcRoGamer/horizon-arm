@@ -15,3 +15,12 @@ Use an APK built from the current `android` branch. Record its source commit, AB
 11. **Upstream regression smoke test:** Compatibility and Batching, world loading, translucent water/glass, dawn/dusk, resource-pack reload, `.hmod` Zoom and minimap, keyboard input, multiplayer join and reconnect, pause/Home/lock recovery.
 
 These checks do not require deleting real worlds or resetting the primary app's storage.
+
+12. **Crash diagnostics:** performance recording can remain off. After a real failure,
+    reopen Horizon, wait a few seconds and use Settings > Diagnostic report > Export
+    ZIP. Check previous/current session phase, Android exit collection status and
+    available panic/native summaries. A return to the launcher must preserve its
+    handled error, including when a non-default profile is active. Do not force a
+    crash in a valued world; intentional failures belong only in the standalone
+    diagnostics probe. Review/redact the ZIP before posting it. Older Android or
+    firmware may expose no OS trace; the report must say so explicitly.

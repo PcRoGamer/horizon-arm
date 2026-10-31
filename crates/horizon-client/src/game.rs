@@ -15956,6 +15956,22 @@ impl ApplicationHandler for Game<'_> {
                     }
                 }
                 WindowEvent::RedrawRequested => {
+                    #[cfg(target_os = "android")]
+                    crate::diagnostics::heartbeat(
+                        if self.title.is_some() {
+                            "game_title"
+                        } else if self.player.is_some() {
+                            "in_world"
+                        } else {
+                            "game_loading"
+                        },
+                        || {
+                            serde_json::json!({
+                        "focused":self.focused,"paused":self.pause,"render_distance":self.settings.render_distance,
+                        "gpu":self.renderer.as_ref().map(|r| &r.info.name),
+                        "backend":self.renderer.as_ref().map(|r| format!("{:?}",r.info.backend))})
+                        },
+                    );
                     self.observe_fullscreen();
                     self.sync_ime();
                     let now = Instant::now();
@@ -18162,6 +18178,11 @@ impl Loading {
             .last_frame
             .replace(now)
             .map(|last| now.duration_since(last).as_secs_f32() * 1000.0);
+        #[cfg(target_os = "android")]
+        crate::diagnostics::heartbeat(
+            "game_resource_loading",
+            || serde_json::json!({"gpu":self.renderer.as_ref().map(|r| &r.info.name)}),
+        );
         let mut batch = HudBatch::new(size);
         self.draw_menu(&mut batch);
         let mut frame = loading_frame(&batch);
@@ -18397,10 +18418,10 @@ impl ApplicationHandler for App {
             };
             if let Some(error) = error {
                 log::error!("Horizon: {error}");
-                if let Ok(home) = std::env::current_dir() {
-                    horizon_client::crash::report_error(&home, "client", &**error);
-                    let _ = std::fs::write(home.join("android-error.txt"), error.to_string());
-                }
+                let home = crate::backend::game_home();
+                crate::diagnostics::record_error(&error.to_string());
+                horizon_client::crash::report_error(&home, "client", &**error);
+                let _ = std::fs::write(home.join("android-error.txt"), error.to_string());
             }
         }
     }

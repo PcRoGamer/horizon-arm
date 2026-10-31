@@ -27,6 +27,24 @@ def run(command, **kwargs):
     subprocess.run(list(map(str, command)), check=True, **kwargs)
 
 
+def save_crash_symbols(library, stripped, abi, objcopy, revision):
+    """Keep matching symbols locally; never enlarge or attach them to the APK."""
+    digest = hashlib.sha256(stripped.read_bytes()).hexdigest()
+    notes = subprocess.check_output([str(objcopy.with_name('llvm-readelf' + objcopy.suffix)), '--notes', str(stripped)], text=True)
+    build_id = notes.split('Build ID:', 1)[1].split()[0] if 'Build ID:' in notes else None
+    key = build_id or digest
+    output = ROOT / '.local/android/native-symbols' / abi
+    output.mkdir(parents=True, exist_ok=True)
+    symbols = output / (key + '.debug')
+    if not symbols.is_file():
+        run([objcopy, '--only-keep-debug', library, symbols])
+    (output / (key + '.json')).write_text(json.dumps({
+        'schema': 1, 'abi': abi, 'source_commit': revision, 'build_id': build_id,
+        'packaged_library_sha256': digest, 'symbols': symbols.name,
+    }, indent=2) + '\n', encoding='utf-8')
+    print(f'Private crash symbols: {symbols}', flush=True)
+
+
 def generated_engine_file(name):
     path = Path(name)
     if len(path.parts) == 1:
@@ -160,6 +178,10 @@ def main():
             raise FileNotFoundError(library)
         shutil.copyfile(library, staging / name)
         run([ndk / 'bin' / ('llvm-strip' + suffix), '--strip-unneeded', staging / name])
+        if args.profile == 'release':
+            save_crash_symbols(library, staging / name, args.abi,
+                               ndk / 'bin' / ('llvm-objcopy' + suffix),
+                               environment.get('HORIZON_ANDROID_BUILD_COMMIT', 'unknown'))
     assets = ROOT / '.local/android/gradle-assets'
     assets.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(ROOT / 'LICENSE', assets / 'LICENSE.txt')
