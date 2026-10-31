@@ -7,7 +7,7 @@
 //! refused with "You logged in from another location". The generated name is
 //! kept in `horizon-player.txt` next to `options.txt` so the same player gets
 //! the same offline UUID (and inventory on a friend's world) every time.
-use std::{fs, path::Path};
+use std::{fs, io, path::Path};
 
 pub const FILE: &str = "horizon-player.txt";
 const KEY: &str = "name:";
@@ -23,6 +23,20 @@ pub fn generate(seed: u64) -> String {
     format!("Player{:05}", seed % 100_000)
 }
 
+/// Writes an explicit offline name in the legacy one-name format. Multi-profile
+/// account management calls this whenever its selection changes so existing
+/// launcher and LAN code keeps seeing the same identity.
+pub fn store(dir: &Path, name: &str) -> io::Result<()> {
+    if !is_valid(name) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "invalid offline player name",
+        ));
+    }
+    fs::create_dir_all(dir)?;
+    fs::write(dir.join(FILE), format!("{KEY}{name}\n"))
+}
+
 /// The name kept in `dir`, created on first use. A file that can't be written
 /// still yields a name for this run.
 pub fn load_or_create(dir: &Path) -> String {
@@ -31,7 +45,7 @@ pub fn load_or_create(dir: &Path) -> String {
         return name;
     }
     let name = generate(seed());
-    if let Err(e) = fs::write(&path, format!("{KEY}{name}\n")) {
+    if let Err(e) = store(dir, &name) {
         log::warn!(
             "Horizon: could not keep the player name in {}: {e}",
             path.display()
@@ -96,6 +110,15 @@ mod tests {
         // An edited name is used as it is.
         fs::write(d.join(FILE), "name:Alex_2\r\n").unwrap();
         assert_eq!(load_or_create(&d), "Alex_2");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn explicit_names_can_be_stored() {
+        let d = dir("store");
+        store(&d, "Alex_2").unwrap();
+        assert_eq!(load_or_create(&d), "Alex_2");
+        assert!(store(&d, "has space").is_err());
         let _ = fs::remove_dir_all(&d);
     }
 
