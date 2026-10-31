@@ -7,84 +7,153 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: overlay-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
-  validate:
-    if: github.event.pull_request.head.ref == 'sync/trigger-conflict-probe'
+  overlay-contract:
+    name: Android overlay contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Prepare pristine current upstream + Android overlay
+        shell: bash
+        run: bash android-port/tools/prepare-upstream-overlay.sh "$RUNNER_TEMP/horizon" main
+      - name: Enforce upstream mutation surface and feature inheritance
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/horizon"
+          echo "UPSTREAM_SHA=$(cat .horizon-upstream-sha)"
+          git diff --check -- \
+            ':!crates/horizon-client/src/game/touch.rs' \
+            ':!crates/horizon-client/src/game/touch_icons.rs' \
+            ':!crates/horizon-client/src/game/mobile_ui.rs' \
+            ':!crates/horizon-client/src/game/touch_settings.rs' \
+            ':!crates/horizon-client/src/android.rs' \
+            ':!crates/horizon-client/src/android/**'
+          python3 - <<'PY'
+          import subprocess
+          allowed = {
+              'Cargo.toml',
+              'crates/horizon-client/Cargo.toml',
+              'crates/horizon-client/src/lib.rs',
+              'crates/horizon-client/src/game.rs',
+          }
+          changed = set(subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines())
+          unexpected = sorted(changed - allowed)
+          if unexpected:
+              raise SystemExit('unexpected upstream mutations before Android patch stage: ' + ', '.join(unexpected))
+          print('base overlay mutation surface:', ', '.join(sorted(changed)))
+          PY
+          cargo metadata --format-version 1 > "$RUNNER_TEMP/metadata.json"
+          python3 - "$RUNNER_TEMP/metadata.json" <<'PY'
+          import json, sys
+          meta = json.load(open(sys.argv[1], encoding='utf-8'))
+          names = {p['name'] for p in meta['packages']}
+          required = {'horizon-client','horizon-client-render','horizon-shaders','horizon-shader-api','horizon-mods','horizon-android'}
+          missing = sorted(required - names)
+          if missing:
+              raise SystemExit('feature-parity packages missing: ' + ', '.join(missing))
+          client = next(p for p in meta['packages'] if p['name'] == 'horizon-client')
+          android = next(p for p in meta['packages'] if p['name'] == 'horizon-android')
+          client_deps = {d['name'] for d in client['dependencies']}
+          android_deps = {d['name'] for d in android['dependencies']}
+          for dep in ('horizon-client-render','horizon-shaders','horizon-mods'):
+              if dep not in client_deps:
+                  raise SystemExit(f'upstream client parity dependency disappeared: {dep}')
+          if 'horizon-client' not in android_deps:
+              raise SystemExit('Android wrapper no longer consumes upstream horizon-client')
+          print('renderer, shaders and mods inherited from current upstream')
+          PY
+
+  android-arm64:
+    name: Android ARM64 current upstream
+    needs: overlay-contract
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: sync/candidate-2026-10-30
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
-
-      - name: Validate merged tree
-        run: |
-          set -euo pipefail
-          git diff --check
-          cargo metadata --no-deps --format-version 1 >/dev/null
-
-      - name: Set up Java 25 for fact generation
+      - name: Prepare current upstream build tree
+        shell: bash
+        run: bash android-port/tools/prepare-upstream-overlay.sh "$RUNNER_TEMP/horizon" main
+      - name: Set up Java 25
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25'
-
-      - name: Prepare Android toolchain symlink target
-        run: mkdir -p ../horizon-android/.toolchain
-
-      - name: Install host packages
+      - name: Install Rust Android target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - name: Install host packages and pinned Android NDK
+        shell: bash
         run: |
           sudo apt-get update
           sudo apt-get install -y curl unzip zip patch
-
-      - name: Fetch Android toolchain
-        env:
-          ANDROID_HOME: ${{ github.workspace }}/android-port/.toolchain/android-sdk
-          ANDROID_SDK_ROOT: ${{ github.workspace }}/android-port/.toolchain/android-sdk
-        run: android-port/tools/fetch-toolchain.sh
-
+          : "${ANDROID_HOME:=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          export ANDROID_HOME ANDROID_SDK_ROOT="$ANDROID_HOME"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platforms;android-34' 'build-tools;34.0.0' 'ndk;27.2.12479018'
+          test -x "$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang"
       - name: Fetch Rust dependencies
-        run: cargo fetch
-
-      - name: Fetch pinned Minecraft inputs for CI only
-        run: python3 android-port/tools/ci-fetch-minecraft.py
-
-      - name: Compute Horizon 26.3 facts
+        shell: bash
         run: |
+          cd "$RUNNER_TEMP/horizon"
+          cargo fetch
+      - name: Fetch pinned Minecraft inputs for CI
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/horizon"
+          python3 android-port/tools/ci-fetch-minecraft.py
+      - name: Compute current Horizon facts
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/horizon"
           cargo run --release -p horizon-prepare -- \
             --prepare \
             --minecraft-dir android-port/build/ci-minecraft \
             --server-jar android-port/build/ci-minecraft/server.jar \
             --root .
-
       - name: Package Horizon-only fact bundle
+        shell: bash
         run: |
+          cd "$RUNNER_TEMP/horizon"
           python3 android-port/tools/ci-pack-facts.py
           unzip -l android-port/build/horizon-facts-26.3.zip | head -80
           if unzip -l android-port/build/horizon-facts-26.3.zip | grep -E '(^|/)(assets|data)/|pack.png|client.jar|server.jar'; then
             echo 'fact bundle contains a Minecraft file' >&2
             exit 1
           fi
-
       - name: Build self-bootstrapping ARM64 APK
+        shell: bash
         env:
           HORIZON_NO_ASSETS: '1'
-          HORIZON_FACTS_ZIP: ${{ github.workspace }}/android-port/build/horizon-facts-26.3.zip
+          HORIZON_FACTS_ZIP: ${{ runner.temp }}/horizon/android-port/build/horizon-facts-26.3.zip
           HORIZON_JOBS: '4'
-        run: android-port/tools/build.sh arm64 fast
-
-      - name: Verify APK
         run: |
+          cd "$RUNNER_TEMP/horizon"
+          android-port/tools/build.sh arm64 fast
+      - name: Verify APK
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/horizon"
           test -f android-port/build/horizon-android-arm64.apk
-          ls -lh android-port/build/horizon-android-arm64.apk
           unzip -l android-port/build/horizon-android-arm64.apk | grep 'lib/arm64-v8a/libhorizon_android.so'
           unzip -l android-port/build/horizon-android-arm64.apk | grep 'assets/horizon-facts-26.3.zip'
           sha256sum android-port/build/horizon-android-arm64.apk
-
       - name: Upload validated APK
         uses: actions/upload-artifact@v4
         with:
-          name: horizon-arm-upstream-sync-candidate-apk
-          path: android-port/build/horizon-android-arm64.apk
+          name: horizon-current-upstream-android-arm64
+          path: ${{ runner.temp }}/horizon/android-port/build/horizon-android-arm64.apk
           if-no-files-found: error

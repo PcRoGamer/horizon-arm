@@ -14,10 +14,12 @@ crate-type = ["cdylib", "rlib"]
 
 # Desktop targets build this crate empty: `src/lib.rs` is `#![cfg(target_os = "android")]`.
 [target.'cfg(target_os = "android")'.dependencies]
-# Android carries the sandboxed Horizon .hmod runtime, but deliberately leaves
-# desktop-only audio/controller defaults off. Content and code mods therefore
-# behave like Horizon rather than being a browser-only decoration.
-horizon-client = { path = "../horizon-client", default-features = false, features = ["mods"] }
+# Keep Horizon's audio feature on for feature parity. The upstream `controllers`
+# feature stays off because gilrs has no Android backend; Android controllers are
+# translated into Horizon's normal PadState by our winit DeviceEvent overlay.
+# Mods, shaders, rendering and the rest of the client are inherited directly
+# from the current upstream horizon-client dependency graph.
+horizon-client = { path = "../horizon-client", default-features = false, features = ["audio"] }
 horizon-core = { path = "../horizon-core" }
 ndk = "0.9"
 raw-window-handle = "0.6"
