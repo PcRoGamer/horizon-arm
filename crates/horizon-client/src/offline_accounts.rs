@@ -155,7 +155,9 @@ impl Accounts {
             .eq_ignore_ascii_case(&self.selected);
         self.accounts.remove(index);
         if removed_selected {
-            self.selected = self.accounts[index.min(self.accounts.len() - 1)].name.clone();
+            self.selected = self.accounts[index.min(self.accounts.len() - 1)]
+                .name
+                .clone();
         }
         Ok(())
     }
@@ -227,7 +229,12 @@ mod tests {
         fs::write(d.join(crate::offline_name::FILE), "name:Alex_2\n").unwrap();
         let accounts = Accounts::load_or_create(&d);
         assert_eq!(accounts.selected_name(), "Alex_2");
-        assert_eq!(accounts.all(), &[Account { name: "Alex_2".into() }]);
+        assert_eq!(
+            accounts.all(),
+            &[Account {
+                name: "Alex_2".into()
+            }]
+        );
         assert!(d.join(FILE).is_file());
         assert_eq!(Accounts::load_or_create(&d), accounts);
         let _ = fs::remove_dir_all(d);
