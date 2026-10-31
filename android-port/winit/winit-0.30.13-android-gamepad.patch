@@ -1,0 +1,83 @@
+--- a/src/platform_impl/android/mod.rs
++++ b/src/platform_impl/android/mod.rs
+@@ -377,6 +377,26 @@
+                 let window_id = window::WindowId(WindowId);
+                 let device_id = event::DeviceId(DeviceId(motion_event.device_id()));
+ 
++                // Horizon: a controller is not a pointer. Its sticks, triggers
++                // and hat arrive as a generic motion event, with no action
++                // winit knows and no pointer to make a touch of, so they leave
++                // as raw device motion keyed by the Android axis ids.
++                if gamepad_source(motion_event.source()) {
++                    let pointer = motion_event.pointer_at_index(motion_event.pointer_index());
++                    for axis in GAMEPAD_AXES {
++                        let value = pointer.axis_value(axis);
++                        let event = event::Event::DeviceEvent {
++                            device_id,
++                            event: event::DeviceEvent::Motion {
++                                axis: u32::from(axis),
++                                value: f64::from(value),
++                            },
++                        };
++                        callback(event, self.window_target());
++                    }
++                    return InputStatus::Handled;
++                }
++
+                 let phase = match motion_event.action() {
+                     MotionAction::Down | MotionAction::PointerDown => {
+                         Some(event::TouchPhase::Started)
+@@ -423,6 +443,24 @@
+                 }
+             },
+             InputEvent::KeyEvent(key) => {
++                // Horizon: a controller's buttons are keys to Android, but not
++                // to winit, which has no KeyCode for them. They leave as raw
++                // device buttons with the Android key code as the number.
++                if gamepad_source(key.source()) {
++                    let state = match key.action() {
++                        KeyAction::Down => event::ElementState::Pressed,
++                        _ => event::ElementState::Released,
++                    };
++                    let event = event::Event::DeviceEvent {
++                        device_id: event::DeviceId(DeviceId(key.device_id())),
++                        event: event::DeviceEvent::Button {
++                            button: u32::from(key.key_code()),
++                            state,
++                        },
++                    };
++                    callback(event, self.window_target());
++                    return InputStatus::Handled;
++                }
+                 match key.key_code() {
+                     // Flag keys related to volume as unhandled. While winit does not have a way for
+                     // applications to configure what keys to flag as handled,
+@@ -1139,3 +1177,28 @@
+         self.monitor.clone()
+     }
+ }
++
++/// Horizon: the sources a controller (a gamepad, a joystick or a TV remote's
++/// D-pad) reports. Android sets both the GAMEPAD and the JOYSTICK bit on most
++/// pads; `is_joystick_class` catches the ones that only set the second.
++fn gamepad_source(source: android_activity::input::Source) -> bool {
++    use android_activity::input::Source;
++    source.is_joystick_class()
++        || matches!(
++            source,
++            Source::Gamepad | Source::Joystick | Source::Dpad
++        )
++}
++
++/// Horizon: the controller axes sent with each motion event: both sticks, the
++/// D-pad hat and both triggers.
++const GAMEPAD_AXES: [android_activity::input::Axis; 8] = [
++    android_activity::input::Axis::X,
++    android_activity::input::Axis::Y,
++    android_activity::input::Axis::Z,
++    android_activity::input::Axis::Rz,
++    android_activity::input::Axis::HatX,
++    android_activity::input::Axis::HatY,
++    android_activity::input::Axis::Ltrigger,
++    android_activity::input::Axis::Rtrigger,
++];

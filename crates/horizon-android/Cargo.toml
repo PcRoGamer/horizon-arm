@@ -1,0 +1,28 @@
+[package]
+name = "horizon-android"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version = "1.90"
+description = "Horizon on Android: the NativeActivity entry point, and the smoke screen that proves a device draws"
+
+[lib]
+name = "horizon_android"
+# A library, because Android starts `libhorizon_android.so` from
+# `android.app.NativeActivity` instead of running a program.
+crate-type = ["cdylib", "rlib"]
+
+# Desktop targets build this crate empty: `src/lib.rs` is `#![cfg(target_os = "android")]`.
+[target.'cfg(target_os = "android")'.dependencies]
+horizon-client = { path = "../horizon-client", default-features = false }
+horizon-core = { path = "../horizon-core" }
+ndk = "0.9"
+raw-window-handle = "0.6"
+winit = { version = "0.30.13", features = ["android-native-activity"] }
+android-activity = { version = "0.6", default-features = false, features = ["native-activity"] }
+wgpu = { version = "30.0.1", default-features = false, features = ["vulkan", "gles"] }
+pollster = "0.4"
+log = "0.4"
+
+[lints]
+workspace = true

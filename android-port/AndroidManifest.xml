@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Horizon on Android.
+
+  No Java in this APK: `android:name="android.app.NativeActivity"` is the
+  framework's own activity, and `android.app.lib_name` tells it which library
+  to start, `libhorizon_android.so` (crates/horizon-android). `hasCode="false"`
+  says so out loud; there is no classes.dex to ship.
+
+  Landscape, as Minecraft is. Vulkan 1.1 if the GPU has it, GLES 3.1 as wgpu's
+  fallback; `android.hardware.vulkan.version` is `required="false"` so a device
+  that only offers GLES still installs and reports what it has in logcat.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="dev.horizon.android">
+
+    <uses-feature android:glEsVersion="0x00030001" android:required="true" />
+    <uses-feature
+        android:name="android.hardware.vulkan.version"
+        android:version="0x00401000"
+        android:required="false" />
+    <uses-feature android:name="android.hardware.gamepad" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:label="Horizon"
+        android:hasCode="false"
+        android:extractNativeLibs="true"
+        android:allowBackup="false"
+        android:hardwareAccelerated="true">
+
+        <activity
+            android:name="android.app.NativeActivity"
+            android:exported="true"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|keyboard|keyboardHidden|navigation|screenLayout|screenSize|smallestScreenSize|uiMode|density"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+            <meta-data android:name="android.app.lib_name" android:value="horizon_android" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
