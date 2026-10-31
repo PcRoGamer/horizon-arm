@@ -150,7 +150,8 @@ impl Accounts {
     }
 
     pub fn set_skin(&mut self, skin: Option<&str>) {
-        self.accounts[self.selected_index()].skin = skin.map(str::to_owned);
+        let index = self.selected_index();
+        self.accounts[index].skin = skin.map(str::to_owned);
     }
 
     /// Removes a profile. Keeping one profile avoids the ambiguous no-identity
