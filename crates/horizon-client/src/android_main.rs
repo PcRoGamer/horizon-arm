@@ -53,7 +53,6 @@ mod winit {
     }
 }
 
-#[path = "game.rs"]
 mod game;
 
 #[global_allocator]
@@ -74,8 +73,13 @@ fn android_main(app: AndroidApp) {
     };
     ANDROID_APP.with(|slot| *slot.borrow_mut() = Some(app));
 
-    if let Err(error) = std::fs::create_dir_all(&home).and_then(|()| std::env::set_current_dir(&home)) {
-        log::error!("Cannot use Android application directory {}: {error}", home.display());
+    if let Err(error) =
+        std::fs::create_dir_all(&home).and_then(|()| std::env::set_current_dir(&home))
+    {
+        log::error!(
+            "Cannot use Android application directory {}: {error}",
+            home.display()
+        );
         return;
     }
 
