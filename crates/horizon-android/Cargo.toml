@@ -61,7 +61,10 @@ rustix = { version = "1", default-features = false, features = ["std", "time", "
 default = []
 audio = ["horizon-client/audio", "horizon-client-render/audio"]
 controllers = ["horizon-client/controllers", "horizon-client-input/controllers"]
-mods = ["horizon-mods/runtime"]
+# The clean Android build intentionally does not enable Horizon's native mod runtime.
+# Keep the feature name as a compatibility no-op so shared cfg(feature = "mods") code
+# can compile without depending on an upstream feature that no longer exists.
+mods = []
 rng-trace = ["horizon-core/rng-trace"]
 
 [lints]
