@@ -1,0 +1,28 @@
+name: Android clean port
+
+on:
+  push:
+    branches: [android-clean-v1]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.90.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Offline account tests
+        run: cargo test -p horizon-client offline_accounts --lib
+      - name: Client check
+        run: cargo check -p horizon-client
