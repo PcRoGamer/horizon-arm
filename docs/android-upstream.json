@@ -7,11 +7,11 @@
   "compared_source_files": 3147,
   "modified_existing_files": 41,
   "branch": "android",
-  "merged_upstream_commit": "13ce6bcc6",
-  "merged_upstream_commits": 6468,
+  "merged_upstream_commit": "c3905131b",
+  "merged_upstream_commits": 6470,
   "last_reviewed_date": "2026-10-31",
-  "last_update_commits": 715,
-  "latest_fetched_commit": "13ce6bcc6",
-  "review": "Merged stable main through 13ce6bcc6 (42 commits). Resolved the remote.rs conflict by retaining mod ticking, the native queue reset and native tick. Moved periodic CPAL output-device discovery off the render thread; diagnostic logging, heartbeat and logger flush now skip instead of waiting for a busy diagnostic state. Upstream workflows remain disabled. Native .hnmod on-device compilation remains unsupported. On-device FPS, audio device switching, loss recovery and APK gameplay testing remain pending.",
+  "last_update_commits": 717,
+  "latest_fetched_commit": "c3905131b",
+  "review": "Merged stable main through c3905131b. Preserved Android mod ticking and native queue reset from the prior merge; reviewed teleport/jump replay fixes and jittered vanilla-client tests. Reviewed and merged PR #39 with original author history. Fixed synchronous CPAL discovery, nonblocking diagnostics, integrated-server owner persistence and GLES shader composition. Added opaque Android presentation and interrupted-Vulkan startup recovery. Upstream deployment workflows remain inactive. Native .hnmod on-device compilation remains unsupported. Targeted source/GPU tests pass; owner-device FPS, audio hotplug, Mali composition and Unisoc recovery verification remain release-candidate checks.",
   "pending_review_commits": 0
 }

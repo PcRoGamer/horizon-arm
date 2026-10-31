@@ -55,7 +55,7 @@ See [diagnostic collection and limitations](android-diagnostics.md).
 
 ## Validation
 
-Local checks passed: 44 touch tests (including layout migration and per-axis calibration), 8 installer tests, 9 diagnostics/timing tests, 26 content tests (one fixture-dependent test skipped), 13 Android tooling tests, ARM64 Clippy and ARMv7 cargo check. Public-tree and whitespace checks passed.
+Local checks passed: 2 execution-role/player save tests, 44 touch tests (including layout migration and per-axis calibration), 8 installer tests, 5 crash-diagnostic tests, 9 performance/timing tests, 27 content tests (one fixture-dependent test skipped), 10 audio tests, 19 GPU tests, 26 renderer/shader tests and a standalone storage-probe build, 13 Android tooling tests, ARM64 Clippy and ARMv7 cargo check. Public-tree and whitespace checks passed.
 
 The change is a release candidate until the device checklist below passes. Local source tests do not establish performance or compatibility on every phone.
 
