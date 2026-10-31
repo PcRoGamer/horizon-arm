@@ -7,11 +7,11 @@
   "compared_source_files": 3147,
   "modified_existing_files": 41,
   "branch": "android",
-  "merged_upstream_commit": "7aa0e28fa",
-  "merged_upstream_commits": 6426,
+  "merged_upstream_commit": "13ce6bcc6",
+  "merged_upstream_commits": 6468,
   "last_reviewed_date": "2026-10-31",
-  "last_update_commits": 673,
-  "latest_fetched_commit": "7aa0e28fa",
-  "review": "Reviewed stable main through 7aa0e28fa: sector-selected sunrise rendering, bounded upload bursts, mesh recycling, resource-pack overlay handling, IME composition, gameplay/network fixes, content effects and native API updates. Resolved Android touch/HUD bounds, keypad, sandbox .hmod command hooks, mobile upload budgeting and native dialogs explicitly. Upstream workflows remain disabled. Android compile/test results are recorded in the 0.7.6 notes. Native .hnmod on-device compilation remains unsupported. ARM64 Clippy, ARMv7 cargo check, touch/layout migration, installer cleanup serialization, combined diagnostics and Android source/content tests passed. APK/device gameplay testing remains pending.",
+  "last_update_commits": 715,
+  "latest_fetched_commit": "13ce6bcc6",
+  "review": "Merged stable main through 13ce6bcc6 (42 commits). Resolved the remote.rs conflict by retaining mod ticking, the native queue reset and native tick. Moved periodic CPAL output-device discovery off the render thread; diagnostic logging, heartbeat and logger flush now skip instead of waiting for a busy diagnostic state. Upstream workflows remain disabled. Native .hnmod on-device compilation remains unsupported. On-device FPS, audio device switching, loss recovery and APK gameplay testing remain pending.",
   "pending_review_commits": 0
 }

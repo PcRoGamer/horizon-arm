@@ -23,7 +23,7 @@ by the user also lacks that marker; it is not automatically labelled a crash.
 ## Contents and limits
 
 - `diagnostic.log`, rotated/previous logs: local Android/Rust log messages from
-  launch onward, up to 512 KiB per log. Disk writes use a bounded worker queue;
+  launch onward, up to 512 KiB per log. Redaction, process-memory reads and disk writes use a bounded worker queue;
   overload drops messages rather than blocking rendering, with a dropped count
   in the next session snapshot.
 - `current-session.json`, `previous-session.json`: build/ABI/PID, startup/game
@@ -40,10 +40,14 @@ by the user also lacks that marker; it is not automatically labelled a crash.
   tombstones: signal, crashed thread, up to 64 frames, relative PCs, module names
   and Build IDs. Unknown/malformed/truncated traces may have no usable frames.
 
-Raw system traces remain local in Reports, bounded to 1 MiB each / eight files.
+Raw system traces remain in private app storage, bounded to 1 MiB each / eight files.
+The Files provider exposes exported diagnostic ZIPs and standalone performance
+JSONL files only; session snapshots, raw logs and OS traces cannot be opened through it.
 They may contain private memory/path information. The ZIP excludes their raw
 memory/register dumps and instead includes a readable crashed-thread summary
 when decoding succeeds. ANR/plain-text traces get best-effort text redaction.
+Export **one ZIP** when reporting a problem; individual internal log files are not
+needed. JSONL files remain available for advanced performance analysis.
 Accounts, credentials, worlds, screenshots and launcher configuration are not
 exported. Redaction of arbitrary log text is **best effort**; inspect before
 sharing. ZIPs retain at most 4 MiB of text payload, 256 KiB per ordinary input,

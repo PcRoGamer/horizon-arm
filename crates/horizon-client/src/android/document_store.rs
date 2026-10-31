@@ -46,6 +46,9 @@ struct Document {
     label: Option<&'static str>,
     reports: bool,
 }
+fn shareable_report(name: &str) -> bool {
+    (name.starts_with("horizon-diagnostics-") && name.ends_with(".zip")) || name.ends_with(".jsonl")
+}
 fn resolve(home: &Path, id: &str) -> io::Result<Document> {
     let mut parts = id.split('/');
     let first = parts.next().ok_or_else(invalid)?;
@@ -74,6 +77,12 @@ fn resolve(home: &Path, id: &str) -> io::Result<Document> {
     let tail: Vec<_> = parts.collect();
     for name in &tail {
         component(name)?;
+    }
+    // Internal session/error logs and raw OS traces are private. Sharing goes
+    // through the bounded, redacted ZIP exporter; retain standalone performance
+    // reports for existing workflows, including previously granted document IDs.
+    if reports && !tail.is_empty() && (tail.len() != 1 || !shareable_report(tail[0])) {
+        return Err(invalid());
     }
     let mut path = base.clone();
     for name in &tail {
@@ -361,6 +370,11 @@ mod tests {
         assert!(call(&home, "delete", "p0/mods", "").is_err());
         assert!(call(&home, "create", "reports", "bad.txt").is_err());
         fs::write(home.join("performance/report.jsonl"), b"{}").unwrap();
+        fs::write(home.join("performance/current-session.json"), b"{}").unwrap();
+        fs::write(home.join("performance/exit-1.trace"), b"private trace").unwrap();
+        assert!(open(&home, "reports/exit-1.trace", "r").is_err());
+        assert!(open(&home, "reports/current-session.json", "r").is_err());
+        assert_eq!(children(&home, "reports").unwrap().len(), 1);
         assert!(open(&home, "reports/report.jsonl", "r").is_ok());
         assert!(open(&home, "reports/report.jsonl", "w").is_err());
         assert!(!is_child(&home, "p0/mods", "p0/packs/pack.zip"));

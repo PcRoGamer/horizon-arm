@@ -101,6 +101,7 @@ pub fn initialize(home: &Path, device: Value) -> io::Result<()> {
             for event in receiver {
                 match event {
                     Event::Log(line) => {
+                        let line = redact(&line);
                         if size + line.len() as u64 + 1 > LOG_LIMIT {
                             drop(log.take());
                             let _ = fs::rename(
@@ -115,7 +116,8 @@ pub fn initialize(home: &Path, device: Value) -> io::Result<()> {
                         }
                         size += line.len() as u64 + 1;
                     }
-                    Event::Session(value) => {
+                    Event::Session(mut value) => {
+                        value["memory"] = memory();
                         let _ = atomic_json(&dir.join("current-session.json"), &value);
                     }
                     Event::Flush(done) => {
@@ -137,27 +139,36 @@ pub fn initialize(home: &Path, device: Value) -> io::Result<()> {
     });
     Ok(())
 }
-/// Called by the logger; never waits for disk or for a full queue.
+/// Called by the logger; never waits for disk, the state lock or a full queue.
 pub fn log_line(level: log::Level, target: &str, message: &str) {
     if level > log::Level::Info {
         return;
     }
-    let line = redact(&format!(
+    let line = format!(
         "{} [{level}] {target}: {}",
         timestamp(),
         message.chars().take(4096).collect::<String>()
-    ));
-    if let Some(state) = STATE.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+    );
+    let guard = match STATE.try_lock() {
+        Ok(guard) => guard,
+        Err(std::sync::TryLockError::WouldBlock) => {
+            DROPPED_LOGS.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+        Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
+    };
+    if let Some(state) = guard.as_ref() {
         if state.sender.try_send(Event::Log(line)).is_err() {
             DROPPED_LOGS.fetch_add(1, Ordering::Relaxed);
         }
-    } else {
-        let mut early = EARLY.lock().unwrap_or_else(|e| e.into_inner());
-        if early.len() == 32 {
-            early.pop_front();
-        }
-        early.push_back(line);
+        return;
     }
+    drop(guard);
+    let mut early = EARLY.lock().unwrap_or_else(|e| e.into_inner());
+    if early.len() == 32 {
+        early.pop_front();
+    }
+    early.push_back(line);
 }
 fn memory() -> Value {
     let status = fs::read_to_string("/proc/self/status").unwrap_or_default();
@@ -171,15 +182,21 @@ fn memory() -> Value {
     }
     json!(values)
 }
+/// Frame-safe heartbeat: a busy diagnostic state skips this update rather than
+/// making rendering wait. Memory collection and disk writes happen off-thread.
 pub fn heartbeat(phase: &str, context: impl FnOnce() -> Value) {
-    if let Some(state) = STATE.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+    let mut guard = match STATE.try_lock() {
+        Ok(guard) => guard,
+        Err(std::sync::TryLockError::WouldBlock) => return,
+        Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
+    };
+    if let Some(state) = guard.as_mut() {
         if state.session["phase"] == phase && state.heartbeat.elapsed() < Duration::from_secs(5) {
             return;
         }
         state.heartbeat = Instant::now();
         state.session["phase"] = phase.into();
         state.session["updated_ms"] = timestamp().into();
-        state.session["memory"] = memory();
         state.session["dropped_log_lines"] = DROPPED_LOGS.load(Ordering::Relaxed).into();
         state.session["context"] = context();
         let _ = state.sender.try_send(Event::Session(state.session.clone()));
@@ -201,6 +218,18 @@ pub fn finish() {
     }
     flush();
 }
+/// Logger flush must not make startup/rendering wait for the diagnostic disk worker.
+pub fn request_flush() {
+    let (tx, _rx) = mpsc::sync_channel(1);
+    let guard = match STATE.try_lock() {
+        Ok(guard) => guard,
+        Err(std::sync::TryLockError::WouldBlock) => return,
+        Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
+    };
+    if let Some(state) = guard.as_ref() {
+        let _ = state.sender.try_send(Event::Flush(tx));
+    }
+}
 pub fn flush() {
     let (tx, rx) = mpsc::sync_channel(1);
     if let Some(state) = STATE.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
@@ -220,7 +249,7 @@ pub fn summary(home: &Path) -> String {
         .and_then(|b| serde_json::from_slice::<Value>(&b).ok());
     match previous {
         Some(v) if v["clean_exit"] != true => format!("Previous session ended without a clean exit; last phase: {}. This may be a crash or an Android process kill. Export diagnostics before reporting.", v["phase"].as_str().unwrap_or("unknown")),
-        _ => "Local logs and Android exit history are available in Reports. Export diagnostics to attach a ZIP; review it before sharing.".into(),
+        _ => "Export one diagnostic ZIP to send with your report. It includes local logs, Android exit history and retained performance recordings. Review before sharing.".into(),
     }
 }
 /// Best-effort redaction, not a promise that arbitrary third-party text is public.
@@ -335,7 +364,7 @@ pub fn export(home: &Path) -> Result<PathBuf, String> {
                 && (std::str::from_utf8(&data).is_err()
                     || data.iter().any(|b| *b < 32 && !matches!(b, 9 | 10 | 13)));
             let text = if binary_trace {
-                omitted.push(json!({"file":name,"reason":"binary system trace: original available separately in Reports"}));
+                omitted.push(json!({"file":name,"reason":"binary system trace: original retained privately on device"}));
                 let Some(summary) = native_tombstone::summarize(&data) else {
                     continue;
                 };
@@ -358,7 +387,7 @@ pub fn export(home: &Path) -> Result<PathBuf, String> {
             included.push(name);
         }
         archive.start_file("manifest.json", options)?;
-        archive.write_all(&serde_json::to_vec_pretty(&json!({"schema":1,"version":crate::backend::VERSION,"source_commit":option_env!("HORIZON_ANDROID_BUILD_COMMIT"),"included":included,"files":details,"omitted":omitted,"note":"Logs are bounded tails with best-effort redaction. Review before sharing. Binary Android tombstones contribute a bounded crashed-thread summary; original memory/register dumps are excluded and remain in Reports. No account files, worlds or configuration are included."}))?)?;
+        archive.write_all(&serde_json::to_vec_pretty(&json!({"schema":1,"version":crate::backend::VERSION,"source_commit":option_env!("HORIZON_ANDROID_BUILD_COMMIT"),"included":included,"files":details,"omitted":omitted,"note":"Logs are bounded tails with best-effort redaction. Review before sharing. Binary Android tombstones contribute a bounded crashed-thread summary; original memory/register dumps are excluded and remain private on device. No account files, worlds or configuration are included."}))?)?;
         archive.finish()?;
         fs::rename(&stage, &path)?;
         Ok(())
@@ -468,6 +497,13 @@ mod tests {
         heartbeat("in_world", || {
             panic!("context must not be built each frame")
         });
+        {
+            // A frame must never wait for a diagnostic lock held elsewhere.
+            let _guard = STATE.lock().unwrap();
+            heartbeat("blocked", || panic!("busy heartbeat must skip context"));
+            log_line(log::Level::Info, "probe", "busy diagnostic state");
+            request_flush();
+        }
         record_error("VK_ERROR_DEVICE_LOST");
         log_line(log::Level::Error, "probe", "VK_ERROR_DEVICE_LOST");
         finish();

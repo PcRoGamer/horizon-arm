@@ -34,11 +34,16 @@ fn terrain_shader(gl: bool) -> std::borrow::Cow<'static, str> {
     if !gl {
         return std::borrow::Cow::Borrowed(source);
     }
-    let start = source.find("fn sprite(").expect("terrain sprite function");
-    let end = start + source[start..].find("\n}\n").expect("terrain sprite end") + 3;
+    let start = source
+        .find("fn sprite_grad(")
+        .expect("terrain sprite function");
+    let level = source
+        .find("fn sprite_level(")
+        .expect("terrain level function");
+    let end = level + source[level..].find("\n}\n").expect("terrain level end") + 3;
     let mut output = String::with_capacity(source.len() + 200);
     output.push_str(&source[..start]);
-    output.push_str(include_str!("gfx/terrain_gles.wgsl"));
+    output.push_str(include_str!("gfx/terrain_gles.wgsl.inc"));
     output.push_str(&source[end..]);
     std::borrow::Cow::Owned(output)
 }
@@ -105,6 +110,8 @@ mod native_sky;
 mod occlusion;
 mod oit;
 mod oit_features;
+#[cfg(any(target_os = "android", test))]
+mod opaque_output;
 mod pack_atlas;
 pub mod pack_draw;
 mod pack_entities;
@@ -667,6 +674,10 @@ pub struct Renderer {
     world_post: world_post::Post,
     #[cfg(target_os = "android")]
     frame_scale: Option<frame_scale::FrameScale>,
+    #[cfg(target_os = "android")]
+    opaque_output: Option<opaque_output::OpaqueOutput>,
+    #[cfg(target_os = "android")]
+    startup: Option<crate::android_runtime::graphics_startup::Startup>,
     /// HDR output (Horizon setting): `Some` while the swapchain is HDR.
     hdr: Option<hdr::Hdr>,
     /// The HDR output the window's surface can present.
@@ -1425,6 +1436,11 @@ impl Renderer {
         mut previous: Option<ReplacementContext>,
         api: GraphicsApi,
     ) -> Result<Self> {
+        #[cfg(target_os = "android")]
+        let startup = (!offscreen && api != GraphicsApi::OpenGl)
+            .then(crate::android_runtime::graphics_startup::begin)
+            .flatten();
+
         let split = sprite_split();
         if layers > split * SPRITE_ARRAYS {
             return Err(format!(
@@ -1480,6 +1496,10 @@ impl Renderer {
                 )
                 .ok_or("surface has no supported configuration")?;
             let caps = surface.get_capabilities(&adapter);
+            #[cfg(target_os = "android")]
+            if caps.alpha_modes.contains(&wgpu::CompositeAlphaMode::Opaque) {
+                config.alpha_mode = wgpu::CompositeAlphaMode::Opaque;
+            }
             config.format = surface_format(&caps.formats, config.format);
             config.view_formats = vec![config.format.remove_srgb_suffix()];
             // Screenshots copy the presented frame back from the swapchain.
@@ -3114,6 +3134,10 @@ impl Renderer {
             world_post,
             #[cfg(target_os = "android")]
             frame_scale: None,
+            #[cfg(target_os = "android")]
+            opaque_output: None,
+            #[cfg(target_os = "android")]
+            startup,
             hdr: None,
             hdr_output,
             hdr_marker: None,
@@ -6405,6 +6429,21 @@ impl Renderer {
         if let (Some(scale), Some(frame)) = (&self.frame_scale, &surface_frame) {
             scale.present(&mut encoder, &frame.texture);
         }
+        #[cfg(target_os = "android")]
+        if self.config.alpha_mode != wgpu::CompositeAlphaMode::Opaque
+            && let Some(surface) = &surface_frame
+        {
+            // Sanitize only the final swapchain, after HDR/shader packs/scaling.
+            // Internal emissive markers and every RGB channel remain untouched.
+            let format = self.surface_config().format.remove_srgb_suffix();
+            let output = self
+                .opaque_output
+                .get_or_insert_with(|| opaque_output::OpaqueOutput::new(&self.device, format));
+            if output.format != format {
+                *output = opaque_output::OpaqueOutput::new(&self.device, format);
+            }
+            output.present(&mut encoder, &surface.texture);
+        }
         // With HDR on, a full-frame screenshot gets an HDR10 copy beside it.
         let hdr_readback = readback
             .as_ref()
@@ -6422,6 +6461,11 @@ impl Renderer {
             self.first_frame = FirstFrame::Drawn;
         }
         let submission = crate::spans::time("submit", || self.queue.submit([commands]));
+        #[cfg(target_os = "android")]
+        if first_frame && let Some(startup) = self.startup.take() {
+            self.queue
+                .on_submitted_work_done(move || startup.complete());
+        }
         if let Some(cull) = &mut self.cull {
             cull.submitted();
         }

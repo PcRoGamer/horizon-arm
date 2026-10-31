@@ -202,7 +202,7 @@ impl Default for Settings {
             Placement::new(0.73, 0.95, 0.075),
             Placement::new(0.42, 0.055, 0.075),
             Placement::new(0.58, 0.055, 0.075),
-            Placement::new(0.68, 0.80, 0.09),
+            Placement::new(0.66, 0.38, 0.09),
             Placement::new(0.92, 0.36, 0.12),
         ];
         let mut layouts = [base; 3];
@@ -261,6 +261,13 @@ impl Settings {
                 if p.center == [old, 0.055] && p.size == 0.075 {
                     p.center[0] = new;
                 }
+            }
+        }
+        // Move only the initial swap-hands placement that overlapped Sprint.
+        for row in &mut s.layouts {
+            let swap = &mut row[Control::Offhand as usize];
+            if swap.center == [0.68, 0.80] && (swap.size - 0.09).abs() < 0.0001 {
+                swap.center = [0.66, 0.38];
             }
         }
         // Move the old factory sprint position only; keep customized placements.
@@ -472,5 +479,24 @@ mod tests {
         let roundtrip: Settings =
             serde_json::from_slice(&serde_json::to_vec(&settings).unwrap()).unwrap();
         assert_eq!(roundtrip.layouts[0][6].center, [0.25, 0.2]);
+    }
+    #[test]
+    fn swap_factory_migration_keeps_custom_positions() {
+        let file =
+            std::env::temp_dir().join(format!("horizon-swap-layout-{}.json", std::process::id()));
+        let mut settings = Settings::default();
+        settings.layouts[0][Control::Offhand as usize].center = [0.68, 0.80];
+        settings.layouts[1][Control::Offhand as usize].center = [0.55, 0.43];
+        settings.save_to(&file).unwrap();
+        let read = Settings::load_from(&file);
+        assert_eq!(
+            read.layouts[0][Control::Offhand as usize].center,
+            [0.66, 0.38]
+        );
+        assert_eq!(
+            read.layouts[1][Control::Offhand as usize].center,
+            [0.55, 0.43]
+        );
+        std::fs::remove_file(file).unwrap();
     }
 }

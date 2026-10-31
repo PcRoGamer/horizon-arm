@@ -138,16 +138,30 @@ fn agent() -> ureq::Agent {
         .clone()
 }
 
-fn json(url: &str) -> Result<Value> {
+// Metadata requests need the same transient-network recovery as asset files.
+// Retry on the installer worker, retaining completed files for the next attempt.
+fn metadata_bytes(url: &str) -> Result<Vec<u8>> {
     official_url(url)?;
-    let mut bytes = Vec::new();
-    agent()
-        .get(url)
-        .call()?
-        .into_reader()
-        .take(16 * 1024 * 1024)
-        .read_to_end(&mut bytes)?;
-    Ok(serde_json::from_slice(&bytes)?)
+    for attempt in 0..3 {
+        let result = (|| -> Result<Vec<u8>> {
+            let mut bytes = Vec::new();
+            agent()
+                .get(url)
+                .call()?
+                .into_reader()
+                .take(16 * 1024 * 1024)
+                .read_to_end(&mut bytes)?;
+            Ok(bytes)
+        })();
+        if result.is_ok() || attempt == 2 {
+            return result;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500 * (attempt + 1)));
+    }
+    unreachable!()
+}
+fn json(url: &str) -> Result<Value> {
+    Ok(serde_json::from_slice(&metadata_bytes(url)?)?)
 }
 
 fn hash(path: &Path) -> Result<String> {
@@ -336,13 +350,7 @@ pub fn install_with_progress(home: &Path, progress: impl Fn(InstallProgress) + S
         .as_str()
         .ok_or("Missing version metadata URL")?;
     official_url(manifest_url)?;
-    let mut bytes = Vec::new();
-    agent()
-        .get(manifest_url)
-        .call()?
-        .into_reader()
-        .take(16 * 1024 * 1024)
-        .read_to_end(&mut bytes)?;
+    let bytes = metadata_bytes(manifest_url)?;
     let manifest = validate_manifest(&bytes, checksum, version, pins)?;
     let index = Download::from(&manifest["assetIndex"], cache.join("asset-index.json"))?;
     index.get()?;
@@ -481,8 +489,9 @@ pub fn install_with_progress(home: &Path, progress: impl Fn(InstallProgress) + S
         let _ = fs::remove_dir_all(stage);
     }
     if result.is_ok()
-        && let Err(error) = cleanup_completed_downloads(home)
+        && let Err(error) = cleanup_completed_downloads_inner(home)
     {
+        // The installation guard is still held here; do not lock it again.
         // Resources were committed successfully; failed housekeeping must not
         // turn a working installation into a reported installation failure.
         log::warn!("Could not clean completed Minecraft downloads: {error}");

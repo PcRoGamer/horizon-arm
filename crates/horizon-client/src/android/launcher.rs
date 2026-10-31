@@ -75,6 +75,14 @@ impl Launcher {
         if crate::diagnostics::previous_unclean(&home) {
             catalog.status = crate::diagnostics::summary(&home);
         }
+        horizon_client::android_runtime::graphics_startup::configure(home.clone());
+        if horizon_client::android_runtime::graphics_startup::recover(&home) {
+            catalog.config.renderer = crate::catalog::RendererMode::OpenGl;
+            if let Err(error) = catalog.config.save(&home) {
+                log::warn!("Could not save graphics recovery choice: {error}");
+            }
+            catalog.status = "Previous Vulkan startup was interrupted. Using OpenGL ES recovery; you can change Rendering mode in Settings.".into();
+        }
         crate::configure_input_mode(catalog.config.input_host);
         crate::device_runtime::configure(catalog.config.device);
         Self {
@@ -192,7 +200,11 @@ impl Launcher {
             false,
             Some(&gui),
             None,
-            horizon_client::graphics::GraphicsApi::Auto,
+            if self.catalog.config.renderer == crate::catalog::RendererMode::OpenGl {
+                horizon_client::graphics::GraphicsApi::OpenGl
+            } else {
+                horizon_client::graphics::GraphicsApi::Auto
+            },
         )?);
         self.window = Some(window);
         self.gui = Some(gui);
@@ -501,7 +513,12 @@ impl ApplicationHandler for Launcher {
         if let Some(result) = self.worker.as_ref().and_then(|w| w.try_recv().ok()) {
             self.worker = None;
             if let Err(error) = result {
-                self.fail(error);
+                let message = error.to_string();
+                if message.contains("Dns Failed") || message.contains("lookup address") {
+                    self.fail("Minecraft download interrupted: DNS could not resolve the download host. Check your connection, VPN or Private DNS, then retry Download. Completed files are kept.");
+                } else {
+                    self.fail(error);
+                }
             }
         }
         for out in crate::platform::poll() {

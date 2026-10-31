@@ -97,7 +97,7 @@ rustix = { version = "1", features = ["fs"] }
     source = ROOT / 'crates/horizon-client/src'
     modules = '\n'.join(f'#[path = "{(source / path).as_posix()}"] mod {name};'
         for name, path in [('document_provider', 'android/document_provider.rs'),
-                           ('document_store', 'android/document_store.rs'), ('file_lock', 'file_lock.rs')])
+                           ('document_store', 'android/document_store.rs'), ('file_lock', '../../horizon-client-render/src/file_lock.rs')])
     (out / 'src/lib.rs').write_text('''#![allow(dead_code)]
 ''' + modules + r'''
 #[unsafe(no_mangle)]

@@ -218,7 +218,7 @@ fn init_logging() {
             diagnostics::log_line(record.level(), record.target(), &record.args().to_string());
         }
         fn flush(&self) {
-            diagnostics::flush();
+            diagnostics::request_flush();
         }
     }
     static LOGGER: std::sync::OnceLock<LocalLogger> = std::sync::OnceLock::new();

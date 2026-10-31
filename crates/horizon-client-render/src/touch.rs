@@ -60,7 +60,6 @@ pub fn projectile_crosshair(item: &str) -> bool {
             | "minecraft:lingering_potion"
             | "minecraft:wind_charge"
             | "minecraft:fishing_rod"
-            | "minecraft:firework_rocket"
     )
 }
 /// Equal physical drags turn equally on either axis, including portrait screens.
@@ -1088,6 +1087,7 @@ mod tests {
         }
         let mut t = TouchControls::default();
         t.settings.mode = Mode::Tap;
+        assert!(!projectile_crosshair("minecraft:firework_rocket"));
         t.projectile_crosshair = true;
         t.hold_uses_item = true;
         t.update(1, [0.6, 0.4], true, false);

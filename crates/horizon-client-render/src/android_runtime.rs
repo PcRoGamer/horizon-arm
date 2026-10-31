@@ -1,4 +1,6 @@
 //! Android renderer and platform policy.
+#[path = "graphics_startup.rs"]
+pub mod graphics_startup;
 use crate::android_gamepad::{Devices, InputMode};
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(target_os = "android")]

@@ -853,12 +853,12 @@ impl Launcher {
                 ),
                 (
                     "Diagnostic report",
-                    "Export ZIP / review before sharing".into(),
+                    "Export one ZIP to share".into(),
                     Action::ExportDiagnostics,
                 ),
                 (
-                    "Performance report",
-                    "Open in Files / Reports".into(),
+                    "Raw performance data",
+                    "Advanced / JSONL in Reports".into(),
                     Action::ExportPerformance,
                 ),
                 (

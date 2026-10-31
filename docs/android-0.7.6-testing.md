@@ -24,3 +24,9 @@ These checks do not require deleting real worlds or resetting the primary app's 
     crash in a valued world; intentional failures belong only in the standalone
     diagnostics probe. Review/redact the ZIP before posting it. Older Android or
     firmware may expose no OS trace; the report must say so explicitly.
+
+13. **Player persistence:** in a disposable new world obtain several items, gain experience and walk away from spawn. Save and Quit, reopen twice and restart the app. Inventory, position, XP and block edits must persist. Keep backups before testing existing worlds.
+14. **Periodic stalls/audio:** leave both launcher and game menu idle for a minute, then play with performance recording off and on. Confirm the former roughly one-second freezes are absent. Check sound and reconnect headphones; an actual output change may briefly reopen audio.
+15. **Mali composition:** at 100% and 85%, compare sun, fire and lantern colors in SDR; check shader packs and screenshots. The alpha-only compositor fix must not darken/change RGB.
+16. **Graphics recovery:** first verify ordinary OpenGL ES starts launcher and game. An interrupted Vulkan startup should select GLES at next app launch, preserving profiles. Test intentional interruption only in a disposable test installation; later crashes may have other causes.
+17. **Swap/aim:** enable Swap hands, check it does not overlap Sprint, and confirm custom layouts survive migration. Fireworks must not add an automatic crosshair; bows and thrown projectiles still do.
