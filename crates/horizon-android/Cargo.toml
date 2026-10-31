@@ -1,0 +1,68 @@
+[package]
+name = "horizon-android"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version = "1.90"
+description = "Minimal Android shell for the upstream Horizon client"
+
+[lib]
+path = "../horizon-client/src/android_main.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+horizon-client = { path = "../horizon-client", default-features = false }
+horizon-assets = { path = "../horizon-assets" }
+horizon-client-core = { path = "../horizon-client-core" }
+horizon-client-input = { path = "../horizon-client-input" }
+horizon-client-render = { path = "../horizon-client-render", default-features = false }
+horizon-command = { path = "../horizon-command" }
+horizon-items = { path = "../horizon-items" }
+horizon-core = { path = "../horizon-core" }
+horizon-threads = { path = "../horizon-threads" }
+horizon-hdr = { path = "../horizon-hdr" }
+horizon-world = { path = "../horizon-world" }
+horizon-protocol = { path = "../horizon-protocol" }
+horizon-server-files = { path = "../horizon-server-files" }
+horizon-anticheat = { path = "../horizon-anticheat" }
+horizon-shaders = { path = "../horizon-shaders" }
+horizon-shader-api = { path = "../horizon-shader-api" }
+horizon-friends = { path = "../horizon-friends" }
+horizon-mods = { path = "../horizon-mods", default-features = false, features = ["index"] }
+horizon-theme = { path = "../horizon-theme" }
+horizon-telemetry = { path = "../horizon-telemetry", default-features = false, features = ["live"] }
+horizon-bench = { path = "../horizon-bench" }
+android_logger = "0.15"
+winit_real = { package = "winit", version = "0.30.13", features = ["android-game-activity"] }
+wgpu = { version = "30.0.1", default-features = false, features = ["std", "parking_lot", "vulkan", "gles", "wgsl", "naga-ir"] }
+pollster = "0.4"
+bytemuck = { version = "1.24", features = ["derive"] }
+glam = "0.30"
+png = "0.18"
+sha1 = "0.10"
+sha2 = "0.10.9"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1.0.151", features = ["raw_value"] }
+naga = { version = "30.0.1", features = ["wgsl-in", "hlsl-out"] }
+miniz_oxide = "0.8"
+ab_glyph = "0.2.32"
+log = "0.4"
+chrono = { version = "0.4.42", default-features = false, features = ["clock", "std"] }
+flate2 = { version = "1.1.10", default-features = false, features = ["zlib-rs", "runtime_detection"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+ureq = { version = "2", default-features = false, features = ["tls"] }
+unicode-bidi = "0.3.18"
+fs4 = { version = "1.1.0", default-features = false, features = ["sync"] }
+
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1", default-features = false, features = ["std", "time", "process", "fs"] }
+
+[features]
+default = []
+audio = ["horizon-client/audio", "horizon-client-render/audio"]
+controllers = ["horizon-client/controllers", "horizon-client-input/controllers"]
+mods = ["horizon-client/mods", "horizon-mods/runtime"]
+rng-trace = ["horizon-core/rng-trace"]
+
+[lints]
+workspace = true
