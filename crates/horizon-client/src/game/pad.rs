@@ -8,6 +8,7 @@ use horizon_client::{
     Result,
     gamepad::{self, Button, Edges, GlyphStyle, HealthWatch, PadState, Rumble},
     keybinds::{KeyBinds, key_code, mouse_button},
+    keymapping::SNEAK,
 };
 use serde_json::{Value, json};
 use std::time::Instant;
@@ -30,6 +31,8 @@ pub(super) struct Pads {
     pub(super) hardware_keys: std::collections::HashSet<KeyCode>,
     #[cfg(target_os = "android")]
     last_input_mode: Option<horizon_client::android_gamepad::InputMode>,
+    #[cfg(target_os = "android")]
+    pub(super) touch_shield: bool,
     #[cfg(target_os = "android")]
     pub(super) touch: horizon_client::touch::TouchControls,
     /// Keep a released tap's ray until the tick consumed its queued click.
@@ -122,6 +125,13 @@ impl Pads {
 
 impl Game<'_> {
     #[cfg(target_os = "android")]
+    pub(super) fn touch_shield_available(&self) -> bool {
+        self.held()
+            .into_iter()
+            .chain(self.offhand.as_ref())
+            .any(|s| self.blocks_attacks(s).is_some())
+    }
+    #[cfg(target_os = "android")]
     pub(super) fn android_inventory_controls(&self) -> bool {
         self.settings.touch.inventory_controls
             && matches!(self.screen, Screen::Inventory | Screen::Creative)
@@ -189,7 +199,19 @@ impl Game<'_> {
         let state = hardware.merge(&self.pad.injected);
         #[cfg(target_os = "android")]
         let state = {
+            self.pad.touch.shield_available = self.touch_shield_available();
             let mut touch = self.pad.touch.poll_state();
+            self.pad.touch_shield = crate::touch_visible()
+                && !self.pad_in_menu()
+                && self.touch_shield_available()
+                && if self.settings.touch.shield_button {
+                    self.pad.touch.shield_held()
+                } else {
+                    self.pad.touch.sneaking || touch.held(Button::RightStick)
+                };
+            if self.pad.touch_shield {
+                touch.triggers[0] = 1.0;
+            }
             if let Some(point) = self.pad.touch.aim {
                 self.pad.touch_aim = Some(point);
             }
@@ -465,12 +487,16 @@ impl Game<'_> {
                     && !self.settings.toggle_crouch
                     && !self.android_touch_descending() =>
             {
-                // A stick click flips sneaking instead of holding it.
-                if down {
-                    let sneaking = self.keys.contains(&KeyCode::ShiftLeft);
-                    self.mapped_key(KeyCode::ShiftLeft, !sneaking, false)?;
+                // A stick click flips sneaking instead of holding it, as
+                // vanilla's toggle crouch does: a screen opening releases it
+                // and closing restores it (ToggleKeyMapping).
+                if !down {
+                    return Ok(());
                 }
-                Ok(())
+                let screen_open = self.screen != Screen::Playing || self.title.is_some();
+                self.toggles.pad_toggle(SNEAK, screen_open);
+                self.sync_toggle(SNEAK);
+                self.key_pressed(KeyCode::ShiftLeft)
             }
             _ => {
                 let default = KeyBinds::default_of(action);
@@ -560,6 +586,8 @@ impl Game<'_> {
                 rotation,
             );
             if enabled {
+                self.tutorial
+                    .mouse(f64::from(delta[0]), f64::from(delta[1]));
                 self.turn_player(f64::from(delta[0] / 0.15), f64::from(delta[1] / 0.15));
             }
         }
@@ -577,6 +605,7 @@ impl Game<'_> {
         if yaw == 0.0 && pitch == 0.0 {
             return;
         }
+        self.tutorial.mouse(f64::from(yaw), f64::from(pitch));
         self.turn_player(f64::from(yaw / 0.15), f64::from(pitch / 0.15));
     }
 

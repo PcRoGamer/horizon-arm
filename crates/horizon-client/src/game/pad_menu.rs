@@ -690,7 +690,7 @@ impl Game<'_> {
             self.pad.in_use = false;
         }
         // Focus lands on the menu as it opens when the pad was in use.
-        if self.pad.in_use && self.pad.menu.pos.is_none() && self.pad.menu.open_polls == 3 {
+        if self.pad.in_use && self.pad.menu.pos.is_none() && self.pad.menu.open_polls >= 3 {
             self.pad_take_pointer(event_loop);
         }
         let focus_mode = self.pad_focus_mode();

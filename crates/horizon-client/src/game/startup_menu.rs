@@ -12,6 +12,10 @@ pub(super) struct StartupMenu {
     #[cfg(target_os = "android")]
     touch: horizon_client::touch_ui::TouchUi,
     #[cfg(target_os = "android")]
+    keyboard_focus: Option<horizon_client::widgets::Target>,
+    #[cfg(target_os = "android")]
+    keyboard_navigation: bool,
+    #[cfg(target_os = "android")]
     controls: horizon_client::touch::TouchControls,
     #[cfg(target_os = "android")]
     pub(super) audio: Option<horizon_client::audio::Audio>,
@@ -112,8 +116,16 @@ impl StartupMenu {
             game.music = std::mem::take(&mut self.music);
         }
         game.frame_graph = std::mem::take(&mut self.frame_graph);
-        game.title = self.title.take();
+        game.title = self
+            .title
+            .take()
+            .map(|title| title.with_user(|| game.options.player_name()));
         game.pending_entry = self.pending.take();
+        #[cfg(target_os = "android")]
+        if self.keyboard_navigation {
+            game.pad.in_use = true;
+            game.pad.menu.keyboard_focus = true;
+        }
         game.cursor = self.cursor;
         game.modifiers = self.modifiers;
         game.physical_keys = std::mem::take(&mut self.physical_keys);
@@ -542,6 +554,11 @@ impl Loading {
             Action::Language => self.open_menu_options(Page::Language),
             Action::Sounds => self.open_menu_options(Page::Sound),
             Action::Credits => self.open_menu_options(Page::Credits),
+            Action::OpenUri(uri) => super::packs::open_uri(&uri),
+            Action::CopyText(text) => {
+                use horizon_client::clipboard::Clipboard;
+                self.menu.clipboard.set(&text);
+            }
             Action::DataPacks { dir, selected } => {
                 let resources = self.vanilla_root.clone();
                 self.menu.options.open_data_packs(dir, selected, resources);
@@ -606,6 +623,74 @@ impl Loading {
         }
     }
     #[cfg(target_os = "android")]
+    fn startup_navigation(&mut self, events: &ActiveEventLoop, event: &KeyEvent) -> Result<bool> {
+        use horizon_client::{
+            gamepad::{self, Button},
+            widgets,
+        };
+        let Some(key) = horizon_client::keypad::resolve_key(event.physical_key, &event.logical_key)
+        else {
+            return Ok(false);
+        };
+        if crate::platform::active()
+            || self.menu.options.selected_key.is_some()
+            || self
+                .menu
+                .title
+                .as_mut()
+                .is_some_and(|t| t.has_caret_field())
+        {
+            return Ok(false);
+        }
+        let direction = match key {
+            KeyCode::ArrowUp => Some(Button::DPadUp),
+            KeyCode::ArrowDown => Some(Button::DPadDown),
+            KeyCode::ArrowLeft => Some(Button::DPadLeft),
+            KeyCode::ArrowRight => Some(Button::DPadRight),
+            _ => None,
+        };
+        let targets = widgets::last_targets();
+        if let Some(direction) = direction {
+            self.menu.keyboard_navigation = true;
+            let rects: Vec<_> = targets.iter().map(|t| t.rect).collect();
+            let old = self
+                .menu
+                .keyboard_focus
+                .and_then(|f| gamepad::refind(f.rect, &rects, 2.0));
+            let next = old
+                .and_then(|i| gamepad::focus_step_rect(rects[i], direction, &rects))
+                .or(old)
+                .or_else(|| (!targets.is_empty()).then_some(0));
+            if let Some(i) = next {
+                self.menu.keyboard_focus = Some(targets[i]);
+            }
+            if let Some(t) = self.menu.keyboard_focus {
+                let scale = HudBatch::new(self.menu_size()).scale;
+                self.menu_event(
+                    events,
+                    WindowEvent::CursorMoved {
+                        device_id: DeviceId::dummy(),
+                        position: winit::dpi::PhysicalPosition::new(
+                            f64::from(t.center().0 * scale),
+                            f64::from(t.center().1 * scale),
+                        ),
+                    },
+                )?;
+            }
+            return Ok(true);
+        }
+        if matches!(key, KeyCode::Enter | KeyCode::NumpadEnter | KeyCode::Space)
+            && self.menu.keyboard_focus.is_some()
+        {
+            self.startup_mouse_button(events, false, true)?;
+            self.startup_mouse_button(events, false, false)?;
+            self.menu.keyboard_focus = None;
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
+    #[cfg(target_os = "android")]
     fn startup_mouse_button(
         &mut self,
         events: &ActiveEventLoop,
@@ -635,6 +720,13 @@ impl Loading {
         event_loop: &ActiveEventLoop,
         event: WindowEvent,
     ) -> Result<()> {
+        #[cfg(target_os = "android")]
+        if let WindowEvent::KeyboardInput { event, .. } = &event
+            && event.state == ElementState::Pressed
+            && self.startup_navigation(event_loop, event)?
+        {
+            return Ok(());
+        }
         #[cfg(target_os = "android")]
         if matches!(event, WindowEvent::Focused(false)) {
             self.menu.touch.cancel();
@@ -700,6 +792,8 @@ impl Loading {
         }
         #[cfg(target_os = "android")]
         if let WindowEvent::Touch(touch) = &event {
+            self.menu.keyboard_navigation = false;
+            self.menu.keyboard_focus = None;
             use horizon_client::touch_ui::{Action, Gesture};
             use winit::event::TouchPhase;
             let b = HudBatch::new(self.menu_size());
@@ -1054,16 +1148,25 @@ impl Loading {
     pub(super) fn draw_menu(&mut self, batch: &mut HudBatch) {
         let Some(gui) = &self.gui else { return };
         #[cfg(target_os = "android")]
+        if self.menu.keyboard_navigation
+            && self.menu.keyboard_focus.is_none()
+            && let Some(t) = horizon_client::widgets::last_targets().first().copied()
+        {
+            self.menu.keyboard_focus = Some(t);
+            self.menu.cursor = t.center();
+        }
+        #[cfg(target_os = "android")]
         if self.menu.controls.editor.is_some() {
             self.menu.controls.draw(batch, &gui.atlas);
             return;
         }
         if self.menu.pending.is_some() {
-            horizon_client::level_loading::draw_progress(
+            horizon_client::level_loading::draw_loading_overlay(
                 batch,
                 &gui.atlas,
                 self.progress.line(),
                 self.progress.fraction(),
+                self.settings.file.bool("darkMojangStudiosBackground"),
             );
         } else if let Some((win, frame)) = &mut self.menu.win {
             let now = Instant::now();

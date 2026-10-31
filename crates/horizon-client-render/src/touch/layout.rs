@@ -47,9 +47,11 @@ pub enum Control {
     Inventory,
     Debug,
     Perspective,
+    Offhand,
+    Shield,
 }
 impl Control {
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 14] = [
         Self::Move,
         Self::Sprint,
         Self::Jump,
@@ -62,6 +64,8 @@ impl Control {
         Self::Inventory,
         Self::Debug,
         Self::Perspective,
+        Self::Offhand,
+        Self::Shield,
     ];
     pub fn name(self) -> &'static str {
         match self {
@@ -77,6 +81,8 @@ impl Control {
             Self::Inventory => "Inventory",
             Self::Debug => "Debug overlay (F3)",
             Self::Perspective => "Camera perspective (F5)",
+            Self::Offhand => "Swap hands",
+            Self::Shield => "Raise shield",
         }
     }
 }
@@ -131,6 +137,10 @@ pub struct Settings {
     pub sprint_with_joystick: bool,
     pub swap_jump_sneak: bool,
     pub sensitivity: f32,
+    pub sensitivity_horizontal: f32,
+    pub sensitivity_vertical: f32,
+    pub offhand_button: bool,
+    pub shield_button: bool,
     pub circle_size: f32,
     pub button_scale: f32,
     pub custom_buttons: Vec<super::CustomButton>,
@@ -143,20 +153,21 @@ pub struct Settings {
     pub gyroscope: bool,
     pub gyro_sensitivity: f32,
     pub attack_indicator_left: bool,
-    pub button_visibility: [u8; 12],
+    #[serde(deserialize_with = "deserialize_visibility")]
+    pub button_visibility: [u8; 14],
     pub horizontal_margin: f32,
     pub vertical_margin: f32,
     #[serde(deserialize_with = "deserialize_layouts")]
-    pub layouts: [[Placement; 12]; 3],
+    pub layouts: [[Placement; 14]; 3],
 }
 // Append new buttons without resetting a player's existing ten-button layout.
 fn deserialize_layouts<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
-) -> Result<[[Placement; 12]; 3], D::Error> {
+) -> Result<[[Placement; 14]; 3], D::Error> {
     let rows = Vec::<Vec<Placement>>::deserialize(deserializer)?;
-    if rows.len() != 3 || rows.iter().any(|r| !matches!(r.len(), 10 | 12)) {
+    if rows.len() != 3 || rows.iter().any(|r| !matches!(r.len(), 10 | 12 | 14)) {
         return Err(serde::de::Error::custom(
-            "expected three touch layouts of 10 or 12 controls",
+            "expected three touch layouts of 10, 12 or 14 controls",
         ));
     }
     let mut layouts = Settings::default().layouts;
@@ -164,6 +175,17 @@ fn deserialize_layouts<'de, D: serde::Deserializer<'de>>(
         output[..input.len()].copy_from_slice(&input);
     }
     Ok(layouts)
+}
+fn deserialize_visibility<'de, D: serde::Deserializer<'de>>(d: D) -> Result<[u8; 14], D::Error> {
+    let old = Vec::<u8>::deserialize(d)?;
+    if !matches!(old.len(), 12 | 14) {
+        return Err(serde::de::Error::custom(
+            "expected 12 or 14 visibility values",
+        ));
+    }
+    let mut values = [0; 14];
+    values[..old.len()].copy_from_slice(&old);
+    Ok(values)
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -180,6 +202,8 @@ impl Default for Settings {
             Placement::new(0.73, 0.95, 0.075),
             Placement::new(0.42, 0.055, 0.075),
             Placement::new(0.58, 0.055, 0.075),
+            Placement::new(0.68, 0.80, 0.09),
+            Placement::new(0.92, 0.36, 0.12),
         ];
         let mut layouts = [base; 3];
         layouts[2][Control::Sneak as usize] = Placement::new(0.13, 0.76, 0.10);
@@ -192,6 +216,10 @@ impl Default for Settings {
             sprint_with_joystick: false,
             swap_jump_sneak: false,
             sensitivity: 1.0,
+            sensitivity_horizontal: 1.0,
+            sensitivity_vertical: 1.0,
+            offhand_button: false,
+            shield_button: false,
             circle_size: 32.0,
             button_scale: 1.0,
             custom_buttons: Vec::new(),
@@ -204,7 +232,7 @@ impl Default for Settings {
             gyroscope: false,
             gyro_sensitivity: 1.0,
             attack_indicator_left: true,
-            button_visibility: [0; 12],
+            button_visibility: [0; 14],
             horizontal_margin: 0.0,
             vertical_margin: 0.0,
             layouts,
@@ -271,6 +299,16 @@ impl Settings {
             self.sensitivity = 1.0;
         }
         self.sensitivity = self.sensitivity.clamp(0.1, 3.0);
+        for value in [
+            &mut self.sensitivity_horizontal,
+            &mut self.sensitivity_vertical,
+        ] {
+            *value = if value.is_finite() {
+                value.clamp(0.1, 3.0)
+            } else {
+                1.0
+            };
+        }
         self.button_scale = if self.button_scale.is_finite() {
             self.button_scale.clamp(0.5, 2.0)
         } else {
@@ -311,6 +349,8 @@ impl Settings {
             _ => {}
         }
         match c {
+            Control::Offhand => self.offhand_button,
+            Control::Shield => self.shield_button,
             Control::Attack | Control::Use => self.crosshair(),
             Control::Sprint => {
                 self.sprint_button && self.mode != Mode::Dpad && !self.sprint_with_joystick

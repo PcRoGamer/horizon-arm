@@ -27,6 +27,51 @@ pub fn item_places_entity_on_tap(item: &str) -> bool {
         )
 }
 
+/// Surface-targeted actions should not wait for a long press.
+pub fn item_uses_on_tap(item: &str) -> bool {
+    item_places_entity_on_tap(item)
+        || item
+            .strip_prefix("minecraft:")
+            .is_some_and(|id| id.ends_with("_bucket") && id != "milk_bucket")
+        || matches!(
+            item,
+            "minecraft:bone_meal"
+                | "minecraft:flint_and_steel"
+                | "minecraft:fire_charge"
+                | "minecraft:honeycomb"
+                | "minecraft:glass_bottle"
+                | "minecraft:bucket"
+                | "minecraft:water_bucket"
+                | "minecraft:lava_bucket"
+                | "minecraft:powder_snow_bucket"
+        )
+}
+pub fn projectile_crosshair(item: &str) -> bool {
+    matches!(
+        item,
+        "minecraft:bow"
+            | "minecraft:crossbow"
+            | "minecraft:trident"
+            | "minecraft:snowball"
+            | "minecraft:egg"
+            | "minecraft:ender_pearl"
+            | "minecraft:experience_bottle"
+            | "minecraft:splash_potion"
+            | "minecraft:lingering_potion"
+            | "minecraft:wind_charge"
+            | "minecraft:fishing_rod"
+            | "minecraft:firework_rocket"
+    )
+}
+/// Equal physical drags turn equally on either axis, including portrait screens.
+pub fn camera_delta(delta: [f32; 2], width: u32, height: u32, s: &Settings) -> [f32; 2] {
+    let scale = width.max(height).max(1) as f32;
+    [
+        delta[0] * width as f32 / scale * 180.0 * s.sensitivity * s.sensitivity_horizontal,
+        delta[1] * height as f32 / scale * 180.0 * s.sensitivity * s.sensitivity_vertical,
+    ]
+}
+
 /// In tap modes the crosshair is absent, so use Java's native hotbar gauge.
 pub fn attack_indicator(setting: u8, crosshair: bool) -> u8 {
     if setting == 1 && !crosshair {
@@ -73,12 +118,15 @@ enum Role {
         committed: bool,
     },
     Ignore,
+    Shield,
     Button(Button),
 }
 #[derive(Default)]
 pub struct TouchControls {
     pub settings: Settings,
     pub force_crosshair: bool,
+    pub projectile_crosshair: bool,
+    pub shield_available: bool,
     /// Physical keypad profiles keep utility controls without a movement overlay.
     pub auxiliary_only: bool,
     /// Inventory utility buttons emit real modifier/mouse events, never movement.
@@ -180,6 +228,9 @@ impl TouchControls {
         self.pending.set(button, true);
     }
     fn visible(&self, c: Control) -> bool {
+        if c == Control::Shield && !self.shield_available && self.editor.is_none() {
+            return false;
+        }
         if self.auxiliary_only && !Self::auxiliary_control(c) {
             return false;
         }
@@ -237,7 +288,7 @@ impl TouchControls {
             Control::Jump => Button::South,
             Control::Sneak => Button::RightStick,
             Control::Attack => Button::RightTrigger,
-            Control::Use => Button::LeftTrigger,
+            Control::Use | Control::Shield => Button::LeftTrigger,
             Control::Pause => Button::Start,
             Control::Inventory => Button::North,
             _ => return None,
@@ -375,6 +426,7 @@ impl TouchControls {
                     Control::Chat | Control::Debug | Control::Perspective => "gui",
                     Control::Inventory => "ui/more-dots",
                     Control::Settings => "ui/gear",
+                    Control::Offhand | Control::Shield => "ui/joystick_knob",
                     _ => continue,
                 };
                 let bounds = [x, y, size, size];
@@ -383,6 +435,26 @@ impl TouchControls {
                     Control::Debug => region(b, a, "gui", [236.0, 82.0, 18.0, 18.0], bounds, color),
                     Control::Perspective => {
                         region(b, a, "gui", [236.0, 46.0, 18.0, 18.0], bounds, color)
+                    }
+                    Control::Offhand | Control::Shield => {
+                        menu_frame(b, a, bounds, color);
+                        let label = if control == Control::Offhand {
+                            "Swap"
+                        } else {
+                            "Shield"
+                        };
+                        let start = b.vertices.len();
+                        let width = HudBatch::text_width(a, label);
+                        b.text(
+                            a,
+                            label,
+                            x + (size - width) / 2.0,
+                            y + (size - 8.0) / 2.0,
+                            color,
+                            false,
+                        );
+                        let scale = ((size - 5.0) / width.max(1.0)).clamp(0.1, 1.0);
+                        b.scale_since(start, x + size / 2.0, y + size / 2.0, scale, scale);
                     }
                     Control::Inventory => {
                         sprite(b, a, "ui/joystick_knob", bounds, color);
@@ -456,6 +528,14 @@ impl TouchControls {
             }
         }
     }
+    pub fn shield_held(&self) -> bool {
+        self.settings.shield_button
+            && self.shield_available
+            && self
+                .fingers
+                .values()
+                .any(|(role, _)| matches!(role, Role::Shield))
+    }
     pub fn pointer(&self) -> Option<[f32; 2]> {
         if self.crosshair() {
             return None;
@@ -489,7 +569,7 @@ impl TouchControls {
                 && !dragged
                 && since.elapsed() < HOLD_DELAY
             {
-                self.tap_aim = Some(if self.settings.crosshair() {
+                self.tap_aim = Some(if self.settings.crosshair() || self.projectile_crosshair {
                     [0.5, 0.5]
                 } else {
                     start
@@ -509,6 +589,19 @@ impl TouchControls {
                         .any(|(r, _)| matches!(r, Role::Move(_))) =>
                 {
                     Role::Move(self.placement(Control::Move).center)
+                }
+                Some(Control::Shield) => {
+                    self.clicked = true;
+                    self.pending.triggers[0] = 1.0;
+                    Role::Shield
+                }
+                Some(Control::Offhand) => {
+                    self.clicked = true;
+                    self.custom_events
+                        .push(("action:key.swapOffhand".into(), true));
+                    self.custom_events
+                        .push(("action:key.swapOffhand".into(), false));
+                    Role::Ignore
                 }
                 Some(Control::Chat) => {
                     self.chat_requested = true;
@@ -636,11 +729,12 @@ impl TouchControls {
                         *committed = true;
                     }
                     if !*dragged || *committed {
-                        self.aim = Some(if self.settings.crosshair() {
-                            [0.5, 0.5]
-                        } else {
-                            *point
-                        });
+                        self.aim =
+                            Some(if self.settings.crosshair() || self.projectile_crosshair {
+                                [0.5, 0.5]
+                            } else {
+                                *point
+                            });
                         if *committed {
                             self.holding = true;
                             self.holding_use = *held_use;
@@ -698,7 +792,7 @@ impl TouchControls {
                         state.set(Button::LeftStick, true);
                     }
                 }
-                Role::Button(Button::LeftTrigger) => state.triggers[0] = 1.0,
+                Role::Button(Button::LeftTrigger) | Role::Shield => state.triggers[0] = 1.0,
                 Role::Button(Button::RightTrigger) => state.triggers[1] = 1.0,
                 Role::Button(b) => state.set(*b, true),
                 _ => {}
@@ -956,6 +1050,94 @@ fn line(
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn camera_calibration_uses_physical_distance_on_both_axes() {
+        let mut settings = Settings::default();
+        for (w, h) in [(2400, 1080), (1080, 2400)] {
+            let turn = camera_delta([100.0 / w as f32, 100.0 / h as f32], w, h, &settings);
+            assert!((turn[0] - turn[1]).abs() < 0.0001);
+            settings.sensitivity_vertical = 0.5;
+            let tuned = camera_delta([100.0 / w as f32, 100.0 / h as f32], w, h, &settings);
+            assert!((tuned[0] - tuned[1] * 2.0).abs() < 0.0001);
+            settings.sensitivity_vertical = 1.0;
+        }
+    }
+
+    #[test]
+    fn surface_tools_tap_but_projectiles_keep_hold_use_and_center_aim() {
+        for id in [
+            "bone_meal",
+            "flint_and_steel",
+            "fire_charge",
+            "water_bucket",
+            "honeycomb",
+        ] {
+            assert!(item_uses_on_tap(&format!("minecraft:{id}")));
+        }
+        for id in [
+            "bow",
+            "crossbow",
+            "snowball",
+            "egg",
+            "wind_charge",
+            "trident",
+        ] {
+            let id = format!("minecraft:{id}");
+            assert!(!item_uses_on_tap(&id));
+            assert!(projectile_crosshair(&id));
+        }
+        let mut t = TouchControls::default();
+        t.settings.mode = Mode::Tap;
+        t.projectile_crosshair = true;
+        t.hold_uses_item = true;
+        t.update(1, [0.6, 0.4], true, false);
+        t.update(1, [0.6, 0.4], false, true);
+        t.poll_state();
+        assert_eq!(t.aim, Some([0.5, 0.5]));
+        assert_eq!(t.take_tap(), Some(true));
+    }
+
+    #[test]
+    fn new_buttons_preserve_old_layouts_and_release_shield() {
+        let settings = Settings::default();
+        let mut old = serde_json::to_value(&settings).unwrap();
+        for row in old["layouts"].as_array_mut().unwrap() {
+            row.as_array_mut().unwrap().truncate(12);
+        }
+        old["button_visibility"]
+            .as_array_mut()
+            .unwrap()
+            .truncate(12);
+        old["layouts"][0][0]["center"] = serde_json::json!([0.2, 0.7]);
+        let restored: Settings = serde_json::from_value(old).unwrap();
+        assert_eq!(restored.layouts[0][0].center, [0.2, 0.7]);
+        assert!(!restored.offhand_button);
+        let mut t = TouchControls::default();
+        assert!(!t.visible(Control::Offhand));
+        t.settings.offhand_button = true;
+        let p = t.placement(Control::Offhand).center;
+        t.update(1, p, true, false);
+        assert_eq!(
+            t.key_events(),
+            [
+                ("action:key.swapOffhand".into(), true),
+                ("action:key.swapOffhand".into(), false)
+            ]
+        );
+        t.clear();
+        t.settings.shield_button = true;
+        t.shield_available = true;
+        let p = t.placement(Control::Shield).center;
+        t.update(2, p, true, false);
+        assert!(t.shield_held());
+        t.update(2, [0.5, 0.4], false, false);
+        assert!(t.shield_held());
+        assert!(t.poll_state().triggers[0] > 0.0);
+        t.update(2, [0.5, 0.4], false, true);
+        assert!(!t.shield_held());
+        assert_eq!(t.poll_state().triggers[0], 0.0);
+    }
+
     #[test]
     fn entity_placement_taps_do_not_change_consumption_and_throwing_holds() {
         for id in [

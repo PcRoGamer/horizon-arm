@@ -28,6 +28,7 @@ struct Recorder {
 
 pub fn start(home: &Path, metadata: Value) -> horizon_client::Result<()> {
     stop();
+    PROFILE_OWNS_RECORDER.store(false, Ordering::Relaxed);
     let dir = home.join("performance");
     std::fs::create_dir_all(&dir)?;
     let mut files = reports(home);
@@ -147,6 +148,8 @@ pub fn submit(mut row: Value, context: Value) {
 }
 pub fn stop() {
     ACTIVE.store(false, Ordering::Relaxed);
+    PROFILE_SWITCH.store(false, Ordering::Relaxed);
+    PROFILE_OWNS_RECORDER.store(false, Ordering::Relaxed);
     spans::record_timings(false);
     spans::enable(false);
     if let Some(r) = RECORDER.lock().unwrap_or_else(|e| e.into_inner()).take() {
@@ -265,6 +268,30 @@ mod tests {
         assert!(record(16.0, 4.0, &[], [0.0; 4]).is_none());
         assert!(!active());
         stop();
+        // GPU profiling joins the existing writer, and disabling it must not
+        // stop an independently requested CPU/performance report.
+        start(&home, json!({"purpose":"combined"})).unwrap();
+        configure_gpu_profile(true, &home);
+        assert!(active());
+        assert!(!PROFILE_OWNS_RECORDER.load(Ordering::Relaxed));
+        configure_gpu_profile(false, &home);
+        assert!(active());
+        stop();
+        configure_gpu_profile(true, &home);
+        assert!(active());
+        assert!(PROFILE_OWNS_RECORDER.load(Ordering::Relaxed));
+        configure_gpu_profile(false, &home);
+        assert!(!active());
+        configure_gpu_profile(true, &home);
+        start(&home, json!({"purpose":"replace_gpu_only"})).unwrap();
+        configure_gpu_profile(true, &home);
+        configure_gpu_profile(false, &home);
+        assert!(active());
+        stop();
+        // Returning to the launcher resets the switch for the next Play.
+        configure_gpu_profile(true, &home);
+        assert!(active());
+        stop();
         std::fs::remove_dir_all(home).unwrap();
     }
 }
@@ -278,7 +305,10 @@ pub fn configure_gpu_profile(on: bool, home: &Path) {
             home,
             json!({"purpose":"detailed_gpu_profile","quantiles":"rolling 120 completed GPU samples per stage; delayed readback","limits":"No GPU clocks or vendor hardware counters; correlation is not proof of cause."}),
         ) {
-            Ok(()) => PROFILE_OWNS_RECORDER.store(true, Ordering::Relaxed),
+            Ok(()) => {
+                PROFILE_SWITCH.store(true, Ordering::Relaxed);
+                PROFILE_OWNS_RECORDER.store(true, Ordering::Relaxed);
+            }
             Err(error) => log::warn!("Cannot start GPU profile: {error}"),
         }
     } else if !on && old && PROFILE_OWNS_RECORDER.swap(false, Ordering::Relaxed) {

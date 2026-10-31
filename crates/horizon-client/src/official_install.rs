@@ -15,6 +15,7 @@ use std::{
 
 const CATALOG: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 const LOCK: &str = include_str!("../../../research-lock.json");
+static INSTALLATION: Mutex<()> = Mutex::new(());
 static DOWNLOAD_CACHE_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 /// Android supplies Context.getCacheDir(), keeping temporary downloads out of files/.
@@ -90,6 +91,10 @@ fn cleanup_system_download_cache() -> Result<()> {
 
 /// Clean both old files/ downloads and the system cache when resources are complete.
 pub fn cleanup_completed_downloads(home: &Path) -> Result<()> {
+    let _guard = INSTALLATION.lock().unwrap_or_else(|e| e.into_inner());
+    cleanup_completed_downloads_inner(home)
+}
+fn cleanup_completed_downloads_inner(home: &Path) -> Result<()> {
     if !ready(home) {
         return Ok(());
     }
@@ -299,6 +304,7 @@ fn validate_manifest(bytes: &[u8], checksum: &str, version: &str, pins: &Value) 
 }
 
 pub fn install_with_progress(home: &Path, progress: impl Fn(InstallProgress) + Sync) -> Result<()> {
+    let _guard = INSTALLATION.lock().unwrap_or_else(|e| e.into_inner());
     let report = |stage, done, total| progress(InstallProgress { stage, done, total });
     report(InstallStage::Metadata, 0, 0);
     let version = horizon_core::VANILLA_VERSION;
@@ -439,10 +445,10 @@ pub fn install_with_progress(home: &Path, progress: impl Fn(InstallProgress) + S
         })?;
         report(InstallStage::Finalize, 0, 0);
         fs::write(stage.join("android-downloads-v2.json"), b"{\"schema\":2}")?;
-        fs::copy(
-            cache.join("asset-index.json"),
-            stage.join("asset-index.json"),
-        )?;
+        // Android can evict cache files under storage pressure. The verified
+        // index was already decoded above; finalization must not reopen it.
+        fs::write(stage.join("asset-index.json"), serde_json::to_vec(&index)?)
+            .map_err(|error| format!("Could not save prepared asset index: {error}"))?;
         if !stage.join("horizon-resources.json").is_file() {
             return Err("APK has no engine data for this version".into());
         }
@@ -464,7 +470,7 @@ pub fn install_with_progress(home: &Path, progress: impl Fn(InstallProgress) + S
             if backup.exists() {
                 let _ = fs::rename(&backup, &destination);
             }
-            return Err(error.into());
+            return Err(format!("Could not activate prepared Minecraft resources: {error}").into());
         }
         if backup.exists() {
             let _ = fs::remove_dir_all(&backup);
@@ -535,6 +541,36 @@ mod tests {
             fs::write(root.join(marker), b"{}").unwrap();
         }
         fs::write(root.join("prepared-data"), b"runtime data").unwrap();
+    }
+
+    #[test]
+    fn cleanup_waits_until_installation_releases_its_inputs() {
+        let home = cache_home();
+        mark_cache_install_ready(home.path());
+        let guard = INSTALLATION.lock().unwrap();
+        let path = home.path().to_owned();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            let result = cleanup_completed_downloads(&path).map_err(|e| e.to_string());
+            tx.send(result).unwrap();
+        });
+        assert!(
+            rx.recv_timeout(std::time::Duration::from_millis(30))
+                .is_err()
+        );
+        assert!(
+            home.path()
+                .join(".local/downloads")
+                .join(horizon_core::VANILLA_VERSION)
+                .join("client.jar")
+                .is_file()
+        );
+        drop(guard);
+        rx.recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap()
+            .unwrap();
+        worker.join().unwrap();
+        assert!(home.path().join("saves/keep").is_file());
     }
 
     #[test]

@@ -69,7 +69,7 @@ impl TouchControls {
             } else if layout::contains([0.25, 0.04, 0.105, 0.075], p) {
                 self.settings.layouts[self.settings.mode.index()] =
                     Settings::default().layouts[self.settings.mode.index()];
-                self.settings.button_visibility = [0; 12];
+                self.settings.button_visibility = [0; 14];
                 for (i, button) in self.settings.custom_buttons.iter_mut().enumerate() {
                     button.layouts[self.settings.mode.index()] =
                         CustomButton::new(button.key.clone(), i).layouts

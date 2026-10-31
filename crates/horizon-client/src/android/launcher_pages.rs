@@ -833,7 +833,7 @@ impl Launcher {
                 (
                     "GPU profiling",
                     if c.device.gpu_profile {
-                        "On / diagnostic recording"
+                        "On / included in report"
                     } else {
                         "Off"
                     }
@@ -891,10 +891,7 @@ impl Launcher {
                 );
                 if matches!(
                     action,
-                    Action::PerformanceHints
-                        | Action::GpuProfile
-                        | Action::Immersive
-                        | Action::Cutout
+                    Action::PerformanceHints | Action::Immersive | Action::Cutout
                 ) {
                     toggle(
                         &mut ui,

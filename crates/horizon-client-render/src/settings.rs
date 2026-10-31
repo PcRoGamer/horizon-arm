@@ -509,10 +509,13 @@ impl Settings {
     /// `Options.createInformation`: what the server learns about this player.
     pub fn client_information(&self, view_distance: i8) -> ClientInformation {
         ClientInformation {
+            language: self.language.clone(),
             chat_visibility: self.chat_visibility as i32,
+            chat_colors: self.chat_colors,
             model_customisation: self.file.model_customisation(),
             main_hand: i32::from(!self.main_hand_left),
             allows_listing: self.file.bool("allowServerListing"),
+            particle_status: i32::from(self.particles),
             ..ClientInformation::new(view_distance)
         }
     }
@@ -793,6 +796,10 @@ pub enum Opt {
     TouchHorizontalMargin,
     TouchVerticalMargin,
     TouchSensitivity,
+    TouchSensitivityHorizontal,
+    TouchSensitivityVertical,
+    TouchOffhand,
+    TouchShield,
     TouchButtonScale,
     TouchInteract,
     TouchLeftHand,

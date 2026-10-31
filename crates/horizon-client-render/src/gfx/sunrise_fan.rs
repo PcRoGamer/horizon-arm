@@ -55,9 +55,9 @@ mod tests {
         let n = |i: usize| Vec3::from_slice(&normals[i][..3]);
         let mut best = 0.0f32;
         let mut k0 = d.dot(n(TRIANGLES));
-        for i in 0..TRIANGLES {
+        for (i, triangle) in normals.iter().take(TRIANGLES).enumerate() {
             let k1 = d.dot(n(TRIANGLES + (i + 1) % TRIANGLES));
-            let w = normals[i][3];
+            let w = triangle[3];
             if k0 * w <= 0.0 && k1 * w >= 0.0 {
                 let apex = d.dot(n(i));
                 let s = apex + k1 - k0;

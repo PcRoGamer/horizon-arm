@@ -705,8 +705,23 @@ pub fn poll_gamepad_connections() {
 /// Display rotation is queried only while gyro aiming is enabled.
 pub fn display_rotation() -> i32 {
     with_context(|env, activity| {
-        let manager = env.call_method(activity, "getWindowManager", "()Landroid/view/WindowManager;", &[])?.l()?;
-        let display = env.call_method(manager, "getDefaultDisplay", "()Landroid/view/Display;", &[])?.l()?;
+        let manager = env
+            .call_method(
+                activity,
+                "getWindowManager",
+                "()Landroid/view/WindowManager;",
+                &[],
+            )?
+            .l()?;
+        let display = env
+            .call_method(
+                manager,
+                "getDefaultDisplay",
+                "()Landroid/view/Display;",
+                &[],
+            )?
+            .l()?;
         env.call_method(display, "getRotation", "()I", &[])?.i()
-    }).unwrap_or(0)
+    })
+    .unwrap_or(0)
 }

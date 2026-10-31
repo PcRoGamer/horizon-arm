@@ -262,7 +262,7 @@ impl Launcher {
             self.audio = None;
             self.error = None;
             let _ = std::fs::remove_file(self.home.join("android-error.txt"));
-            if self.catalog.config.record_performance {
+            if self.catalog.config.record_performance || self.catalog.config.device.gpu_profile {
                 crate::performance::start(
                     &self.home,
                     serde_json::json!({
@@ -270,6 +270,8 @@ impl Launcher {
                         "resolution_percent": self.catalog.config.render_scale.percent(),
                         "source_commit": option_env!("HORIZON_ANDROID_BUILD_COMMIT"),
                         "source_dirty": option_env!("HORIZON_ANDROID_BUILD_DIRTY"),
+                        "performance_recording": self.catalog.config.record_performance,
+                        "gpu_profiling": self.catalog.config.device.gpu_profile,
                     }),
                 )?;
             }
