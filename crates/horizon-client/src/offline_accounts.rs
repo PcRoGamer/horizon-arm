@@ -1,10 +1,8 @@
 //! Small, local-only player profile store.
 //!
 //! These are deliberately not Microsoft accounts and never contain tokens or
-//! passwords.  An offline profile is only the Java player name Horizon uses
-//! when it joins an offline-mode/LAN server.  Keeping this separate from the
-//! launcher lets Android expose a Bedrock-like account picker inside the app
-//! without changing Horizon's authentication path.
+//! passwords. An offline profile is the Java player name Horizon uses when it
+//! joins an offline-mode/LAN server plus an optional locally saved skin id.
 use serde::{Deserialize, Serialize};
 use std::{fs, io, path::Path};
 
@@ -14,6 +12,9 @@ const VERSION: u32 = 1;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Account {
     pub name: String,
+    /// Id in `profile_skins::Library`; absent means Horizon's normal default skin.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skin: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -49,7 +50,7 @@ impl Accounts {
         };
         let accounts = Self {
             selected: name.clone(),
-            accounts: vec![Account { name }],
+            accounts: vec![Account { name, skin: None }],
         };
         let _ = accounts.save(dir);
         accounts
@@ -87,6 +88,10 @@ impl Accounts {
         &self.accounts
     }
 
+    pub fn selected(&self) -> &Account {
+        &self.accounts[self.selected_index()]
+    }
+
     pub fn selected_name(&self) -> &str {
         &self.selected
     }
@@ -107,7 +112,10 @@ impl Accounts {
         {
             return Err("That offline account already exists.".into());
         }
-        self.accounts.push(Account { name: name.clone() });
+        self.accounts.push(Account {
+            name: name.clone(),
+            skin: None,
+        });
         self.selected = name;
         Ok(())
     }
@@ -139,6 +147,10 @@ impl Accounts {
             self.selected = name;
         }
         Ok(())
+    }
+
+    pub fn set_skin(&mut self, skin: Option<&str>) {
+        self.accounts[self.selected_index()].skin = skin.map(str::to_owned);
     }
 
     /// Removes a profile. Keeping one profile avoids the ambiguous no-identity
@@ -232,7 +244,8 @@ mod tests {
         assert_eq!(
             accounts.all(),
             &[Account {
-                name: "Alex_2".into()
+                name: "Alex_2".into(),
+                skin: None,
             }]
         );
         assert!(d.join(FILE).is_file());
@@ -247,6 +260,8 @@ mod tests {
         let mut accounts = Accounts::load_or_create(&d);
         accounts.add("Second_2").unwrap();
         assert_eq!(accounts.selected_name(), "Second_2");
+        accounts.set_skin(Some("skin-a"));
+        assert_eq!(accounts.selected().skin.as_deref(), Some("skin-a"));
         accounts.select(0).unwrap();
         accounts.rename(0, "Main_3").unwrap();
         accounts.save(&d).unwrap();
@@ -256,6 +271,19 @@ mod tests {
         );
         accounts.remove(1).unwrap();
         assert!(accounts.remove(0).is_err());
+        let _ = fs::remove_dir_all(d);
+    }
+
+    #[test]
+    fn old_json_without_skin_still_loads() {
+        let d = dir("old-json");
+        fs::write(
+            d.join(FILE),
+            r#"{"version":1,"selected":"Alex_2","accounts":[{"name":"Alex_2"}]}"#,
+        )
+        .unwrap();
+        let accounts = Accounts::load_or_create(&d);
+        assert_eq!(accounts.selected().skin, None);
         let _ = fs::remove_dir_all(d);
     }
 
