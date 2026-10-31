@@ -60,3 +60,14 @@ Local checks passed: 2 execution-role/player save tests, 44 touch tests (includi
 The change is a release candidate until the device checklist below passes. Local source tests do not establish performance or compatibility on every phone.
 
 See [the test checklist](android-0.7.6-testing.md).
+
+## Post-RC1 allocator candidate
+
+Phone reports from RC1 show frame-thread `arena_buffer_create` spikes of 799.5 ms,
+571.0 ms and 364.4 ms. These are nested inside geometry upload, not evidence of
+CPU time spent in diagnostic serialization. Android arena pages now stop normal
+growth at 8 MiB rather than repeatedly growing/copying buffers toward 256 MiB.
+Large single meshes retain the original hardware limit. Desktop allocation policy
+is unchanged. Twenty GPU tests pass, including range/data preservation across
+bounded pages and a larger single mesh. Phone FPS and allocator-stall improvement
+remain unverified; this is not a benchmark claim.
