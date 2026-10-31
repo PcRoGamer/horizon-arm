@@ -86,6 +86,7 @@ pub mod native_data;
 pub mod net;
 pub mod nether_portal;
 pub mod no_resources;
+pub mod offline_accounts;
 pub mod offline_name;
 pub mod osk;
 pub mod patrol;

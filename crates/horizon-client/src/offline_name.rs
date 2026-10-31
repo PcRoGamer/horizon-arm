@@ -7,31 +7,37 @@
 //! refused with "You logged in from another location". The generated name is
 //! kept in `horizon-player.txt` next to `options.txt` so the same player gets
 //! the same offline UUID (and inventory on a friend's world) every time.
-use std::{fs, path::Path};
+use std::{fs, io, path::Path};
 
 pub const FILE: &str = "horizon-player.txt";
 const KEY: &str = "name:";
 
-/// StringUtil.isValidPlayerName, plus not empty (the login screen sends at least one character).
 pub fn is_valid(name: &str) -> bool {
     crate::lan::conn::valid_name(name)
 }
 
-/// `Player` and five digits (vanilla's default has three: one shared name in a
-/// thousand pairs is too many for a game that keeps it).
 pub fn generate(seed: u64) -> String {
     format!("Player{:05}", seed % 100_000)
 }
 
-/// The name kept in `dir`, created on first use. A file that can't be written
-/// still yields a name for this run.
+pub fn store(dir: &Path, name: &str) -> io::Result<()> {
+    if !is_valid(name) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "invalid offline player name",
+        ));
+    }
+    fs::create_dir_all(dir)?;
+    fs::write(dir.join(FILE), format!("{KEY}{name}\n"))
+}
+
 pub fn load_or_create(dir: &Path) -> String {
     let path = dir.join(FILE);
     if let Some(name) = fs::read_to_string(&path).ok().and_then(|text| parse(&text)) {
         return name;
     }
     let name = generate(seed());
-    if let Err(e) = fs::write(&path, format!("{KEY}{name}\n")) {
+    if let Err(e) = store(dir, &name) {
         log::warn!(
             "Horizon: could not keep the player name in {}: {e}",
             path.display()
@@ -51,7 +57,6 @@ fn seed() -> u64 {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_nanos() as u64);
-    // Two players starting the game in the same millisecond still differ.
     let mut x = nanos ^ u64::from(std::process::id()).rotate_left(32);
     x ^= x >> 33;
     x = x.wrapping_mul(0xff51_afd7_ed55_8ccd);
@@ -77,7 +82,6 @@ mod tests {
         for seed in [0, 7, 99_999, 100_000, u64::MAX] {
             let name = generate(seed);
             assert!(is_valid(&name), "{name}");
-            // The LAN host's own profile (game/chat.rs PLAYER_NAME).
             assert_ne!(name, "Player");
             assert_eq!(name.len(), 11);
         }
@@ -93,10 +97,18 @@ mod tests {
             format!("name:{first}\n")
         );
         assert_eq!(load_or_create(&d), first);
-        // An edited name is used as it is.
         fs::write(d.join(FILE), "name:Alex_2\r\n").unwrap();
         assert_eq!(load_or_create(&d), "Alex_2");
         let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn explicit_names_can_be_stored() {
+        let d = dir("store");
+        store(&d, "Alex_2").unwrap();
+        assert_eq!(load_or_create(&d), "Alex_2");
+        assert!(store(&d, "has space").is_err());
+        let _ = fs::remove_dir_all(d);
     }
 
     #[test]
@@ -116,7 +128,7 @@ mod tests {
                 "{text:?} -> {name}"
             );
             assert_eq!(load_or_create(&d), name);
-            let _ = fs::remove_dir_all(&d);
+            let _ = fs::remove_dir_all(d);
         }
     }
 }
