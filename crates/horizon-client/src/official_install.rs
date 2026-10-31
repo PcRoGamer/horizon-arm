@@ -480,8 +480,11 @@ pub fn install_with_progress(home: &Path, progress: impl Fn(InstallProgress) + S
     if stage.exists() {
         let _ = fs::remove_dir_all(stage);
     }
+    // `install_with_progress` holds INSTALLATION for the entire transaction,
+    // so use the inner helper here rather than reacquiring the non-reentrant
+    // mutex through `cleanup_completed_downloads`.
     if result.is_ok()
-        && let Err(error) = cleanup_completed_downloads(home)
+        && let Err(error) = cleanup_completed_downloads_inner(home)
     {
         // Resources were committed successfully; failed housekeeping must not
         // turn a working installation into a reported installation failure.
