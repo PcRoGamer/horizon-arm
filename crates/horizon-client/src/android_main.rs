@@ -8,6 +8,9 @@
 use std::cell::RefCell;
 use winit::platform::android::activity::AndroidApp;
 
+#[path = "../../horizon-android/src/bootstrap.rs"]
+mod bootstrap;
+
 thread_local! {
     /// Kept for the Android IME/clipboard/haptics bridge added by the platform
     /// layer. `horizon-winit` stores its own clone for EventLoop construction.
@@ -36,7 +39,7 @@ fn android_main(app: AndroidApp) {
     // Winit requires AndroidApp on its EventLoopBuilder. Installing it here lets
     // untouched upstream code continue to call EventLoop::new().
     winit::install_android_app(app.clone());
-    ANDROID_APP.with(|slot| *slot.borrow_mut() = Some(app));
+    ANDROID_APP.with(|slot| *slot.borrow_mut() = Some(app.clone()));
 
     if let Err(error) =
         std::fs::create_dir_all(&home).and_then(|()| std::env::set_current_dir(&home))
@@ -51,6 +54,17 @@ fn android_main(app: AndroidApp) {
     horizon_client::logging::set_game_home(home.clone());
     horizon_client::logging::init(&home, "Render thread");
     horizon_client::crash::install(home.clone(), "client");
+
+    // The APK carries Horizon-generated engine tables only. Minecraft's client
+    // resources and indexed assets are fetched directly from Mojang, verified
+    // against the repository's pinned version, and installed atomically into
+    // the same path the untouched desktop game loop already uses.
+    if let Err(error) = bootstrap::ensure(&home, &app) {
+        log::error!("Minecraft resource bootstrap failed: {error}");
+        horizon_client::crash::report_error(&home, "resource-bootstrap", &*error);
+        horizon_client::logging::flush();
+        return;
+    }
 
     // Migrate Horizon's old single offline name into the profile store now.
     // The selected profile is mirrored back to horizon-player.txt, so existing
