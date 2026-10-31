@@ -117,7 +117,10 @@ impl Download {
     fn from(value: &Value, path: PathBuf) -> Result<Self> {
         let file = Self {
             url: value["url"].as_str().ok_or("missing download URL")?.into(),
-            sha1: value["sha1"].as_str().ok_or("missing download hash")?.into(),
+            sha1: value["sha1"]
+                .as_str()
+                .ok_or("missing download hash")?
+                .into(),
             size: value["size"].as_u64().ok_or("missing download size")?,
             path,
         };
@@ -246,15 +249,15 @@ pub fn ensure(home: &Path, app: &AndroidApp) -> Result<PathBuf> {
         return Err("Mojang changed this version metadata; Horizon update required".into());
     }
 
-    let manifest_url = entry["url"].as_str().ok_or("missing version metadata URL")?;
+    let manifest_url = entry["url"]
+        .as_str()
+        .ok_or("missing version metadata URL")?;
     let manifest_bytes = get_bytes(manifest_url, MAX_METADATA)?;
     if format!("{:x}", Sha1::digest(&manifest_bytes)) != metadata_sha1 {
         return Err("version metadata checksum mismatch".into());
     }
     let manifest: Value = serde_json::from_slice(&manifest_bytes)?;
-    if manifest["id"] != version
-        || manifest["downloads"]["client"]["sha1"] != pins["client_sha1"]
-    {
+    if manifest["id"] != version || manifest["downloads"]["client"]["sha1"] != pins["client_sha1"] {
         return Err("Minecraft client differs from Horizon's pinned version".into());
     }
 
@@ -263,7 +266,9 @@ pub fn ensure(home: &Path, app: &AndroidApp) -> Result<PathBuf> {
     let index_download = Download::from(&manifest["assetIndex"], cache.join("asset-index.json"))?;
     index_download.get()?;
     let index: Value = serde_json::from_reader(fs::File::open(&index_download.path)?)?;
-    let objects = index["objects"].as_object().ok_or("missing Mojang asset objects")?;
+    let objects = index["objects"]
+        .as_object()
+        .ok_or("missing Mojang asset objects")?;
     let client = Download::from(&manifest["downloads"]["client"], cache.join("client.jar"))?;
 
     let mut files = vec![client.clone()];
@@ -304,20 +309,25 @@ pub fn ensure(home: &Path, app: &AndroidApp) -> Result<PathBuf> {
     let error = Mutex::new(None::<String>);
     std::thread::scope(|scope| {
         for _ in 0..6 {
-            scope.spawn(|| loop {
-                if error.lock().expect("download error mutex").is_some() {
-                    break;
+            scope.spawn(|| {
+                loop {
+                    if error.lock().expect("download error mutex").is_some() {
+                        break;
+                    }
+                    let index = next.fetch_add(1, Ordering::Relaxed);
+                    let Some(file) = files.get(index) else {
+                        break;
+                    };
+                    if let Err(e) = file.get() {
+                        *error.lock().expect("download error mutex") = Some(e.to_string());
+                        break;
+                    }
+                    let now = done.fetch_add(file.size, Ordering::Relaxed) + file.size;
+                    log::info!(
+                        "Mojang resources: {}%",
+                        now.saturating_mul(100) / total.max(1)
+                    );
                 }
-                let index = next.fetch_add(1, Ordering::Relaxed);
-                let Some(file) = files.get(index) else {
-                    break;
-                };
-                if let Err(e) = file.get() {
-                    *error.lock().expect("download error mutex") = Some(e.to_string());
-                    break;
-                }
-                let now = done.fetch_add(file.size, Ordering::Relaxed) + file.size;
-                log::info!("Mojang resources: {}%", now.saturating_mul(100) / total.max(1));
             });
         }
     });
