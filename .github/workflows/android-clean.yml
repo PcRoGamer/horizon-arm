@@ -32,7 +32,7 @@ jobs:
 
   android-arm64:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -42,7 +42,37 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: android-arm64
-      - uses: actions/setup-java@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .local/android/mojang
+            .local/horizon-client
+            .local/android/engine-data.zip
+          key: android-engine-data-${{ hashFiles('research-lock.json', 'crates/horizon-prepare/**', 'tools/android_engine_data.py') }}
+      - name: Install JDK 25 for Horizon resource exporters
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Prepare Horizon engine data from Mojang-verified inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -s .local/android/engine-data.zip ]]; then
+            python3 tools/android_engine_data.py
+          fi
+          python3 - <<'PY'
+          from zipfile import ZipFile
+          path = '.local/android/engine-data.zip'
+          with ZipFile(path) as z:
+              names = set(z.namelist())
+          assert 'horizon-resources.json' in names, 'engine-data.zip lacks Horizon resource marker'
+          assert 'asset-index.json' not in names, 'Minecraft asset index must not be bundled'
+          assert not any(n.startswith('assets/minecraft/') for n in names), 'Minecraft assets must not be bundled'
+          print(f'engine-data.zip: {len(names)} Horizon-generated entries')
+          PY
+      - name: Install JDK 17 for Android Gradle
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -70,22 +100,41 @@ jobs:
         run: cargo check -p horizon-android --target aarch64-linux-android
       - name: Build native arm64 library
         run: cargo build -p horizon-android --target aarch64-linux-android --profile fast
-      - name: Stage native library
+      - name: Stage native library and Horizon engine data
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p .local/android/gradle-jni/arm64-v8a .local/android/gradle-assets
           cp target/aarch64-linux-android/fast/libhorizon_android.so .local/android/gradle-jni/arm64-v8a/
+          cp .local/android/engine-data.zip .local/android/gradle-assets/engine-data.zip
           test -s .local/android/gradle-jni/arm64-v8a/libhorizon_android.so
+          test -s .local/android/gradle-assets/engine-data.zip
       - name: Build debug APK
         run: gradle -p packaging/android assembleDebug -Pabi=arm64-v8a --stacktrace
-      - name: Verify APK contains Horizon arm64 library
+      - name: Verify APK payload
         shell: bash
         run: |
           set -euo pipefail
           APK=".local/android/gradle-build/outputs/apk/debug/android-debug.apk"
           test -f "$APK"
-          unzip -l "$APK" | grep -F 'lib/arm64-v8a/libhorizon_android.so'
+          python3 - "$APK" <<'PY'
+          import sys
+          from zipfile import ZipFile
+          apk = sys.argv[1]
+          with ZipFile(apk) as z:
+              names = set(z.namelist())
+          required = {
+              'lib/arm64-v8a/libhorizon_android.so',
+              'assets/engine-data.zip',
+          }
+          missing = sorted(required - names)
+          if missing:
+              raise SystemExit(f'APK missing: {missing}')
+          forbidden = [n for n in names if n.startswith('assets/minecraft/') or n.endswith('/client.jar')]
+          if forbidden:
+              raise SystemExit(f'APK unexpectedly bundles Minecraft-owned files: {forbidden[:5]}')
+          print(f'APK verified: {apk} ({len(names)} ZIP entries)')
+          PY
           cp "$APK" horizon-clean-arm64-debug.apk
       - uses: actions/upload-artifact@v4
         with:
