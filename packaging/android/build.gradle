@@ -23,9 +23,10 @@ android {
 
 dependencies {
     implementation 'androidx.games:games-activity:4.4.0'
-    // GameActivity's Java API references androidx.core.view types. Core 1.15 is
-    // the stable Android-15/API-35-compatible line, matching compileSdk 35.
+    // GameActivity's Java API exposes AndroidX Core/AppCompat types. These are
+    // Android-15/API-35-compatible stable versions matching compileSdk 35.
     implementation 'androidx.core:core:1.15.0'
+    implementation 'androidx.appcompat:appcompat:1.7.1'
 }
 
 layout.buildDirectory = file('../../.local/android/gradle-build')
