@@ -21,6 +21,19 @@ android {
     packaging { jniLibs { useLegacyPackaging = true } }
 }
 
+// AppCompat/Core and GameActivity currently arrive through different Kotlin
+// stdlib generations. Kotlin 1.8 merged the jdk7/jdk8 classes into stdlib;
+// forcing the entire Kotlin family to one generation prevents Gradle from
+// packaging the old 1.6 split jars alongside the merged 1.8 stdlib.
+configurations.configureEach {
+    resolutionStrategy.eachDependency { details ->
+        if (details.requested.group == 'org.jetbrains.kotlin') {
+            details.useVersion '1.8.22'
+            details.because 'keep GameActivity/AppCompat Kotlin runtime on one generation'
+        }
+    }
+}
+
 dependencies {
     implementation 'androidx.games:games-activity:4.4.0'
     // GameActivity's Java API exposes AndroidX Core/AppCompat types. These are
