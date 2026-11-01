@@ -13,6 +13,7 @@ android {
     }
     sourceSets.main {
         manifest.srcFile 'AndroidManifest.xml'
+        java.srcDirs = ['java']
         jniLibs.srcDirs = ['../../.local/android/gradle-jni']
         assets.srcDirs = ['../../.local/android/gradle-assets']
         res.srcDirs = ['res']
