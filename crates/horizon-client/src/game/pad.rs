@@ -26,7 +26,7 @@ pub(super) const HELP: &[&str] = &[
 #[derive(Default)]
 pub(super) struct Pads {
     /// The real controllers and the DualSense's output.
-    #[cfg(feature = "controllers")]
+    #[cfg(all(feature = "controllers", not(target_os = "android")))]
     devices: hardware::Devices,
     /// The virtual pad of `horizon-ctl pad`.
     injected: PadState,
@@ -53,12 +53,13 @@ pub(super) struct Pads {
     health: HealthWatch,
 }
 
-#[cfg(feature = "controllers")]
+#[cfg(all(feature = "controllers", not(target_os = "android")))]
 mod hardware;
 
 /// A build without the `controllers` feature (the server build, which must not need libudev): no
-/// hardware pads, only `horizon-ctl pad`'s virtual one.
-#[cfg(not(feature = "controllers"))]
+/// hardware pads, only `horizon-ctl pad`'s virtual one. Android also uses this
+/// backend because touch is provided by the additive winit adapter rather than gilrs.
+#[cfg(any(not(feature = "controllers"), target_os = "android"))]
 mod hardware {
     use super::{super::Game, Pads};
     use horizon_client::gamepad::{PadState, Pulse, Rumble};
@@ -66,6 +67,17 @@ mod hardware {
 
     impl Pads {
         pub(super) fn read(&mut self) -> PadState {
+            #[cfg(target_os = "android")]
+            {
+                let t = winit::android_touch_state();
+                return PadState {
+                    buttons: t.buttons,
+                    left: t.left,
+                    right: t.right,
+                    triggers: t.triggers,
+                };
+            }
+            #[cfg(not(target_os = "android"))]
             PadState::default()
         }
     }
@@ -76,7 +88,11 @@ mod hardware {
         pub(in crate::game) fn pad_close_output(&mut self) {}
         pub(super) fn pad_vibrate(&mut self, _: Rumble, _: Pulse) {}
         pub(super) fn pad_devices_status(&self) -> Value {
-            json!({ "backend": false, "controllers": [] })
+            json!({
+                "backend": cfg!(target_os = "android"),
+                "controllers": [],
+                "android_touch": cfg!(target_os = "android")
+            })
         }
     }
 }
@@ -92,8 +108,14 @@ impl Pads {
 impl Game<'_> {
     /// Once per loop iteration: read the pads and act on button changes.
     pub(super) fn poll_pads(&mut self, event_loop: &ActiveEventLoop) {
+        #[cfg(target_os = "android")]
+        {
+            // This flag is also what the Java overlay reads. A menu uses direct
+            // touch-to-click translation; gameplay uses the virtual pad.
+            winit::android_touch_set_menu(self.pad_in_menu() || !self.focused);
+        }
         let settings = &self.settings.controller;
-        if !settings.enabled {
+        if !settings.enabled && !cfg!(target_os = "android") {
             self.pad_output_off();
             if self.pad.state != PadState::default() {
                 self.pad.state = PadState::default();
@@ -167,7 +189,7 @@ impl Game<'_> {
     /// Input from the pad counts while the window has focus, or always for
     /// the virtual pad (a script can't focus the window).
     fn pad_focused(&self) -> bool {
-        self.focused || self.pad.virtual_input
+        self.focused || self.pad.virtual_input || cfg!(target_os = "android")
     }
 
     fn pad_button(
@@ -212,7 +234,9 @@ impl Game<'_> {
                 Ok(())
             }
             "key.sneak"
-                if self.settings.controller.toggle_sneak && !self.settings.toggle_crouch =>
+                if self.settings.controller.toggle_sneak
+                    && !self.settings.toggle_crouch
+                    && !cfg!(target_os = "android") =>
             {
                 // A stick click flips sneaking instead of holding it, as
                 // vanilla's toggle crouch does: a screen opening releases it
@@ -228,7 +252,9 @@ impl Game<'_> {
             _ => {
                 let default = KeyBinds::default_of(action);
                 if let Some(button) = mouse_button(default) {
-                    if self.title.is_none() && self.screen == Screen::Playing {
+                    // Always let a release through: a pause/activity transition
+                    // between edges must never leave mine/use latched.
+                    if !down || (self.title.is_none() && self.screen == Screen::Playing) {
                         self.play_mouse(button, down)?;
                     }
                     Ok(())
@@ -267,7 +293,10 @@ impl Game<'_> {
     /// The left stick as the move vector, while playing.
     pub(super) fn pad_move(&self) -> Option<[f32; 2]> {
         let settings = &self.settings.controller;
-        if !settings.enabled || self.pad_in_menu() || !self.pad_focused() {
+        if (!settings.enabled && !cfg!(target_os = "android"))
+            || self.pad_in_menu()
+            || !self.pad_focused()
+        {
             return None;
         }
         gamepad::move_vector(self.pad.state.left, settings.move_deadzone)
@@ -276,7 +305,11 @@ impl Game<'_> {
     /// The right stick turns the view, once per frame (`Entity.turn`).
     pub(super) fn pad_look(&mut self, seconds: f32) {
         let settings = &self.settings.controller;
-        if !settings.enabled || self.pad_in_menu() || self.player.is_none() || !self.pad_focused() {
+        if (!settings.enabled && !cfg!(target_os = "android"))
+            || self.pad_in_menu()
+            || self.player.is_none()
+            || !self.pad_focused()
+        {
             return;
         }
         // A long frame (a hitch) must not spin the view.
@@ -296,7 +329,10 @@ impl Game<'_> {
     /// playing (a pad lying idle while the mouse plays stays still).
     pub(super) fn pad_rumble(&mut self, rumble: Rumble) {
         let settings = &self.settings.controller;
-        if !settings.enabled || !settings.vibration || !self.pad.in_use {
+        if (!settings.enabled && !cfg!(target_os = "android"))
+            || !settings.vibration
+            || !self.pad.in_use
+        {
             return;
         }
         let Some(pulse) = rumble.pulse() else {
@@ -331,7 +367,7 @@ impl Game<'_> {
                     .map(Button::name)
                     .collect();
                 let mut status = json!({
-                    "enabled": self.settings.controller.enabled,
+                    "enabled": self.settings.controller.enabled || cfg!(target_os = "android"),
                     "glyphs": self.pad.style.name(),
                     "last_rumble": self.pad.last_rumble.map(|(why, p)| json!({
                         "reason": why, "strong": p.strong, "weak": p.weak, "ms": p.millis,
