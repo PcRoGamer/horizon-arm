@@ -61,6 +61,17 @@ fn android_main(app: AndroidApp) {
         return;
     }
 
+    // Upstream Horizon already has an offline-skin path. Android's Profile UI
+    // keeps its selected PNG at a stable path, so no renderer fork is needed.
+    // SAFETY: these variables are installed before Horizon starts its game/event
+    // threads. The path is stable; ProfileActivity may replace its contents.
+    unsafe {
+        std::env::set_var("HORIZON_OFFLINE_SKIN", home.join("horizon-profile-skin.png"));
+        let model = std::fs::read_to_string(home.join("horizon-profile-skin-model.txt"))
+            .unwrap_or_else(|_| "classic".into());
+        std::env::set_var("HORIZON_OFFLINE_SKIN_MODEL", model.trim());
+    }
+
     horizon_client::logging::set_game_home(home.clone());
     horizon_client::logging::init(&home, "Render thread");
     horizon_client::crash::install(home.clone(), "client");
