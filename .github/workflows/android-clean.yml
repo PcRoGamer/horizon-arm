@@ -110,7 +110,19 @@ jobs:
           test -s .local/android/gradle-jni/arm64-v8a/libhorizon_android.so
           test -s .local/android/gradle-assets/engine-data.zip
       - name: Build debug APK
-        run: gradle -p packaging/android assembleDebug -Pabi=arm64-v8a --stacktrace
+        id: gradle_build
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p .local/android
+          gradle -p packaging/android assembleDebug -Pabi=arm64-v8a --stacktrace 2>&1 | tee .local/android/gradle-build.log
+      - name: Upload Gradle diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-gradle-diagnostics
+          path: .local/android/gradle-build.log
+          if-no-files-found: warn
       - name: Verify APK payload
         shell: bash
         run: |
