@@ -22,6 +22,16 @@ mod game;
 #[global_allocator]
 static ALLOCATOR: horizon_threads::Allocator = horizon_threads::Allocator;
 
+/// The Java overlay only needs to know whether it should show gameplay controls
+/// or the title/menu Profile button. No game state or pointer crosses JNI.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_horizon_android_HorizonActivity_nativeTouchMenu(
+    _env: *mut std::ffi::c_void,
+    _class: *mut std::ffi::c_void,
+) -> u8 {
+    u8::from(winit::android_touch_menu())
+}
+
 #[unsafe(no_mangle)]
 fn android_main(app: AndroidApp) {
     android_logger::init_once(
