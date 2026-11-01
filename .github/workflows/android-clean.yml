@@ -115,8 +115,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APK=".local/android/gradle-build/outputs/apk/debug/android-debug.apk"
-          test -f "$APK"
+          mapfile -t APKS < <(find . -type f -path '*/outputs/apk/debug/*.apk' -print | sort)
+          if [[ ${#APKS[@]} -ne 1 ]]; then
+            printf 'Expected exactly one debug APK, found %s:\n' "${#APKS[@]}" >&2
+            printf '  %s\n' "${APKS[@]:-<none>}" >&2
+            exit 1
+          fi
+          APK="${APKS[0]}"
+          echo "Verifying $APK"
           python3 - "$APK" <<'PY'
           import sys
           from zipfile import ZipFile
