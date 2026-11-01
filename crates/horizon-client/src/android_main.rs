@@ -66,7 +66,10 @@ fn android_main(app: AndroidApp) {
     // SAFETY: these variables are installed before Horizon starts its game/event
     // threads. The path is stable; ProfileActivity may replace its contents.
     unsafe {
-        std::env::set_var("HORIZON_OFFLINE_SKIN", home.join("horizon-profile-skin.png"));
+        std::env::set_var(
+            "HORIZON_OFFLINE_SKIN",
+            home.join("horizon-profile-skin.png"),
+        );
         let model = std::fs::read_to_string(home.join("horizon-profile-skin-model.txt"))
             .unwrap_or_else(|_| "classic".into());
         std::env::set_var("HORIZON_OFFLINE_SKIN_MODEL", model.trim());
