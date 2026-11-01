@@ -273,11 +273,13 @@ pub mod event_loop {
                 WindowEvent::Resized(size) => {
                     crate::WIDTH.store(size.width.max(1), std::sync::atomic::Ordering::Relaxed);
                     crate::HEIGHT.store(size.height.max(1), std::sync::atomic::Ordering::Relaxed);
-                    self.0.window_event(event_loop, window_id, WindowEvent::Resized(size));
+                    self.0
+                        .window_event(event_loop, window_id, WindowEvent::Resized(size));
                 }
                 WindowEvent::Focused(false) => {
                     crate::android_touch_clear();
-                    self.0.window_event(event_loop, window_id, WindowEvent::Focused(false));
+                    self.0
+                        .window_event(event_loop, window_id, WindowEvent::Focused(false));
                 }
                 WindowEvent::Touch(touch) if crate::android_touch_menu() => {
                     self.0.window_event(
