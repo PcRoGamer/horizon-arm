@@ -10,7 +10,7 @@
         android:usesCleartextTraffic="false"
         android:theme="@style/HorizonGameTheme">
         <activity
-            android:name="com.google.androidgamesdk.GameActivity"
+            android:name="dev.horizon.android.HorizonActivity"
             android:exported="true"
             android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|screenSize|keyboardHidden|keyboard|density|screenLayout"
@@ -21,5 +21,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name="dev.horizon.android.ProfileActivity"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape"
+            android:windowSoftInputMode="adjustResize" />
     </application>
 </manifest>
