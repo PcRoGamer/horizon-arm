@@ -1,8 +1,8 @@
 //! Minimal Android entry point for Horizon.
 //!
-//! The game module below is the same source file the desktop binary uses. All
-//! Android-specific event-loop construction lives in the additive `horizon-winit`
-//! compatibility crate, so `game.rs` and its child modules remain untouched.
+//! The game is provided by the upstream horizon-client library, avoiding a
+//! second divergent copy of the engine. Android-specific event loop
+//! construction stays in the additive horizon-winit compatibility layer.
 #![cfg(target_os = "android")]
 
 use std::cell::RefCell;
@@ -16,8 +16,6 @@ thread_local! {
     /// layer. `horizon-winit` stores its own clone for EventLoop construction.
     pub(crate) static ANDROID_APP: RefCell<Option<AndroidApp>> = const { RefCell::new(None) };
 }
-
-mod game;
 
 #[global_allocator]
 static ALLOCATOR: horizon_threads::Allocator = horizon_threads::Allocator;
@@ -106,7 +104,7 @@ fn android_main(app: AndroidApp) {
     let accounts = horizon_client::offline_accounts::Accounts::load_or_create(&home);
     log::info!("Offline profile: {}", accounts.selected_name());
 
-    if let Err(error) = game::run() {
+    if let Err(error) = horizon_client::game::run_with() {
         log::error!("Horizon: {error}");
         horizon_client::crash::report_error(&home, "client", &*error);
     }
