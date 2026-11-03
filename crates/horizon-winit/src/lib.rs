@@ -101,7 +101,9 @@ static TOUCH: OnceLock<Mutex<AndroidTouch>> = OnceLock::new();
 #[cfg(target_os = "android")]
 static TOUCH_MENU: AtomicBool = AtomicBool::new(true);
 #[cfg(target_os = "android")]
-static TOUCH_CROSSHAIR: AtomicBool = AtomicBool::new(false);
+static TOUCH_SCHEME: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "android")]
+static TOUCH_SCALE: AtomicU32 = AtomicU32::new(100);
 #[cfg(target_os = "android")]
 static TOUCH_START: OnceLock<Instant> = OnceLock::new();
 #[cfg(target_os = "android")]
@@ -145,14 +147,50 @@ pub fn android_touch_set_menu(menu: bool) {
 }
 
 #[cfg(target_os = "android")]
-pub fn android_touch_set_crosshair(crosshair: bool) {
-    TOUCH_CROSSHAIR.store(crosshair, Ordering::Relaxed);
-    android_touch_clear();
+pub fn android_touch_set_controls(scheme: u32, scale: u32) {
+    let scheme = scheme.min(3);
+    let scale = scale.clamp(80, 120);
+    let previous = TOUCH_SCHEME.swap(scheme, Ordering::Relaxed);
+    let previous_scale = TOUCH_SCALE.swap(scale, Ordering::Relaxed);
+    if previous != scheme || previous_scale != scale {
+        android_touch_clear();
+    }
 }
 
 #[cfg(target_os = "android")]
 pub fn android_touch_crosshair() -> bool {
-    TOUCH_CROSSHAIR.load(Ordering::Relaxed)
+    TOUCH_SCHEME.load(Ordering::Relaxed) & 1 != 0
+}
+
+#[cfg(target_os = "android")]
+fn android_touch_dpad() -> bool {
+    TOUCH_SCHEME.load(Ordering::Relaxed) >= 2
+}
+
+#[cfg(target_os = "android")]
+fn android_touch_scale() -> f64 {
+    f64::from(TOUCH_SCALE.load(Ordering::Relaxed)) / 100.0
+}
+
+/// Overlay reads the same held input state that feeds the gamepad.
+#[cfg(target_os = "android")]
+pub fn android_touch_axes() -> [f32; 2] {
+    touch()
+        .lock()
+        .map(|touch| touch.state.left)
+        .unwrap_or_default()
+}
+
+#[cfg(target_os = "android")]
+pub fn android_touch_button_bits() -> u32 {
+    touch()
+        .lock()
+        .map(|touch| {
+            touch.state.buttons
+                | (u32::from(touch.state.triggers[0] > 0.5) << 24)
+                | (u32::from(touch.state.triggers[1] > 0.5) << 25)
+        })
+        .unwrap_or_default()
 }
 
 #[cfg(target_os = "android")]
@@ -293,9 +331,35 @@ fn handle_game_touch(t: winit_real::event::Touch) {
                     }
                 }
                 TouchRole::Ignored => {}
-                TouchRole::Button(bit) => press_button(&mut touch.state, bit, false),
-                TouchRole::LeftTrigger => touch.state.triggers[0] = 0.0,
-                TouchRole::RightTrigger => touch.state.triggers[1] = 0.0,
+                TouchRole::Button(bit) => {
+                    // Two fingers may press the same control at once. Only the
+                    // last release should clear its held gamepad button.
+                    if !touch
+                        .fingers
+                        .values()
+                        .any(|r| matches!(r, TouchRole::Button(other) if *other == bit))
+                    {
+                        press_button(&mut touch.state, bit, false);
+                    }
+                }
+                TouchRole::LeftTrigger => {
+                    if !touch
+                        .fingers
+                        .values()
+                        .any(|r| matches!(r, TouchRole::LeftTrigger))
+                    {
+                        touch.state.triggers[0] = 0.0;
+                    }
+                }
+                TouchRole::RightTrigger => {
+                    if !touch
+                        .fingers
+                        .values()
+                        .any(|r| matches!(r, TouchRole::RightTrigger))
+                    {
+                        touch.state.triggers[1] = 0.0;
+                    }
+                }
             }
         }
         return;
@@ -304,21 +368,27 @@ fn handle_game_touch(t: winit_real::event::Touch) {
     if t.phase == TouchPhase::Started {
         // Geometry intentionally mirrors HorizonActivity.TouchOverlay. Sizes are
         // fractions of screen height so phones and tablets keep square controls.
+        let scale = android_touch_scale();
+        let movement_owned = touch.fingers.values().any(|r| matches!(r, TouchRole::Move));
         let role = if hotbar_slot(p).is_some() {
             TouchRole::Hotbar
-        } else if p[0] < 0.38 && p[1] > 0.34 {
-            TouchRole::Move
-        } else if near(p, [0.90, 0.74], 0.085, aspect) {
+        } else if near(p, [0.15, 0.72], 0.162 * scale, aspect) {
+            if movement_owned {
+                TouchRole::Ignored
+            } else {
+                TouchRole::Move
+            }
+        } else if near(p, [0.90, 0.72], 0.085 * scale, aspect) {
             TouchRole::Button(0) // South: jump
-        } else if near(p, [0.79, 0.82], 0.065, aspect) {
+        } else if near(p, [0.75, 0.78], 0.065 * scale, aspect) {
             TouchRole::Button(11) // Right stick: sneak
-        } else if android_touch_crosshair() && near(p, [0.80, 0.58], 0.080, aspect) {
+        } else if android_touch_crosshair() && near(p, [0.75, 0.54], 0.073 * scale, aspect) {
             TouchRole::RightTrigger // attack/mine
-        } else if android_touch_crosshair() && near(p, [0.92, 0.51], 0.075, aspect) {
+        } else if android_touch_crosshair() && near(p, [0.91, 0.46], 0.070 * scale, aspect) {
             TouchRole::LeftTrigger // use/place
-        } else if near(p, [0.62, 0.80], 0.055, aspect) {
+        } else if near(p, [0.62, 0.80], 0.055 * scale, aspect) {
             TouchRole::Button(3) // North: inventory
-        } else if near(p, [0.50, 0.10], 0.055, aspect) {
+        } else if near(p, [0.50, 0.10], 0.055 * scale, aspect) {
             TouchRole::Button(9) // Start: pause
         } else if touch.gestures.down(
             t.id,
@@ -344,12 +414,26 @@ fn handle_game_touch(t: winit_real::event::Touch) {
     };
     match role {
         TouchRole::Move => {
-            // Fixed Bedrock-style joystick: centered at 14% x / 75% y.
-            let radius = height * 0.16;
-            let dx = (t.location.x - width * 0.14) / radius;
-            let dy = (t.location.y - height * 0.75) / radius;
-            let length = (dx * dx + dy * dy).sqrt().max(1.0);
-            touch.state.left = [(dx / length) as f32, (-dy / length) as f32];
+            // The drawn thumb and movement physics share a center and scale.
+            let radius = height * 0.135 * android_touch_scale();
+            let dx = (t.location.x - width * 0.15) / radius;
+            let dy = (t.location.y - height * 0.72) / radius;
+            if android_touch_dpad() {
+                // An 8-way D-pad with a neutral center and intentional diagonal input.
+                let digital = |axis: f64| {
+                    if axis > 0.28 {
+                        1.0
+                    } else if axis < -0.28 {
+                        -1.0
+                    } else {
+                        0.0
+                    }
+                };
+                touch.state.left = [digital(dx) as f32, -digital(dy) as f32];
+            } else {
+                let length = (dx * dx + dy * dy).sqrt().max(1.0);
+                touch.state.left = [(dx / length) as f32, (-dy / length) as f32];
+            }
         }
         TouchRole::Look => {
             if let Some(AndroidGesture::Look { dx, dy }) =

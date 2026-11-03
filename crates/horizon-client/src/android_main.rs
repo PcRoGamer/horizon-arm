@@ -30,14 +30,34 @@ pub extern "system" fn Java_dev_horizon_android_HorizonActivity_nativeTouchMenu(
     u8::from(winit::android_touch_menu())
 }
 
-/// Change between touch-to-interact and the dedicated crosshair buttons.
+/// Settings are persisted in the Activity and applied atomically to input.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_horizon_android_HorizonActivity_nativeSetCrosshair(
+pub extern "system" fn Java_dev_horizon_android_HorizonActivity_nativeSetControls(
     _env: *mut std::ffi::c_void,
     _class: *mut std::ffi::c_void,
-    crosshair: u8,
+    scheme: i32,
+    scale: i32,
 ) {
-    winit::android_touch_set_crosshair(crosshair != 0);
+    winit::android_touch_set_controls(scheme.clamp(0, 3) as u32, scale.clamp(80, 120) as u32);
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_horizon_android_HorizonActivity_nativeTouchAxes(
+    _env: *mut std::ffi::c_void,
+    _class: *mut std::ffi::c_void,
+) -> i32 {
+    let [x, y] = winit::android_touch_axes();
+    let x = (x.clamp(-1.0, 1.0) * 32767.0) as i16 as u16 as u32;
+    let y = (y.clamp(-1.0, 1.0) * 32767.0) as i16 as u16 as u32;
+    ((x << 16) | y) as i32
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_horizon_android_HorizonActivity_nativeTouchButtons(
+    _env: *mut std::ffi::c_void,
+    _class: *mut std::ffi::c_void,
+) -> i32 {
+    winit::android_touch_button_bits() as i32
 }
 
 #[unsafe(no_mangle)]

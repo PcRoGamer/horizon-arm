@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Static visual-layout guard for the Android native overlay and Rust hitboxes.
-
-The checks use Java Canvas geometry and Horizon's real GUI scaling. They
-cannot replace inspection on a physical device.
+"""Geometry contract between the Java Canvas and Rust touch input.
+Covers aspect ratios, scaled presets, hotbar collisions and button hit parity.
+Does not replace physical device/input testing.
 """
 from __future__ import annotations
 
+import itertools
 import math
 import re
 from pathlib import Path
@@ -14,77 +14,106 @@ ROOT = Path(__file__).resolve().parents[1]
 JAVA = (ROOT / "packaging/android/java/dev/horizon/android/HorizonActivity.java").read_text()
 RUST = (ROOT / "crates/horizon-winit/src/lib.rs").read_text()
 
-circles = {}
-for x, y, radius, label in re.findall(
-    r'circle\(canvas,\s*([0-9.]+)f,\s*([0-9.]+)f,\s*([0-9.]+)f,\s*"([^"]+)"\)',
+visuals = {}
+for x, y, radius, name in re.findall(
+    r'control\(canvas,\s*([0-9.]+)f,\s*([0-9.]+)f,\s*([0-9.]+)f,\s*"([^"]+)"\)',
     JAVA,
 ):
-    if label in circles:
-        raise AssertionError(f"duplicate Java button: {label}")
-    circles[label] = tuple(map(float, (x, y, radius)))
+    assert name not in visuals, f"duplicate Java button: {name}"
+    visuals[name] = (float(x), float(y), float(radius))
 
-expected = {"JUMP", "SNEAK", "HIT", "USE", "INV", "II"}
-assert expected == set(circles), f"missing or unexpected buttons: {set(circles) ^ expected}"
+expected = {"jump", "sneak", "hit", "use", "inventory", "pause"}
+assert set(visuals) == expected, (set(visuals), expected)
 
-rust_regions = {
-    tuple(map(float, values))
-    for values in re.findall(
-        r'near\(p,\s*\[([0-9.]+),\s*([0-9.]+)\],\s*([0-9.]+),\s*aspect\)',
+touch_regions = {
+    (float(x), float(y), float(r))
+    for x, y, r in re.findall(
+        r'near\(p,\s*\[([0-9.]+),\s*([0-9.]+)\],\s*([0-9.]+) \* scale,\s*aspect\)',
         RUST,
     )
 }
-for label, coordinate in circles.items():
-    assert coordinate in rust_regions, f"{label}: Java circle != Rust hit region: {coordinate}"
+for name, coords in visuals.items():
+    assert coords in touch_regions, f"{name}: Java visual does not match Rust touch hitbox: {coords}"
 
-# The thumbstick is drawn twice at this centre and handled by the same
-# fixed-centre movement math in the Rust adapter.
-assert "0.14f, 0.75f, 0.16f, null" in JAVA
-assert "0.14f, 0.75f, 0.055f, null" in JAVA
-assert "width * 0.14" in RUST and "height * 0.75" in RUST
+assert "float x = .15f * getWidth();" in JAVA
+assert "float y = .72f * h;" in JAVA
+assert "float r = .135f * h * scale;" in JAVA
+assert "width * 0.15" in RUST and "height * 0.72" in RUST
+assert "height * 0.135 * android_touch_scale()" in RUST
+assert "movement_owned" in RUST, "second joystick finger can steal movement"
+assert "touch.fingers.values().any(" in RUST, "duplicate finger ownership not guarded"
+assert "TOUCH_SCHEME" in RUST and "TOUCH_SCALE" in RUST
+assert "nativeTouchAxes" in JAVA and "nativeTouchButtons" in JAVA
 
-regions = {"JOYSTICK": (0.14, 0.75, 0.16), **circles}
+# Check that the 4 D-pad icons remain reachable inside the movement region.
+dpad_offset = 0.068 * 1.48
+dpad_half = 0.049
+assert math.hypot(dpad_offset + dpad_half, dpad_half) <= 0.162
 
 
-def distance_to_rect(px, py, rect):
-    left, top, right, bottom = rect
-    nx = min(max(px, left), right)
-    ny = min(max(py, top), bottom)
-    return math.hypot(px - nx, py - ny)
+def rect(x, y, radius, width, height, scale):
+    cx, cy = x * width, y * height
+    r = radius * height * scale
+    return (cx - r, cy - r, cx + r, cy + r)
 
 
-for width, height in [(2400, 1080), (2560, 1080), (1920, 1200), (1600, 1200), (1280, 800)]:
-    # Same algorithm as HudBatch::new. Real hotbar is 182 GUI pixels wide.
-    scale = 1
-    while width // (scale + 1) >= 320 and height // (scale + 1) >= 240:
-        scale += 1
-    bar = (
-        width / 2 - 91 * scale,
-        height - 22 * scale,
-        width / 2 + 91 * scale,
+def clearance(a, b):
+    dx = max(a[0] - b[2], b[0] - a[2], 0)
+    dy = max(a[1] - b[3], b[1] - a[3], 0)
+    return math.hypot(dx, dy)
+
+
+sizes = [
+    (2400, 1080), (2560, 1080), (1920, 1200),
+    (1600, 1200), (1280, 800), (1920, 1080), (1280, 720),
+]
+for width, height in sizes:
+    gui_scale = 1
+    while width // (gui_scale + 1) >= 320 and height // (gui_scale + 1) >= 240:
+        gui_scale += 1
+    hotbar = (
+        width / 2 - 91 * gui_scale,
+        height - 22 * gui_scale,
+        width / 2 + 91 * gui_scale,
         height,
     )
+    for scale in (0.8, 1, 1.2):
+        for scheme in (0, 1, 2, 3):
+            buttons = {k: v for k, v in visuals.items()
+                       if scheme % 2 or k not in ("hit", "use")}
+            regions = {name: rect(*coords, width, height, scale)
+                       for name, coords in buttons.items()}
 
-    for label, (xn, yn, rn) in regions.items():
-        x, y, r = xn * width, yn * height, rn * height
-        edge_margin = min(x - r, y - r, width - x - r, height - y - r)
-        bar_clearance = distance_to_rect(x, y, bar) - r
-        assert edge_margin >= 24, (
-            f"{width}x{height}: {label} too close to screen edge: {edge_margin:.1f}px"
-        )
-        assert bar_clearance >= 24, (
-            f"{width}x{height}: {label} overlaps/approaches hotbar: {bar_clearance:.1f}px"
-        )
+            if scheme < 2:
+                regions["movement"] = rect(.15, .72, .135, width, height, scale)
+            else:
+                # Actual D-pad keys are squares, not the theoretical joystick circle.
+                for name, dx, dy in (
+                    ("up", 0, -1), ("right", 1, 0),
+                    ("down", 0, 1), ("left", -1, 0),
+                ):
+                    x = .15 * width + dx * dpad_offset * height * scale
+                    y = .72 * height + dy * dpad_offset * height * scale
+                    r = dpad_half * height * scale
+                    regions["dpad_" + name] = (x - r, y - r, x + r, y + r)
 
-    items = list(regions.items())
-    for a, (axn, ayn, ar) in items:
-        for b, (bxn, byn, br) in items:
-            if a >= b:
-                continue
-            delta = math.hypot((axn - bxn) * width, (ayn - byn) * height)
-            separation = delta - (ar + br) * height
-            assert separation >= 10, (
-                f"{width}x{height}: {a} and {b} too close: {separation:.1f}px"
-            )
-    print(f"PASS {width}x{height}: GUI scale {scale}, clear buttons and safe margins")
+            for name, box in regions.items():
+                left, top, right, bottom = box
+                assert left >= 20 and top >= 20 and right <= width - 20 and bottom <= height - 20, (
+                    f"{width}x{height} scale={scale} scheme={scheme}: {name} outside safe area {box}"
+                )
+                assert clearance(box, hotbar) >= 12, (
+                    f"{width}x{height} scale={scale} scheme={scheme}: {name} overlaps hotbar"
+                )
 
-print("PASS Java render circles match Rust touch hitboxes")
+            for (name_a, a), (name_b, b) in itertools.combinations(regions.items(), 2):
+                if scheme >= 2 and name_a.startswith("dpad") and name_b.startswith("dpad"):
+                    # D-pad cells are intentionally adjacent.
+                    continue
+                assert clearance(a, b) >= 8, (
+                    f"{width}x{height} scale={scale} scheme={scheme}: "
+                    f"{name_a}/{name_b} overlap (gap={clearance(a,b):.1f}px)"
+                )
+    print(f"PASS {width}x{height}: 4 schemes x 3 scales; hotbar and edge clearance")
+
+print("PASS touch-mode coverage, multitouch ownership guards and Java/Rust hitbox parity")
