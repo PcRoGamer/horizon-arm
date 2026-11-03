@@ -22,13 +22,13 @@ for x, y, radius, name in re.findall(
     assert name not in visuals, f"duplicate Java button: {name}"
     visuals[name] = (float(x), float(y), float(radius))
 
-expected = {"jump", "sneak", "hit", "use", "inventory", "pause"}
+expected = {"jump", "sneak", "hit", "use", "sprint", "inventory", "pause"}
 assert set(visuals) == expected, (set(visuals), expected)
 
 touch_regions = {
     (float(x), float(y), float(r))
     for x, y, r in re.findall(
-        r'near\(p,\s*\[([0-9.]+),\s*([0-9.]+)\],\s*([0-9.]+) \* scale,\s*aspect\)',
+        r'near_square\(p,\s*\[([0-9.]+),\s*([0-9.]+)\],\s*([0-9.]+) \* scale,\s*aspect\)',
         RUST,
     )
 }

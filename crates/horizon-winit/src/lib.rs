@@ -277,6 +277,11 @@ fn near(p: [f64; 2], center: [f64; 2], radius: f64, aspect: f64) -> bool {
 }
 
 #[cfg(target_os = "android")]
+fn near_square(p: [f64; 2], center: [f64; 2], radius: f64, aspect: f64) -> bool {
+    ((p[0] - center[0]) * aspect).abs() <= radius && (p[1] - center[1]).abs() <= radius
+}
+
+#[cfg(target_os = "android")]
 fn press_button(state: &mut AndroidTouchState, bit: u8, down: bool) {
     let mask = 1u32 << bit;
     if down {
@@ -378,17 +383,19 @@ fn handle_game_touch(t: winit_real::event::Touch) {
             } else {
                 TouchRole::Move
             }
-        } else if near(p, [0.90, 0.72], 0.085 * scale, aspect) {
+        } else if near_square(p, [0.90, 0.72], 0.085 * scale, aspect) {
             TouchRole::Button(0) // South: jump
-        } else if near(p, [0.75, 0.78], 0.065 * scale, aspect) {
+        } else if near_square(p, [0.75, 0.78], 0.065 * scale, aspect) {
             TouchRole::Button(11) // Right stick: sneak
-        } else if android_touch_crosshair() && near(p, [0.75, 0.54], 0.073 * scale, aspect) {
+        } else if android_touch_crosshair() && near_square(p, [0.75, 0.54], 0.073 * scale, aspect) {
             TouchRole::RightTrigger // attack/mine
-        } else if android_touch_crosshair() && near(p, [0.91, 0.46], 0.070 * scale, aspect) {
+        } else if android_touch_crosshair() && near_square(p, [0.91, 0.46], 0.070 * scale, aspect) {
             TouchRole::LeftTrigger // use/place
-        } else if near(p, [0.62, 0.80], 0.055 * scale, aspect) {
+        } else if near_square(p, [0.36, 0.67], 0.055 * scale, aspect) {
+            TouchRole::Button(10) // Left stick: sprint
+        } else if near_square(p, [0.62, 0.80], 0.055 * scale, aspect) {
             TouchRole::Button(3) // North: inventory
-        } else if near(p, [0.50, 0.10], 0.055 * scale, aspect) {
+        } else if near_square(p, [0.50, 0.10], 0.055 * scale, aspect) {
             TouchRole::Button(9) // Start: pause
         } else if touch.gestures.down(
             t.id,

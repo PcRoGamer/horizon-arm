@@ -308,6 +308,13 @@ public final class HorizonActivity extends GameActivity {
             c.scale(r * .71f, r * .71f);
             color(alpha(0xFFFFFFFF, 1f), Paint.Style.STROKE, .19f);
             switch (name) {
+                case "sprint":
+                    c.drawLine(-.69f, -.42f, -.12f, 0f, paint);
+                    c.drawLine(-.12f, 0f, -.69f, .42f, paint);
+                    c.drawLine(-.05f, -.42f, .52f, 0f, paint);
+                    c.drawLine(.52f, 0f, -.05f, .42f, paint);
+                    c.drawLine(-.67f, -.67f, .50f, -.67f, paint);
+                    break;
                 case "jump":
                     c.drawLine(-.65f, -.05f, 0f, -.66f, paint);
                     c.drawLine(0f, -.66f, .65f, -.05f, paint);
@@ -388,6 +395,7 @@ public final class HorizonActivity extends GameActivity {
             float r = radius * getHeight() * scale;
             boolean pressed = (name.equals("jump") && (buttons & 1) != 0)
                     || (name.equals("sneak") && (buttons & (1 << 11)) != 0)
+                    || (name.equals("sprint") && (buttons & (1 << 10)) != 0)
                     || (name.equals("inventory") && (buttons & (1 << 3)) != 0)
                     || (name.equals("pause") && (buttons & (1 << 9)) != 0)
                     || (name.equals("hit") && (buttons & (1 << 25)) != 0)
@@ -462,6 +470,7 @@ public final class HorizonActivity extends GameActivity {
                 control(canvas, .75f, .54f, .073f, "hit");
                 control(canvas, .91f, .46f, .070f, "use");
             }
+            control(canvas, .36f, .67f, .055f, "sprint");
             control(canvas, .62f, .80f, .055f, "inventory");
             control(canvas, .50f, .10f, .055f, "pause");
         }
