@@ -189,3 +189,58 @@ jobs:
           name: horizon-clean-arm64-debug-apk
           path: horizon-clean-arm64-debug.apk
           if-no-files-found: error
+
+  # Exercise the actual ARM APK in an ARM Android guest, including Activity
+  # startup and local profile navigation. Upload screenshots even on failure.
+  android-emulator-smoke:
+    needs: android-arm64
+    runs-on: macos-15-arm64
+    timeout-minutes: 35
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: horizon-clean-arm64-debug-apk
+          path: .local/android/emulator
+      - name: Boot ARM Android and inspect the app
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: arm64-v8a
+          profile: pixel_7
+          cores: 4
+          ram-size: 4096M
+          emulator-options: -no-window -no-snapshot-load -no-snapshot-save -noaudio -no-boot-anim -gpu swiftshader_indirect -camera-back none -camera-front none
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            mkdir -p .local/android/emulator
+            adb install -r .local/android/emulator/horizon-clean-arm64-debug.apk
+            adb shell settings put system accelerometer_rotation 0
+            adb shell settings put system user_rotation 1
+            adb logcat -c
+            adb shell am start -n dev.horizon.android/.HorizonActivity
+            sleep 12
+            adb shell screencap -p /sdcard/horizon-shell.png
+            adb pull /sdcard/horizon-shell.png .local/android/emulator/horizon-shell.png
+            adb shell input tap 2220 105
+            sleep 4
+            adb shell screencap -p /sdcard/horizon-profile.png
+            adb pull /sdcard/horizon-profile.png .local/android/emulator/horizon-profile.png
+            adb shell dumpsys activity activities > .local/android/emulator/activity.txt
+            adb logcat -d -v time > .local/android/emulator/logcat.txt
+            if ! grep -q 'ProfileActivity' .local/android/emulator/activity.txt; then
+              echo 'Profile screen was not reached through the in-app button' >&2
+              exit 1
+            fi
+            echo 'ARM emulator app and profile navigation reached successfully'
+      - name: Upload emulator screenshots and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: horizon-arm64-emulator-smoke
+          path: |
+            .local/android/emulator/*.png
+            .local/android/emulator/logcat.txt
+            .local/android/emulator/activity.txt
+          if-no-files-found: warn
