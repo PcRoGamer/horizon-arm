@@ -18491,6 +18491,38 @@ impl Game<'_> {
                             self.world_frames += 1;
                         }
                         self.frames += 1;
+                        // --screenshot-after captures the actual renderer output,
+                        // not a desktop/window screenshot. A world-frame-limited
+                        // run counts gameplay frames so loading screens cannot
+                        // accidentally satisfy the requested capture.
+                        if let Some(frame) = self.options.screenshot_after {
+                            let count = if self.options.world_frames.is_some() {
+                                self.world_frames
+                            } else {
+                                self.frames
+                            };
+                            if count >= frame
+                                && let Some(renderer) = self.renderer.as_mut()
+                                && renderer.screenshot.is_none()
+                            {
+                                let folder = std::env::current_dir()?.join("screenshots");
+                                std::fs::create_dir_all(&folder)?;
+                                let name = if self.options.world_frames.is_some() {
+                                    "horizon-arm64-debug-world.png"
+                                } else {
+                                    "horizon-arm64-debug-title.png"
+                                };
+                                let path = folder.join(name);
+                                renderer.screenshot =
+                                    Some(horizon_client::gfx::ScreenshotRequest {
+                                        path: path.clone(),
+                                        size: None,
+                                        scaled: false,
+                                    });
+                                self.options.screenshot_after = None;
+                                log::info!("Horizon: queued GPU screenshot {}", path.display());
+                            }
+                        }
                         self.fps_frames += 1;
                         horizon_client::crash::debug_crash_tick();
                         if self.fps_at.elapsed() >= Duration::from_secs(1) {
