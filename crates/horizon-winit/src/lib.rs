@@ -67,6 +67,7 @@ pub struct AndroidTouchState {
 enum TouchRole {
     Move,
     Look,
+    Hotbar,
     Ignored,
     Button(u8),
     LeftTrigger,
@@ -107,6 +108,28 @@ static TOUCH_START: OnceLock<Instant> = OnceLock::new();
 static WIDTH: AtomicU32 = AtomicU32::new(1);
 #[cfg(target_os = "android")]
 static HEIGHT: AtomicU32 = AtomicU32::new(1);
+#[cfg(target_os = "android")]
+static GUI_WIDTH: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "android")]
+static GUI_HEIGHT: AtomicU32 = AtomicU32::new(0);
+
+/// The upstream HUD provides virtual GUI pixels after applying GUI Scale.
+#[cfg(target_os = "android")]
+pub fn android_touch_gui_size(width: u32, height: u32) {
+    GUI_WIDTH.store(width, Ordering::Relaxed);
+    GUI_HEIGHT.store(height, Ordering::Relaxed);
+}
+
+#[cfg(target_os = "android")]
+fn hotbar_slot(p: [f64; 2]) -> Option<usize> {
+    touch_gestures::hotbar_slot(
+        [p[0] as f32, p[1] as f32],
+        [
+            GUI_WIDTH.load(Ordering::Relaxed),
+            GUI_HEIGHT.load(Ordering::Relaxed),
+        ],
+    )
+}
 
 #[cfg(target_os = "android")]
 fn touch() -> &'static Mutex<AndroidTouch> {
@@ -262,6 +285,13 @@ fn handle_game_touch(t: winit_real::event::Touch) {
                         }
                     }
                 }
+                TouchRole::Hotbar => {
+                    if t.phase != TouchPhase::Cancelled {
+                        if let Some(slot) = hotbar_slot(p) {
+                            touch.pending.push_back(AndroidGesture::Hotbar(slot));
+                        }
+                    }
+                }
                 TouchRole::Ignored => {}
                 TouchRole::Button(bit) => press_button(&mut touch.state, bit, false),
                 TouchRole::LeftTrigger => touch.state.triggers[0] = 0.0,
@@ -274,7 +304,9 @@ fn handle_game_touch(t: winit_real::event::Touch) {
     if t.phase == TouchPhase::Started {
         // Geometry intentionally mirrors HorizonActivity.TouchOverlay. Sizes are
         // fractions of screen height so phones and tablets keep square controls.
-        let role = if p[0] < 0.38 && p[1] > 0.34 {
+        let role = if hotbar_slot(p).is_some() {
+            TouchRole::Hotbar
+        } else if p[0] < 0.38 && p[1] > 0.34 {
             TouchRole::Move
         } else if near(p, [0.90, 0.74], 0.085, aspect) {
             TouchRole::Button(0) // South: jump
@@ -333,7 +365,7 @@ fn handle_game_touch(t: winit_real::event::Touch) {
                 touch.target = None;
             }
         }
-        TouchRole::Ignored => {}
+        TouchRole::Hotbar | TouchRole::Ignored => {}
         _ => {}
     }
 }

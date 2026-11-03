@@ -8379,6 +8379,8 @@ impl Game<'_> {
             + self.clock.fraction() as f32)
             / 24000.0;
         let (w, h) = (batch.width, batch.height);
+        #[cfg(target_os = "android")]
+        winit::android_touch_gui_size(w as u32, h as u32);
         // HDR calibration ends when its page does, whatever moved the screen
         // off Options (a death screen opened by a server, say).
         if self.screen != Screen::Options && self.ui.options.calibration_fullscreen.is_some() {

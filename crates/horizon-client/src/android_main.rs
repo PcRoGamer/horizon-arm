@@ -18,7 +18,7 @@ thread_local! {
 }
 
 #[global_allocator]
-static ALLOCATOR: horizon_threads::Allocator = horizon_threads::Allocator;
+static ALLOCATOR: horizon_threads::Allocator = horizon_threads::ALLOCATOR;
 
 /// The Java overlay only needs to know whether it should show gameplay controls
 /// or the title/menu Profile button. No game state or pointer crosses JNI.

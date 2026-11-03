@@ -10,6 +10,24 @@ pub enum Action {
     HoldBegin { x: f32, y: f32 },
     HoldEnd,
     Look { dx: f32, dy: f32 },
+    Hotbar(usize),
+}
+
+/// Hit test the actual vanilla hotbar, independent of device resolution.
+/// The HUD draws 9 slots, each 20 GUI pixels wide, centred on the window,
+/// with the bottommost 22 GUI pixels occupied by the hotbar background.
+pub fn hotbar_slot(normalized: [f32; 2], gui: [u32; 2]) -> Option<usize> {
+    let [width, height] = gui;
+    if width < 182 || height < 22 {
+        return None;
+    }
+    let x = normalized[0] * width as f32;
+    let y = normalized[1] * height as f32;
+    let start = (width / 2) as f32 - 90.0;
+    if x < start || x >= start + 180.0 || y < height as f32 - 24.0 || y > height as f32 {
+        return None;
+    }
+    Some(((x - start) / 20.0) as usize)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -195,6 +213,23 @@ mod tests {
         assert!(matches!(r.tick(400), Some(Action::HoldBegin { .. })));
         assert_eq!(r.reset(), Some(Action::HoldEnd));
         assert_eq!(r.tick(600), None);
+    }
+
+    #[test]
+    fn hotbar_selects_exactly_nine_slots_across_screen_sizes() {
+        for gui in [[480, 270], [960, 540], [320, 240]] {
+            let left = (gui[0] / 2) as f32 - 90.0;
+            let y = (gui[1] - 11) as f32 / gui[1] as f32;
+            for i in 0..9 {
+                let nx = (left + 10.0 + (i * 20) as f32) / gui[0] as f32;
+                assert_eq!(super::hotbar_slot([nx, y], gui), Some(i));
+            }
+            assert_eq!(
+                super::hotbar_slot([(left - 1.0) / gui[0] as f32, y], gui),
+                None
+            );
+            assert_eq!(super::hotbar_slot([0.5, 0.5], gui), None);
+        }
     }
 
     #[test]

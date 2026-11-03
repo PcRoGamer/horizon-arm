@@ -191,6 +191,11 @@ impl Game<'_> {
             // decides whether the targeted object should be attacked or used.
             for gesture in winit::android_touch_gestures() {
                 match gesture {
+                    winit::AndroidGesture::Hotbar(slot)
+                        if self.title.is_none() && self.screen == Screen::Playing =>
+                    {
+                        self.hotbar_presses.push(slot);
+                    }
                     winit::AndroidGesture::HoldEnd => {
                         let _ = self.play_mouse(winit::event::MouseButton::Left, false);
                         let _ = self.play_mouse(winit::event::MouseButton::Right, false);
