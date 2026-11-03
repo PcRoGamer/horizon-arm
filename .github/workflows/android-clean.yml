@@ -27,6 +27,8 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Offline account tests
         run: cargo test -p horizon-client offline_accounts --lib
+      - name: Touch recognizer tests
+        run: cargo test -p horizon-winit --lib
       - name: Client check
         run: cargo check -p horizon-client
 
