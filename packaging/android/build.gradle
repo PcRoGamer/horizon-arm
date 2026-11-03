@@ -1,0 +1,45 @@
+plugins { id 'com.android.application' version '8.11.1' }
+
+android {
+    namespace 'dev.horizon.android'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'dev.horizon.android'
+        minSdk 28
+        targetSdk 35
+        versionCode 1
+        versionName '0.1.0-clean'
+        ndk { abiFilters providers.gradleProperty('abi').orElse('arm64-v8a').get() }
+    }
+    sourceSets.main {
+        manifest.srcFile 'AndroidManifest.xml'
+        java.srcDirs = ['java']
+        jniLibs.srcDirs = ['../../.local/android/gradle-jni']
+        assets.srcDirs = ['../../.local/android/gradle-assets']
+        res.srcDirs = ['res']
+    }
+    packaging { jniLibs { useLegacyPackaging = true } }
+}
+
+// AppCompat/Core and GameActivity currently arrive through different Kotlin
+// stdlib generations. Kotlin 1.8 merged the jdk7/jdk8 classes into stdlib;
+// forcing the entire Kotlin family to one generation prevents Gradle from
+// packaging the old 1.6 split jars alongside the merged 1.8 stdlib.
+configurations.configureEach {
+    resolutionStrategy.eachDependency { details ->
+        if (details.requested.group == 'org.jetbrains.kotlin') {
+            details.useVersion '1.8.22'
+            details.because 'keep GameActivity/AppCompat Kotlin runtime on one generation'
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.games:games-activity:4.4.0'
+    // GameActivity's Java API exposes AndroidX Core/AppCompat types. These are
+    // Android-15/API-35-compatible stable versions matching compileSdk 35.
+    implementation 'androidx.core:core:1.15.0'
+    implementation 'androidx.appcompat:appcompat:1.7.1'
+}
+
+layout.buildDirectory = file('../../.local/android/gradle-build')
