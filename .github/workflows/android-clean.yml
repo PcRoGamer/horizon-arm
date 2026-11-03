@@ -234,10 +234,8 @@ jobs:
             adb pull /sdcard/horizon-profile.png .local/android/emulator/horizon-profile.png
             adb shell dumpsys activity activities > .local/android/emulator/activity.txt
             adb logcat -d -v time > .local/android/emulator/logcat.txt
-            if ! grep -q 'ProfileActivity' .local/android/emulator/activity.txt; then
-              echo 'Profile screen was not reached through the in-app button' >&2
-              exit 1
-            fi
+            grep -q 'ProfileActivity' .local/android/emulator/activity.txt || { echo 'Profile screen not reached' >&2; exit 1; }
+
             echo 'ARM emulator app and profile navigation reached successfully'
       - name: Upload emulator screenshots and diagnostics
         if: always()
