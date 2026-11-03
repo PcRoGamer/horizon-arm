@@ -177,13 +177,13 @@ public final class HorizonActivity extends GameActivity {
             circle(canvas, 0.14f, 0.75f, 0.16f, null);
             circle(canvas, 0.14f, 0.75f, 0.055f, null);
             circle(canvas, 0.90f, 0.74f, 0.085f, "JUMP");
-            circle(canvas, 0.79f, 0.84f, 0.065f, "SNEAK");
+            circle(canvas, 0.79f, 0.82f, 0.065f, "SNEAK");
             if (crosshairMode) {
                 circle(canvas, 0.80f, 0.58f, 0.080f, "HIT");
                 circle(canvas, 0.92f, 0.51f, 0.075f, "USE");
             }
-            circle(canvas, 0.72f, 0.94f, 0.055f, "INV");
-            circle(canvas, 0.50f, 0.06f, 0.055f, "II");
+            circle(canvas, 0.62f, 0.80f, 0.055f, "INV");
+            circle(canvas, 0.50f, 0.10f, 0.055f, "II");
         }
     }
 }

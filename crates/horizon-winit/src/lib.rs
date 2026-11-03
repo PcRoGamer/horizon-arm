@@ -310,15 +310,15 @@ fn handle_game_touch(t: winit_real::event::Touch) {
             TouchRole::Move
         } else if near(p, [0.90, 0.74], 0.085, aspect) {
             TouchRole::Button(0) // South: jump
-        } else if near(p, [0.79, 0.84], 0.065, aspect) {
+        } else if near(p, [0.79, 0.82], 0.065, aspect) {
             TouchRole::Button(11) // Right stick: sneak
         } else if android_touch_crosshair() && near(p, [0.80, 0.58], 0.080, aspect) {
             TouchRole::RightTrigger // attack/mine
         } else if android_touch_crosshair() && near(p, [0.92, 0.51], 0.075, aspect) {
             TouchRole::LeftTrigger // use/place
-        } else if near(p, [0.72, 0.94], 0.055, aspect) {
+        } else if near(p, [0.62, 0.80], 0.055, aspect) {
             TouchRole::Button(3) // North: inventory
-        } else if near(p, [0.50, 0.06], 0.055, aspect) {
+        } else if near(p, [0.50, 0.10], 0.055, aspect) {
             TouchRole::Button(9) // Start: pause
         } else if touch.gestures.down(
             t.id,
