@@ -5,6 +5,11 @@
 //! GameActivity-aware EventLoop constructor, modifier-supplement fallback, and
 //! a touch/lifecycle adapter. Horizon's game loop remains upstream source.
 
+#[cfg(any(test, target_os = "android"))]
+mod touch_gestures;
+#[cfg(target_os = "android")]
+pub use touch_gestures::Action as AndroidGesture;
+
 #[cfg(not(target_os = "android"))]
 pub use winit_real::*;
 
@@ -14,11 +19,12 @@ pub use winit_real::{application, dpi, error, event, keyboard, monitor, window};
 #[cfg(target_os = "android")]
 use std::{
     cell::RefCell,
-    collections::BTreeMap,
+    collections::{BTreeMap, VecDeque},
     sync::{
         Mutex, OnceLock,
         atomic::{AtomicBool, AtomicU32, Ordering},
     },
+    time::{Duration, Instant},
 };
 
 #[cfg(target_os = "android")]
@@ -60,23 +66,43 @@ pub struct AndroidTouchState {
 #[derive(Clone, Copy)]
 enum TouchRole {
     Move,
-    Look([f64; 2]),
+    Look,
+    Ignored,
     Button(u8),
     LeftTrigger,
     RightTrigger,
 }
 
 #[cfg(target_os = "android")]
-#[derive(Default)]
 struct AndroidTouch {
     state: AndroidTouchState,
     fingers: BTreeMap<u64, TouchRole>,
+    gestures: touch_gestures::Recognizer,
+    pending: VecDeque<AndroidGesture>,
+    target: Option<([f32; 2], Instant)>,
+}
+
+#[cfg(target_os = "android")]
+impl Default for AndroidTouch {
+    fn default() -> Self {
+        Self {
+            state: AndroidTouchState::default(),
+            fingers: BTreeMap::new(),
+            gestures: touch_gestures::Recognizer::new(HEIGHT.load(Ordering::Relaxed) as f32),
+            pending: VecDeque::new(),
+            target: None,
+        }
+    }
 }
 
 #[cfg(target_os = "android")]
 static TOUCH: OnceLock<Mutex<AndroidTouch>> = OnceLock::new();
 #[cfg(target_os = "android")]
 static TOUCH_MENU: AtomicBool = AtomicBool::new(true);
+#[cfg(target_os = "android")]
+static TOUCH_CROSSHAIR: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "android")]
+static TOUCH_START: OnceLock<Instant> = OnceLock::new();
 #[cfg(target_os = "android")]
 static WIDTH: AtomicU32 = AtomicU32::new(1);
 #[cfg(target_os = "android")]
@@ -89,10 +115,26 @@ fn touch() -> &'static Mutex<AndroidTouch> {
 
 #[cfg(target_os = "android")]
 pub fn android_touch_set_menu(menu: bool) {
-    TOUCH_MENU.store(menu, Ordering::Relaxed);
-    if menu {
+    let was_menu = TOUCH_MENU.swap(menu, Ordering::Relaxed);
+    if menu && !was_menu {
         android_touch_clear();
     }
+}
+
+#[cfg(target_os = "android")]
+pub fn android_touch_set_crosshair(crosshair: bool) {
+    TOUCH_CROSSHAIR.store(crosshair, Ordering::Relaxed);
+    android_touch_clear();
+}
+
+#[cfg(target_os = "android")]
+pub fn android_touch_crosshair() -> bool {
+    TOUCH_CROSSHAIR.load(Ordering::Relaxed)
+}
+
+#[cfg(target_os = "android")]
+fn milliseconds() -> u64 {
+    TOUCH_START.get_or_init(Instant::now).elapsed().as_millis() as u64
 }
 
 #[cfg(target_os = "android")]
@@ -103,8 +145,48 @@ pub fn android_touch_menu() -> bool {
 #[cfg(target_os = "android")]
 pub fn android_touch_clear() {
     if let Ok(mut touch) = touch().lock() {
+        let release = touch.gestures.reset();
         *touch = AndroidTouch::default();
+        if let Some(release) = release {
+            touch.pending.push_back(release);
+        }
     }
+}
+
+/// Consume tap/hold events once. Hold detection is performed here on every
+/// game frame, including frames with no Android motion callbacks.
+#[cfg(target_os = "android")]
+pub fn android_touch_gestures() -> Vec<AndroidGesture> {
+    let Ok(mut touch) = touch().lock() else {
+        return Vec::new();
+    };
+    if !TOUCH_MENU.load(Ordering::Relaxed) {
+        if let Some(action) = touch.gestures.tick(milliseconds()) {
+            if !android_touch_crosshair() {
+                if let AndroidGesture::HoldBegin { x, y } = action {
+                    touch.target = Some(([x, y], Instant::now() + Duration::from_secs(3600)));
+                    touch.pending.push_back(action);
+                }
+            }
+        }
+    }
+    touch.pending.drain(..).collect()
+}
+
+/// The active touch target in fractional screen coordinates, plus aspect.
+#[cfg(target_os = "android")]
+pub fn android_touch_target() -> Option<([f64; 2], f64)> {
+    if android_touch_crosshair() || TOUCH_MENU.load(Ordering::Relaxed) {
+        return None;
+    }
+    let touch = touch().lock().ok()?;
+    let (pos, until) = touch.target?;
+    if Instant::now() > until {
+        return None;
+    }
+    let w = WIDTH.load(Ordering::Relaxed).max(1) as f64;
+    let h = HEIGHT.load(Ordering::Relaxed).max(1) as f64;
+    Some(([f64::from(pos[0]) / w, f64::from(pos[1]) / h], w / h))
 }
 
 /// Read touch like a virtual controller. Look deltas are one-frame impulses;
@@ -156,7 +238,31 @@ fn handle_game_touch(t: winit_real::event::Touch) {
         if let Some(role) = touch.fingers.remove(&t.id) {
             match role {
                 TouchRole::Move => touch.state.left = [0.0; 2],
-                TouchRole::Look(_) => touch.state.right = [0.0; 2],
+                TouchRole::Look => {
+                    let action = touch.gestures.up(
+                        t.id,
+                        t.location.x as f32,
+                        t.location.y as f32,
+                        t.phase == TouchPhase::Cancelled,
+                    );
+                    if let Some(action) = action {
+                        if !android_touch_crosshair() {
+                            match action {
+                                AndroidGesture::Tap { x, y } => {
+                                    touch.target =
+                                        Some(([x, y], Instant::now() + Duration::from_millis(300)));
+                                    touch.pending.push_back(action);
+                                }
+                                AndroidGesture::HoldEnd => {
+                                    touch.target = None;
+                                    touch.pending.push_back(action);
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                TouchRole::Ignored => {}
                 TouchRole::Button(bit) => press_button(&mut touch.state, bit, false),
                 TouchRole::LeftTrigger => touch.state.triggers[0] = 0.0,
                 TouchRole::RightTrigger => touch.state.triggers[1] = 0.0,
@@ -174,16 +280,23 @@ fn handle_game_touch(t: winit_real::event::Touch) {
             TouchRole::Button(0) // South: jump
         } else if near(p, [0.79, 0.84], 0.065, aspect) {
             TouchRole::Button(11) // Right stick: sneak
-        } else if near(p, [0.80, 0.58], 0.080, aspect) {
+        } else if android_touch_crosshair() && near(p, [0.80, 0.58], 0.080, aspect) {
             TouchRole::RightTrigger // attack/mine
-        } else if near(p, [0.92, 0.51], 0.075, aspect) {
+        } else if android_touch_crosshair() && near(p, [0.92, 0.51], 0.075, aspect) {
             TouchRole::LeftTrigger // use/place
         } else if near(p, [0.72, 0.94], 0.055, aspect) {
             TouchRole::Button(3) // North: inventory
         } else if near(p, [0.50, 0.06], 0.055, aspect) {
             TouchRole::Button(9) // Start: pause
+        } else if touch.gestures.down(
+            t.id,
+            t.location.x as f32,
+            t.location.y as f32,
+            milliseconds(),
+        ) {
+            TouchRole::Look
         } else {
-            TouchRole::Look([t.location.x, t.location.y])
+            TouchRole::Ignored
         };
         match role {
             TouchRole::Button(bit) => press_button(&mut touch.state, bit, true),
@@ -206,19 +319,21 @@ fn handle_game_touch(t: winit_real::event::Touch) {
             let length = (dx * dx + dy * dy).sqrt().max(1.0);
             touch.state.left = [(dx / length) as f32, (-dy / length) as f32];
         }
-        TouchRole::Look(previous) => {
-            let dx = t.location.x - previous[0];
-            let dy = t.location.y - previous[1];
-            // Pad look is frame-rate integrated. Scale a finger delta into an
-            // impulse and consume it on the next poll instead of leaving drift.
-            touch.state.right = [
-                (dx / (height * 0.025)).clamp(-1.0, 1.0) as f32,
-                (-dy / (height * 0.025)).clamp(-1.0, 1.0) as f32,
-            ];
-            touch
-                .fingers
-                .insert(t.id, TouchRole::Look([t.location.x, t.location.y]));
+        TouchRole::Look => {
+            if let Some(AndroidGesture::Look { dx, dy }) =
+                touch
+                    .gestures
+                    .move_to(t.id, t.location.x as f32, t.location.y as f32)
+            {
+                // Deltas are accumulated, never replaced, between game frames.
+                touch.state.right[0] =
+                    (touch.state.right[0] + dx / (height as f32 * 0.025)).clamp(-1.0, 1.0);
+                touch.state.right[1] =
+                    (touch.state.right[1] - dy / (height as f32 * 0.025)).clamp(-1.0, 1.0);
+                touch.target = None;
+            }
         }
+        TouchRole::Ignored => {}
         _ => {}
     }
 }
@@ -273,6 +388,9 @@ pub mod event_loop {
                 WindowEvent::Resized(size) => {
                     crate::WIDTH.store(size.width.max(1), std::sync::atomic::Ordering::Relaxed);
                     crate::HEIGHT.store(size.height.max(1), std::sync::atomic::Ordering::Relaxed);
+                    if let Ok(mut touch) = crate::touch().lock() {
+                        touch.gestures.set_screen_height(size.height as f32);
+                    }
                     self.0
                         .window_event(event_loop, window_id, WindowEvent::Resized(size));
                 }

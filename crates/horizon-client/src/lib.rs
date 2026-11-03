@@ -4,7 +4,7 @@
 #![forbid(unsafe_code)]
 extern crate self as horizon_client;
 pub use horizon_client_lib::*;
-pub mod offline_accounts;
 pub mod entry;
 pub mod game;
 pub mod mod_api;
+pub mod offline_accounts;

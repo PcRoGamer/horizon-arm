@@ -21,8 +21,12 @@ import com.google.androidgamesdk.GameActivity;
 public final class HorizonActivity extends GameActivity {
     private TouchOverlay touchOverlay;
     private Button profileButton;
+    private Button modeButton;
+    private boolean crosshairMode;
+    private boolean nativeModeApplied;
 
     public static native boolean nativeTouchMenu();
+    public static native void nativeSetCrosshair(boolean crosshair);
 
     @Override
     protected void onCreate(Bundle state) {
@@ -55,6 +59,24 @@ public final class HorizonActivity extends GameActivity {
         profile.setMargins(margin, margin, margin, margin);
         addContentView(profileButton, profile);
 
+        crosshairMode = getPreferences(MODE_PRIVATE).getBoolean("crosshairMode", false);
+        modeButton = new Button(this);
+        modeButton.setAllCaps(false);
+        updateModeLabel();
+        modeButton.setOnClickListener(v -> {
+            crosshairMode = !crosshairMode;
+            getPreferences(MODE_PRIVATE).edit().putBoolean("crosshairMode", crosshairMode).apply();
+            nativeModeApplied = false;
+            updateModeLabel();
+            syncNativeMode();
+        });
+        FrameLayout.LayoutParams mode = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP | Gravity.START);
+        mode.setMargins(margin, margin, margin, margin);
+        addContentView(modeButton, mode);
+
         getWindow().getDecorView().post(menuPoll);
     }
 
@@ -72,10 +94,34 @@ public final class HorizonActivity extends GameActivity {
         }
     }
 
+    private void updateModeLabel() {
+        if (modeButton != null) {
+            modeButton.setText(crosshairMode ? "Crosshair controls" : "Touch controls");
+        }
+        if (touchOverlay != null) {
+            touchOverlay.crosshairMode = crosshairMode;
+            touchOverlay.invalidate();
+        }
+    }
+
+    private void syncNativeMode() {
+        if (nativeModeApplied) return;
+        try {
+            nativeSetCrosshair(crosshairMode);
+            nativeModeApplied = true;
+        } catch (UnsatisfiedLinkError ignored) {
+            // GameActivity may load the native library after onCreate.
+        }
+    }
+
     private final Runnable menuPoll = new Runnable() {
         @Override
         public void run() {
+            syncNativeMode();
             boolean menu = nativeMenu();
+            if (modeButton != null) {
+                modeButton.setVisibility(menu ? View.VISIBLE : View.GONE);
+            }
             if (profileButton != null) {
                 profileButton.setVisibility(menu ? View.VISIBLE : View.GONE);
             }
@@ -93,6 +139,7 @@ public final class HorizonActivity extends GameActivity {
         private final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
         boolean menu = true;
+        boolean crosshairMode = false;
 
         TouchOverlay() {
             super(HorizonActivity.this);
@@ -131,8 +178,10 @@ public final class HorizonActivity extends GameActivity {
             circle(canvas, 0.14f, 0.75f, 0.055f, null);
             circle(canvas, 0.90f, 0.74f, 0.085f, "JUMP");
             circle(canvas, 0.79f, 0.84f, 0.065f, "SNEAK");
-            circle(canvas, 0.80f, 0.58f, 0.080f, "HIT");
-            circle(canvas, 0.92f, 0.51f, 0.075f, "USE");
+            if (crosshairMode) {
+                circle(canvas, 0.80f, 0.58f, 0.080f, "HIT");
+                circle(canvas, 0.92f, 0.51f, 0.075f, "USE");
+            }
             circle(canvas, 0.72f, 0.94f, 0.055f, "INV");
             circle(canvas, 0.50f, 0.06f, 0.055f, "II");
         }

@@ -187,6 +187,40 @@ impl Game<'_> {
         #[cfg(target_os = "android")]
         {
             winit::android_touch_set_menu(self.pad_in_menu() || !self.focused);
+            // Gesture classification is platform-owned; the upstream game
+            // decides whether the targeted object should be attacked or used.
+            for gesture in winit::android_touch_gestures() {
+                match gesture {
+                    winit::AndroidGesture::HoldEnd => {
+                        let _ = self.play_mouse(winit::event::MouseButton::Left, false);
+                        let _ = self.play_mouse(winit::event::MouseButton::Right, false);
+                    }
+                    winit::AndroidGesture::Tap { .. }
+                        if self.title.is_none() && self.screen == Screen::Playing =>
+                    {
+                        let button = if self.mob_hit().is_some() {
+                            winit::event::MouseButton::Left
+                        } else {
+                            winit::event::MouseButton::Right
+                        };
+                        let _ = self.play_mouse(button, true);
+                        let _ = self.play_mouse(button, false);
+                    }
+                    winit::AndroidGesture::HoldBegin { .. }
+                        if self.title.is_none() && self.screen == Screen::Playing =>
+                    {
+                        // Stationary hold mines a block. On a mob or empty
+                        // space, holding uses the item (bows, food, shields).
+                        let button = if self.mob_hit().is_none() && self.pick().is_some() {
+                            winit::event::MouseButton::Left
+                        } else {
+                            winit::event::MouseButton::Right
+                        };
+                        let _ = self.play_mouse(button, true);
+                    }
+                    _ => {}
+                }
+            }
         }
         let settings = &self.settings.controller;
         if !settings.enabled && !cfg!(target_os = "android") {

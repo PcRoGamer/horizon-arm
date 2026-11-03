@@ -32,6 +32,16 @@ pub extern "system" fn Java_dev_horizon_android_HorizonActivity_nativeTouchMenu(
     u8::from(winit::android_touch_menu())
 }
 
+/// Change between touch-to-interact and the dedicated crosshair buttons.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_horizon_android_HorizonActivity_nativeSetCrosshair(
+    _env: *mut std::ffi::c_void,
+    _class: *mut std::ffi::c_void,
+    crosshair: u8,
+) {
+    winit::android_touch_set_crosshair(crosshair != 0);
+}
+
 #[unsafe(no_mangle)]
 fn android_main(app: AndroidApp) {
     android_logger::init_once(

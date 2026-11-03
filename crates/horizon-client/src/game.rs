@@ -3327,15 +3327,39 @@ impl Game<'_> {
     /// crosshair target (blocks, fluids, entities, mod raycasts) is found
     /// along this ray, so a tracked controller can stand in for it.
     fn aim(&self) -> Option<([f64; 3], [f64; 3])> {
-        // Minecraft.pick: from the camera entity's eyes along its view
-        // (LivingEntity.getViewYRot: the head's yaw).
-        if let Some(m) = self.camera_mob() {
-            return Some((
+        // Minecraft.pick: from the camera entity's eyes along its view.
+        let (origin, forward, _yaw) = if let Some(m) = self.camera_mob() {
+            (
                 [m.position.x, m.eye_y(), m.position.z],
                 view_vector(m.head_yaw, m.head_pitch),
-            ));
+                m.head_yaw,
+            )
+        } else {
+            (
+                self.eye_position()?,
+                view_vector(self.yaw, self.pitch),
+                self.yaw,
+            )
+        };
+        #[cfg(target_os = "android")]
+        if let Some(([u, v], aspect)) = winit::android_touch_target() {
+            // Unproject the touch pixel through the world camera's vertical FOV
+            // so raycasts hit the touched block/entity rather than the centre.
+            let half = (f64::from(self.fov_degrees(1.0, origin)).to_radians() * 0.5).tan();
+            let angle = f64::from(_yaw).to_radians();
+            let right = [angle.cos(), 0.0, angle.sin()];
+            let up = [
+                forward[1] * right[2] - forward[2] * right[1],
+                forward[2] * right[0] - forward[0] * right[2],
+                forward[0] * right[1] - forward[1] * right[0],
+            ];
+            let x = (u * 2.0 - 1.0) * aspect * half;
+            let y = (1.0 - v * 2.0) * half;
+            let ray: [f64; 3] = std::array::from_fn(|i| forward[i] + right[i] * x + up[i] * y);
+            let norm = ray.iter().map(|v| v * v).sum::<f64>().sqrt().max(1e-9);
+            return Some((origin, ray.map(|v| v / norm)));
         }
-        Some((self.eye_position()?, view_vector(self.yaw, self.pitch)))
+        Some((origin, forward))
     }
     /// `Player.blockInteractionRange`: the block pick's and mining's reach.
     fn reach(&self) -> f64 {
