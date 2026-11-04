@@ -3,7 +3,8 @@ on:
   push:
     branches: [feat/bedrock-touch-polish]
     paths:
-      - crates/horizon-client/src/touch_preview.rs
+      - crates/horizon-client/src/game/touch_preview.rs
+      - tools/check_android_control_layout.py
       - crates/horizon-client/src/game.rs
       - tools/windows_arm_debug_assets.py
       - .github/workflows/windows-arm64-touch-preview.yml
@@ -18,6 +19,9 @@ jobs:
       CARGO_INCREMENTAL: '0'
     steps:
       - uses: actions/checkout@v4
+      - name: Verify Android / Windows touch visual parity
+        shell: pwsh
+        run: python tools/check_android_control_layout.py
       - name: ARM64 Rust toolchain
         shell: pwsh
         run: |
