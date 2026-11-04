@@ -268,9 +268,9 @@ impl Painter<'_> {
                 ];
                 let pts=[(0.0,-0.70),(0.66,0.06),(0.28,0.06),(0.28,0.65),(-0.28,0.65),(-0.28,0.06),(-0.66,0.06)];
                 for tri in [[0,1,2],[0,2,5],[5,2,3],[5,3,4],[0,5,6]] {
-                    let p=rotate(pts[tri[0]]0.0,pts[tri[0]]0.1);
-                    let q=rotate(pts[tri[1]]0.0,pts[tri[1]]0.1);
-                    let r=rotate(pts[tri[2]]0.0,pts[tri[2]]0.1);
+                    let p=rotate(pts[tri[0]].0,pts[tri[0]].1);
+                    let q=rotate(pts[tri[1]].0,pts[tri[1]].1);
+                    let r=rotate(pts[tri[2]].0,pts[tri[2]].1);
                     self.quad([p,q,r,r],ink);
                 }
             }
