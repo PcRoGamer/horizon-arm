@@ -67,22 +67,28 @@ pub extern "system" fn Java_dev_horizon_android_HorizonActivity_nativeTouchButto
 
 #[unsafe(no_mangle)]
 fn android_main(app: AndroidApp) {
+    eprintln!("HorizonNative STAGE 00: entered android_main");
     android_logger::init_once(
         android_logger::Config::default()
             .with_max_level(log::LevelFilter::Info)
             .with_tag("Horizon"),
     );
+    log::info!("HorizonNative STAGE 01: logging initialized");
     horizon_threads::configure_allocator();
+    log::info!("HorizonNative STAGE 02: allocator configured");
 
     let Some(home) = app.internal_data_path() else {
         log::error!("Android supplied no application data directory");
         return;
     };
 
+    log::info!("HorizonNative STAGE 03: internal data path resolved");
+
     // Winit requires AndroidApp on its EventLoopBuilder. Installing it here lets
     // untouched upstream code continue to call EventLoop::new().
     winit::install_android_app(app.clone());
     ANDROID_APP.with(|slot| *slot.borrow_mut() = Some(app.clone()));
+    log::info!("HorizonNative STAGE 04: AndroidApp installed");
 
     if let Err(error) =
         std::fs::create_dir_all(&home).and_then(|()| std::env::set_current_dir(&home))
@@ -93,6 +99,8 @@ fn android_main(app: AndroidApp) {
         );
         return;
     }
+
+    log::info!("HorizonNative STAGE 05: working directory prepared");
 
     // Upstream Horizon already has an offline-skin path. Android's Profile UI
     // keeps its selected PNG at a stable path, so no renderer fork is needed.
@@ -116,6 +124,7 @@ fn android_main(app: AndroidApp) {
     // resources and indexed assets are fetched directly from Mojang, verified
     // against the repository's pinned version, and installed atomically into
     // the same path the untouched desktop game loop already uses.
+    log::info!("HorizonNative STAGE 06: entering asset bootstrap");
     if let Err(error) = bootstrap::ensure(&home, &app) {
         log::error!("Minecraft resource bootstrap failed: {error}");
         horizon_client::crash::report_error(&home, "resource-bootstrap", &*error);
