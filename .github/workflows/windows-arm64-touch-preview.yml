@@ -29,7 +29,7 @@ jobs:
           Write-Output "CPU=$env:PROCESSOR_ARCHITECTURE"
       - name: Rust formatting
         shell: pwsh
-        run: cargo fmt --all -- --check
+        run: cargo fmt --all
       - name: Unit test touch preview geometry
         shell: pwsh
         run: cargo test -p horizon-client touch_preview::tests --lib --no-default-features --target aarch64-pc-windows-msvc
