@@ -25,6 +25,36 @@ for x, y, radius, name in re.findall(
 expected = {"jump", "sneak", "hit", "use", "sprint", "inventory", "pause"}
 assert set(visuals) == expected, (set(visuals), expected)
 
+# Desktop ARM64 debug HUD must mirror the same source geometry. It is not a
+# separate decorative mockup; the game's GPU draws these exact controls.
+PREVIEW = (ROOT / "crates/horizon-client/src/touch_preview.rs").read_text()
+preview_controls = {}
+for x, y, radius, symbol in re.findall(
+    r'draw\.control\(\s*(0\.\d+)\s*\*\s*w,\s*(0\.\d+)\s*\*\s*h,\s*'
+    r'(0\.\d+)\s*\*\s*h\s*\*\s*cfg\.scale,\s*Symbol::(\w+)\s*\)',
+    PREVIEW,
+):
+    name = symbol.lower()
+    assert name not in preview_controls, f"duplicate native touch preview: {name}"
+    preview_controls[name] = (float(x), float(y), float(radius))
+assert preview_controls == visuals, (
+    "Native Windows ARM64 preview differs from Android Java Canvas",
+    preview_controls, visuals,
+)
+assert re.search(
+    r'draw\.joystick\(\s*0\.15\s*\*\s*w,\s*0\.72\s*\*\s*h,\s*'
+    r'0\.135\s*\*\s*h\s*\*\s*cfg\.scale\s*\)',
+    PREVIEW,
+), "Windows ARM64 joystick differs from Java"
+assert "0.068 * h * cfg.scale * 1.48" in PREVIEW
+assert "Symbol::Arrow(direction)" in PREVIEW
+assert "cfg.scheme & 1 == 1" in PREVIEW
+assert "HORIZON_TOUCH_PREVIEW" in PREVIEW
+assert "HORIZON_TOUCH_PREVIEW_SCALE" in PREVIEW
+assert "HORIZON_TOUCH_PREVIEW_OPACITY" in PREVIEW
+print("PASS native Windows ARM64 GPU preview / Android visual geometry parity")
+
+
 touch_regions = {
     (float(x), float(y), float(r))
     for x, y, r in re.findall(
