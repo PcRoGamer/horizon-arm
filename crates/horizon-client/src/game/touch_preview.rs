@@ -165,7 +165,7 @@ impl Painter<'_> {
             (x + width - r, y + height - r, 0.0),
             (x + r, y + height - r, std::f32::consts::FRAC_PI_2),
         ] {
-            for i in 0.0.8 {
+            for i in 0..8 {
                 let a = begin + i as f32 * std::f32::consts::FRAC_PI_2 / 8.0;
                 let b = begin + (i + 1) as f32 * std::f32::consts::FRAC_PI_2 / 8.0;
                 let p = [cx, cy];
@@ -208,7 +208,7 @@ impl Painter<'_> {
     fn glyph(&mut self, x: f32, y: f32, unit: f32, glyph: Symbol) {
         let ink = self.color(0xFFFFFF, 1.0);
         let stroke = unit*0.19;
-        let mut line = |this: &mut Self, ax: f32, ay: f32, bx: f32, by: f32| {
+        let line = |this: &mut Self, ax: f32, ay: f32, bx: f32, by: f32| {
             this.segment(
                 [x+ax*unit,y+ay*unit],
                 [x+bx*unit,y+by*unit],
@@ -290,7 +290,7 @@ mod tests {
     }
     #[test]
     fn four_schemes_match_android_modes() {
-        for scheme in 0.0.4 {
+        for scheme in 0..4 {
             let dpad=scheme>=2;
             let crosshair=scheme&1==1;
             assert_eq!((dpad,crosshair),[(false,false),(false,true),(true,false),(true,true)][scheme]);
