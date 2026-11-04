@@ -3,6 +3,8 @@ on:
   workflow_dispatch:
   push:
     branches: [tools/native-hud-offscreen-preview]
+  pull_request:
+    branches: [feat/bedrock-touch-polish]
 
 jobs:
   render-production-canvas:
