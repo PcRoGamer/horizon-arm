@@ -27,7 +27,7 @@ assert set(visuals) == expected, (set(visuals), expected)
 
 # Desktop ARM64 debug HUD must mirror the same source geometry. It is not a
 # separate decorative mockup; the game's GPU draws these exact controls.
-PREVIEW = (ROOT / "crates/horizon-client/src/touch_preview.rs").read_text()
+PREVIEW = (ROOT / "crates/horizon-client/src/game/touch_preview.rs").read_text()
 preview_controls = {}
 for x, y, radius, symbol in re.findall(
     r'draw\.control\(\s*(0\.\d+)\s*\*\s*w,\s*(0\.\d+)\s*\*\s*h,\s*'
