@@ -1580,6 +1580,13 @@ fn backend_order(api: GraphicsApi, os: &str, wgpu_backend: bool) -> Vec<wgpu::Ba
     }
     let windows = os == "windows";
     match api {
+        // On native Windows ARM64, Qualcomm Adreno Vulkan has been observed
+        // presenting an empty terrain pass even though chunks are meshed.
+        // DirectX 12 renders the same world correctly. Prefer DX12 here
+        // while retaining Vulkan and OpenGL fallbacks for other ARM64 GPUs.
+        GraphicsApi::Auto if windows && cfg!(target_arch = "aarch64") => {
+            vec![Backends::DX12, Backends::VULKAN, Backends::GL]
+        }
         GraphicsApi::Auto if windows => vec![Backends::VULKAN, Backends::DX12, Backends::GL],
         GraphicsApi::Auto => vec![Backends::VULKAN, Backends::GL],
         GraphicsApi::Dx12 if windows => vec![Backends::DX12],
@@ -10611,10 +10618,12 @@ mod tests {
         use super::{GraphicsApi, backend_order};
         use wgpu::Backends;
         let order = |api, os| backend_order(api, os, false);
-        assert_eq!(
-            order(GraphicsApi::Auto, "windows"),
-            [Backends::VULKAN, Backends::DX12, Backends::GL]
-        );
+        let windows_auto = if cfg!(target_arch = "aarch64") {
+            vec![Backends::DX12, Backends::VULKAN, Backends::GL]
+        } else {
+            vec![Backends::VULKAN, Backends::DX12, Backends::GL]
+        };
+        assert_eq!(order(GraphicsApi::Auto, "windows"), windows_auto);
         assert_eq!(order(GraphicsApi::Vulkan, "windows"), [Backends::VULKAN]);
         assert_eq!(order(GraphicsApi::Dx12, "windows"), [Backends::DX12]);
         assert_eq!(order(GraphicsApi::OpenGl, "windows"), [Backends::GL]);
@@ -10644,9 +10653,14 @@ mod tests {
             device_search(GraphicsApi::Vulkan, "windows", false),
             [(vec![v], false), (vec![d, g], false), (vec![v], true)]
         );
+        let auto = if cfg!(target_arch = "aarch64") {
+            vec![d, v, g]
+        } else {
+            vec![v, d, g]
+        };
         assert_eq!(
             device_search(GraphicsApi::Auto, "windows", false),
-            [(vec![v, d, g], false), (vec![v, d, g], true)]
+            [(auto.clone(), false), (auto, true)]
         );
         assert_eq!(
             device_search(GraphicsApi::OpenGl, "linux", false),

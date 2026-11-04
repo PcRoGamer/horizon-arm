@@ -374,28 +374,50 @@ fn handle_game_touch(t: winit_real::event::Touch) {
         // Geometry intentionally mirrors HorizonActivity.TouchOverlay. Sizes are
         // fractions of screen height so phones and tablets keep square controls.
         let scale = android_touch_scale();
+        let dpad = android_touch_dpad();
+        let move_x = if dpad {
+            0.11_f64.max(0.205 / aspect)
+        } else {
+            0.11
+        };
+        let gui_scale = (width / 320.0)
+            .floor()
+            .min((height / 240.0).floor())
+            .max(1.0);
+        let inventory_x = (0.735 * width).max(
+            0.5 * width + 91.0 * gui_scale + 0.030 * height * scale + (0.015 * height).max(14.0),
+        );
         let movement_owned = touch.fingers.values().any(|r| matches!(r, TouchRole::Move));
         let role = if hotbar_slot(p).is_some() {
             TouchRole::Hotbar
-        } else if near(p, [0.15, 0.72], 0.162 * scale, aspect) {
+        } else if near_square(p, [0.11 + 0.190 / aspect, 0.62], 0.035 * scale, aspect) {
+            TouchRole::Button(10) // Sprint wins over overlapping D-pad movement.
+        } else if near(
+            p,
+            [move_x, 0.718],
+            (if dpad { 0.160 } else { 0.112 }) * scale,
+            aspect,
+        ) {
             if movement_owned {
                 TouchRole::Ignored
             } else {
                 TouchRole::Move
             }
-        } else if near_square(p, [0.90, 0.72], 0.085 * scale, aspect) {
+        } else if near_square(p, [1.0 - 0.160 / aspect, 0.77], 0.051 * scale, aspect) {
             TouchRole::Button(0) // South: jump
-        } else if near_square(p, [0.75, 0.78], 0.065 * scale, aspect) {
+        } else if near_square(p, [1.0 - 0.290 / aspect, 0.77], 0.040 * scale, aspect) {
             TouchRole::Button(11) // Right stick: sneak
-        } else if android_touch_crosshair() && near_square(p, [0.75, 0.54], 0.073 * scale, aspect) {
+        } else if android_touch_crosshair()
+            && near_square(p, [1.0 - 0.270 / aspect, 0.56], 0.042 * scale, aspect)
+        {
             TouchRole::RightTrigger // attack/mine
-        } else if android_touch_crosshair() && near_square(p, [0.91, 0.46], 0.070 * scale, aspect) {
+        } else if android_touch_crosshair()
+            && near_square(p, [1.0 - 0.145 / aspect, 0.52], 0.042 * scale, aspect)
+        {
             TouchRole::LeftTrigger // use/place
-        } else if near_square(p, [0.36, 0.67], 0.055 * scale, aspect) {
-            TouchRole::Button(10) // Left stick: sprint
-        } else if near_square(p, [0.62, 0.80], 0.055 * scale, aspect) {
+        } else if near_square(p, [inventory_x / width, 0.92], 0.030 * scale, aspect) {
             TouchRole::Button(3) // North: inventory
-        } else if near_square(p, [0.50, 0.10], 0.055 * scale, aspect) {
+        } else if near_square(p, [0.50, 0.072], 0.032 * scale, aspect) {
             TouchRole::Button(9) // Start: pause
         } else if touch.gestures.down(
             t.id,
@@ -422,9 +444,15 @@ fn handle_game_touch(t: winit_real::event::Touch) {
     match role {
         TouchRole::Move => {
             // The drawn thumb and movement physics share a center and scale.
-            let radius = height * 0.135 * android_touch_scale();
-            let dx = (t.location.x - width * 0.15) / radius;
-            let dy = (t.location.y - height * 0.72) / radius;
+            let radius =
+                height * (if android_touch_dpad() { 0.110 } else { 0.092 }) * android_touch_scale();
+            let center_x = if android_touch_dpad() {
+                (width * 0.11).max(height * 0.205)
+            } else {
+                width * 0.11
+            };
+            let dx = (t.location.x - center_x) / radius;
+            let dy = (t.location.y - height * 0.718) / radius;
             if android_touch_dpad() {
                 // An 8-way D-pad with a neutral center and intentional diagonal input.
                 let digital = |axis: f64| {

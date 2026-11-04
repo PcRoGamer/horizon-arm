@@ -306,7 +306,7 @@ public final class HorizonActivity extends GameActivity {
         private void glyph(Canvas c, String name, float r) {
             c.save();
             c.scale(r * .71f, r * .71f);
-            color(alpha(0xFFFFFFFF, 1f), Paint.Style.STROKE, .19f);
+            color(alpha(0xFF202427, 1f), Paint.Style.STROKE, .17f);
             switch (name) {
                 case "sprint":
                     c.drawLine(-.69f, -.42f, -.12f, 0f, paint);
@@ -355,7 +355,7 @@ public final class HorizonActivity extends GameActivity {
                     c.drawLine(.24f, -.50f, .24f, .58f, paint);
                     break;
                 case "pause":
-                    color(alpha(0xFFFFFFFF, 1f), Paint.Style.FILL, 0);
+                    color(alpha(0xFF202427, 1f), Paint.Style.FILL, 0);
                     c.drawRect(-.54f, -.70f, -.12f, .70f, paint);
                     c.drawRect(.12f, -.70f, .54f, .70f, paint);
                     break;
@@ -384,7 +384,7 @@ public final class HorizonActivity extends GameActivity {
             path.lineTo(-.28f, .06f);
             path.lineTo(-.66f, .06f);
             path.close();
-            color(alpha(0xFFFFFFFF, 1f), Paint.Style.FILL, 0);
+            color(alpha(0xFF202427, 1f), Paint.Style.FILL, 0);
             c.drawPath(path, paint);
             c.restore();
         }
@@ -406,17 +406,18 @@ public final class HorizonActivity extends GameActivity {
                     || (name.equals("left") && joyX < -.28f);
             c.save();
             c.translate(x, y + (pressed ? r * .035f : 0));
-            float corner = r * .12f;
+            // Flat, compact, high-contrast Minecraft-style touch key.
+            float corner = r * .035f;
             float edge = r * .075f;
-            color(alpha(0xFF080808, .70f), Paint.Style.FILL, 0);
+            color(alpha(0xFF101618, .82f), Paint.Style.FILL, 0);
             c.drawRoundRect(new RectF(-r, -r + edge, r, r + edge),
                     corner, corner, paint);
-            color(alpha(pressed ? 0xFF353535 : 0xFF616161, .89f),
+            color(alpha(pressed ? 0xFF88949B : 0xFFC4C8CC, .89f),
                     Paint.Style.FILL, 0);
             c.drawRoundRect(new RectF(-r + edge, -r + edge,
                     r - edge, r - edge), corner * .55f, corner * .55f, paint);
-            color(alpha(pressed ? 0xFFEEEEEE : 0xFFBEBEBE, 1f),
-                    Paint.Style.STROKE, r * .050f);
+            color(alpha(pressed ? 0xFF171C20 : 0xFF454A4D, 1f),
+                    Paint.Style.STROKE, r * .047f);
             c.drawRect(-r + edge * 1.3f, -r + edge * 1.3f,
                     r - edge * 1.3f, r - edge * 1.3f, paint);
             glyph(c, name, r);
@@ -425,12 +426,12 @@ public final class HorizonActivity extends GameActivity {
 
         private void joystick(Canvas c) {
             float h = getHeight();
-            float x = .15f * getWidth();
-            float y = .72f * h;
-            float r = .135f * h * scale;
-            color(alpha(0xFF101010, .53f), Paint.Style.FILL, 0);
+            float x = .11f * getWidth();
+            float y = .718f * h;
+            float r = .092f * h * scale;
+            color(alpha(0xFF33383C, .38f), Paint.Style.FILL, 0);
             c.drawCircle(x, y, r, paint);
-            color(alpha(0xFFD5D5D5, .69f), Paint.Style.STROKE, r * .055f);
+            color(alpha(0xFFDCE1E5, .78f), Paint.Style.STROKE, r * .055f);
             c.drawCircle(x, y, r * .93f, paint);
             color(alpha(0xFFFFFFFF, .22f), Paint.Style.STROKE, r * .025f);
             c.drawCircle(x, y, r * .67f, paint);
@@ -438,7 +439,7 @@ public final class HorizonActivity extends GameActivity {
             float ty = y - joyY * r * .70f;
             color(alpha(0xFF080808, .86f), Paint.Style.FILL, 0);
             c.drawCircle(tx, ty + r * .032f, r * .42f, paint);
-            color(alpha(0xFFAAAAAA, .95f), Paint.Style.FILL, 0);
+            color(alpha(0xFFC6C9CC, .95f), Paint.Style.FILL, 0);
             c.drawCircle(tx, ty, r * .36f, paint);
             color(alpha(0xFFF1F1F1, .81f), Paint.Style.STROKE, r * .035f);
             c.drawCircle(tx, ty, r * .34f, paint);
@@ -453,26 +454,37 @@ public final class HorizonActivity extends GameActivity {
                 // D-pad's four independent visual keys share one virtual-stick
                 // hit region; Rust quantizes movement into directional axes.
                 float unit = .068f * getHeight() * scale;
-                float centerX = .15f * getWidth();
-                float centerY = .72f * getHeight();
+                // A height-based inset prevents clipping on 4:3 tablets
+                // when controls are scaled up to 120%.
+                float centerX = Math.max(.11f * getWidth(), .205f * getHeight());
+                float centerY = .718f * getHeight();
                 String[] directions = {"up", "right", "down", "left"};
                 float[][] vectors = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}};
                 for (int i = 0; i < 4; ++i) {
                     float xx = centerX + vectors[i][0] * unit * 1.48f;
                     float yy = centerY + vectors[i][1] * unit * 1.48f;
                     control(canvas, xx / getWidth(), yy / getHeight(),
-                            .049f, directions[i]);
+                            .043f, directions[i]);
                 }
             }
-            control(canvas, .90f, .72f, .085f, "jump");
-            control(canvas, .75f, .78f, .065f, "sneak");
+            // Physical-height offsets keep the right-hand cluster coherent
+            // on tablets, tall phones, and ultra-wide landscape displays.
+            float aspect = getWidth() / (float) getHeight();
+            control(canvas, 1f - .160f / aspect, .77f, .051f, "jump");
+            control(canvas, 1f - .290f / aspect, .77f, .040f, "sneak");
             if ((scheme & 1) == 1) {
-                control(canvas, .75f, .54f, .073f, "hit");
-                control(canvas, .91f, .46f, .070f, "use");
+                control(canvas, 1f - .270f / aspect, .56f, .042f, "hit");
+                control(canvas, 1f - .145f / aspect, .52f, .042f, "use");
             }
-            control(canvas, .36f, .67f, .055f, "sprint");
-            control(canvas, .62f, .80f, .055f, "inventory");
-            control(canvas, .50f, .10f, .055f, "pause");
+            control(canvas, .11f + .190f / aspect, .62f, .035f, "sprint");
+            // Inventory sits beyond the hotbar, not over the held item.
+            int guiScale = Math.max(1, Math.min(getWidth() / 320, getHeight() / 240));
+            float inventoryX = Math.max(.735f * getWidth(),
+                    .5f * getWidth() + 91f * guiScale
+                    + .030f * getHeight() * scale
+                    + Math.max(14f, .015f * getHeight()));
+            control(canvas, inventoryX / getWidth(), .92f, .030f, "inventory");
+            control(canvas, .50f, .072f, .032f, "pause");
         }
     }
 }

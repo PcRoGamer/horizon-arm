@@ -330,14 +330,14 @@ mod text_displays;
 mod titles;
 mod tnt;
 mod totem;
+#[cfg(all(debug_assertions, not(target_os = "android")))]
+mod touch_preview;
 mod trading;
 mod transient_blocks;
 mod trial_spawner;
 mod trial_visuals;
 mod trident;
 mod tutorial;
-#[cfg(all(debug_assertions, not(target_os = "android")))]
-mod touch_preview;
 mod tweaks;
 mod ui_control;
 mod vault;
