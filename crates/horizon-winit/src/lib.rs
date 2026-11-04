@@ -390,7 +390,7 @@ fn handle_game_touch(t: winit_real::event::Touch) {
         let movement_owned = touch.fingers.values().any(|r| matches!(r, TouchRole::Move));
         let role = if hotbar_slot(p).is_some() {
             TouchRole::Hotbar
-        } else if near_square(p, [0.11 + 0.190 / aspect, 0.62], 0.035 * scale, aspect) {
+        } else if near_square(p, [0.11 + 0.190 / aspect, 0.60], 0.035 * scale, aspect) {
             TouchRole::Button(10) // Sprint wins over overlapping D-pad movement.
         } else if near(
             p,

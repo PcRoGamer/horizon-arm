@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
-"""Compatibility entry point for Android's visual/input geometry regression.
+"""CI compatibility entrypoint for the full Android/Windows touch geometry contract."""
+from pathlib import Path
+import runpy
 
-The canonical suite also verifies Windows ARM64 GPU preview parity, physical
-safe areas, scale variants, tablet D-pad layouts, and hotbar clearance.
-Run with: python3 tools/check_android_control_layout.py
-"""
-import test_touch_layout_geometry  # noqa: F401  (executes its assertions)
+runpy.run_path(str(Path(__file__).with_name("test_touch_layout_geometry.py")), run_name="__main__")

@@ -91,7 +91,7 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
     }
     draw.control(
         0.11 * w + 0.190 * h,
-        0.62 * h,
+        0.60 * h,
         0.035 * h * cfg.scale,
         Symbol::Sprint,
     );

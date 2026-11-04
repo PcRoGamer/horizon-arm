@@ -476,7 +476,7 @@ public final class HorizonActivity extends GameActivity {
                 control(canvas, 1f - .270f / aspect, .56f, .042f, "hit");
                 control(canvas, 1f - .145f / aspect, .52f, .042f, "use");
             }
-            control(canvas, .11f + .190f / aspect, .62f, .035f, "sprint");
+            control(canvas, .11f + .190f / aspect, .60f, .035f, "sprint");
             // Inventory sits beyond the hotbar, not over the held item.
             int guiScale = Math.max(1, Math.min(getWidth() / 320, getHeight() / 240));
             float inventoryX = Math.max(.735f * getWidth(),
