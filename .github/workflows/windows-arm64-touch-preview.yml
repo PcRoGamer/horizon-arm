@@ -1,0 +1,113 @@
+name: Windows ARM64 touch preview
+on:
+  push:
+    branches: [feat/bedrock-touch-polish]
+    paths:
+      - crates/horizon-client/src/touch_preview.rs
+      - crates/horizon-client/src/game.rs
+      - tools/windows_arm_debug_assets.py
+      - .github/workflows/windows-arm64-touch-preview.yml
+  workflow_dispatch:
+
+jobs:
+  native-windows-arm:
+    runs-on: windows-11-vs2026-arm
+    timeout-minutes: 65
+    env:
+      CARGO_BUILD_JOBS: '4'
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - name: ARM64 Rust toolchain
+        shell: pwsh
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add aarch64-pc-windows-msvc
+          rustc --version --verbose
+          cargo --version
+          Write-Output "CPU=$env:PROCESSOR_ARCHITECTURE"
+      - name: Rust formatting
+        shell: pwsh
+        run: cargo fmt --all -- --check
+      - name: Unit test touch preview geometry
+        shell: pwsh
+        run: cargo test -p horizon-client touch_preview::tests --lib --no-default-features --target aarch64-pc-windows-msvc
+      - name: Native debug build
+        shell: pwsh
+        run: cargo build -p horizon-client --no-default-features --target aarch64-pc-windows-msvc --jobs 4
+      - name: Confirm ARM64 PE header
+        shell: pwsh
+        run: |
+          $exe='target/aarch64-pc-windows-msvc/debug/horizon-client.exe'
+          if (!(Test-Path $exe)) { throw "Missing native debug binary" }
+          $bytes=[System.IO.File]::ReadAllBytes($exe)
+          $offset=[BitConverter]::ToInt32($bytes,0x3c)
+          $machine=[BitConverter]::ToUInt16($bytes,$offset+4)
+          if ($machine -ne 0xAA64) { throw "Expected ARM64 machine 0xAA64, got $machine" }
+          Write-Output "Verified real ARM64 Windows executable, $([math]::Round($bytes.Length/1MB)) MB"
+      - name: Retrieve Horizon-generated engine tables from verified APK
+        id: assets
+        continue-on-error: true
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $out='.local/downloaded-apk'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          gh run download 41697502144 -R "$env:GITHUB_REPOSITORY" -n horizon-clean-arm64-debug-apk -D $out
+          if ($LASTEXITCODE -ne 0) { throw "APK engine-data artifact download failed" }
+          $apk=Get-ChildItem $out -Filter '*.apk' | Select-Object -First 1
+          if ($null -eq $apk) { throw "Missing artifact APK" }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip=[IO.Compression.ZipFile]::OpenRead($apk.FullName)
+          try {
+            $entry=$zip.GetEntry('assets/engine-data.zip')
+            if ($null -eq $entry) { throw "Missing engine-data.zip entry" }
+            $dest=Join-Path $out 'engine-data.zip'
+            $inputStream=$entry.Open()
+            $outputStream=[IO.File]::Create($dest)
+            try { $inputStream.CopyTo($outputStream) }
+            finally { $inputStream.Dispose(); $outputStream.Dispose() }
+          } finally { $zip.Dispose() }
+          Expand-Archive -LiteralPath "$out/engine-data.zip" -DestinationPath .local/horizon-client/26.3 -Force
+          python tools/windows_arm_debug_assets.py
+          if ($LASTEXITCODE -ne 0) { throw "Resource verification failed" }
+      - name: Render four actual GPU HUD control schemes
+        if: steps.assets.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 12
+        shell: pwsh
+        run: |
+          $exe=Resolve-Path 'target/aarch64-pc-windows-msvc/debug/horizon-client.exe'
+          $root=Join-Path (Get-Location) '.local/horizon-touch-ci'
+          New-Item -ItemType Directory -Force $root | Out-Null
+          $env:HORIZON_HOME=$root
+          $env:HORIZON_TOUCH_PREVIEW='1'
+          $env:HORIZON_TOUCH_PREVIEW_TITLE='1'
+          $env:HORIZON_TOUCH_PREVIEW_SCALE='100'
+          $env:HORIZON_TOUCH_PREVIEW_OPACITY='72'
+          $resources=Join-Path (Get-Location) '.local/horizon-client/26.3'
+          for ($scheme=0;$scheme -lt 4;$scheme++) {
+            $env:HORIZON_TOUCH_PREVIEW_SCHEME="$scheme"
+            & $exe --resources $resources --game-dir $root --width 1600 --height 900 --frames 95 --screenshot-after 40 --timeout-seconds 90 2>&1 | Tee-Object -FilePath "$root/scheme-$scheme.log"
+            $capture=Join-Path $root 'screenshots/horizon-arm64-debug-title.png'
+            if (!(Test-Path $capture)) { throw "Scheme $scheme produced no GPU screenshot" }
+            Move-Item -LiteralPath $capture -Destination (Join-Path $root "touch-scheme-$scheme.png") -Force
+          }
+      - name: Upload GPU screenshots and failure logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: horizon-windows-arm64-touch-preview
+          path: |
+            .local/horizon-touch-ci/*.png
+            .local/horizon-touch-ci/*.log
+          if-no-files-found: warn
+      - name: Publish native ARM64 debug executable
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: horizon-windows-arm64-touch-debug-executable
+          path: target/aarch64-pc-windows-msvc/debug/horizon-client.exe
+          compression-level: 7
