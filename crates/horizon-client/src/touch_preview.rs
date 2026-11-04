@@ -52,30 +52,30 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
     if w <= 0.0 || h <= 0.0 { return; }
     let mut draw = Painter { batch, atlas, cfg };
     if cfg.scheme < 2 {
-        draw.joystick(.15 * w, .72 * h, .135 * h * cfg.scale);
+        draw.joystick(0.15 * w, 0.72 * h, 0.135 * h * cfg.scale);
     } else {
-        let offset = .068 * h * cfg.scale * 1.48;
+        let offset = 0.068 * h * cfg.scale * 1.48;
         for (direction, dx, dy) in [
             (Direction::Up, 0.0, -1.0),
             (Direction::Right, 1.0, 0.0),
             (Direction::Down, 0.0, 1.0),
             (Direction::Left, -1.0, 0.0),
         ] {
-            draw.control(.15 * w + dx * offset, .72 * h + dy * offset,
-                .049 * h * cfg.scale, Symbol::Arrow(direction));
+            draw.control(0.15 * w + dx * offset, 0.72 * h + dy * offset,
+                0.049 * h * cfg.scale, Symbol::Arrow(direction));
         }
     }
     // Same normalized centers, radii, and draw order as
     // HorizonActivity.TouchOverlay.onDraw.
-    draw.control(.90 * w, .72 * h, .085 * h * cfg.scale, Symbol::Jump);
-    draw.control(.75 * w, .78 * h, .065 * h * cfg.scale, Symbol::Sneak);
+    draw.control(0.90 * w, 0.72 * h, 0.085 * h * cfg.scale, Symbol::Jump);
+    draw.control(0.75 * w, 0.78 * h, 0.065 * h * cfg.scale, Symbol::Sneak);
     if cfg.scheme & 1 == 1 {
-        draw.control(.75 * w, .54 * h, .073 * h * cfg.scale, Symbol::Hit);
-        draw.control(.91 * w, .46 * h, .070 * h * cfg.scale, Symbol::Use);
+        draw.control(0.75 * w, 0.54 * h, 0.073 * h * cfg.scale, Symbol::Hit);
+        draw.control(0.91 * w, 0.46 * h, 0.070 * h * cfg.scale, Symbol::Use);
     }
-    draw.control(.36 * w, .67 * h, .055 * h * cfg.scale, Symbol::Sprint);
-    draw.control(.62 * w, .80 * h, .055 * h * cfg.scale, Symbol::Inventory);
-    draw.control(.50 * w, .10 * h, .055 * h * cfg.scale, Symbol::Pause);
+    draw.control(0.36 * w, 0.67 * h, 0.055 * h * cfg.scale, Symbol::Sprint);
+    draw.control(0.62 * w, 0.80 * h, 0.055 * h * cfg.scale, Symbol::Inventory);
+    draw.control(0.50 * w, 0.10 * h, 0.055 * h * cfg.scale, Symbol::Pause);
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -155,7 +155,7 @@ impl Painter<'_> {
     }
 
     fn round_rect(&mut self, x: f32, y: f32, width: f32, height: f32, radius: f32, color: u32) {
-        let r = radius.min(width * .5).min(height * .5);
+        let r = radius.min(width * 0.5).min(height * 0.5);
         self.rect(x + r, y, width - 2.0 * r, height, color);
         self.rect(x, y + r, r, height - 2.0 * r, color);
         self.rect(x + width - r, y + r, r, height - 2.0 * r, color);
@@ -165,7 +165,7 @@ impl Painter<'_> {
             (x + width - r, y + height - r, 0.0),
             (x + r, y + height - r, std::f32::consts::FRAC_PI_2),
         ] {
-            for i in 0..8 {
+            for i in 0.0.8 {
                 let a = begin + i as f32 * std::f32::consts::FRAC_PI_2 / 8.0;
                 let b = begin + (i + 1) as f32 * std::f32::consts::FRAC_PI_2 / 8.0;
                 let p = [cx, cy];
@@ -178,36 +178,36 @@ impl Painter<'_> {
 
     fn control(&mut self, x: f32, y: f32, r: f32, sym: Symbol) {
         // HorizonActivity.control: dark offset shadow, inner face and rim.
-        let edge = r * .075;
-        let corner = r * .12;
-        let shadow = self.color(0x080808, .70);
-        let face = self.color(0x616161, .89);
+        let edge = r * 0.075;
+        let corner = r * 0.12;
+        let shadow = self.color(0x080808, 0.70);
+        let face = self.color(0x616161, 0.89);
         let rim = self.color(0xBEBEBE, 1.0);
         self.round_rect(x-r, y-r+edge, 2.0*r, 2.0*r, corner, shadow);
-        self.round_rect(x-r+edge, y-r+edge, 2.0*(r-edge), 2.0*(r-edge), corner*.55, face);
-        self.stroke_box(x, y, r-edge*1.3, r*.05, rim);
-        self.glyph(x, y, r * .71, sym);
+        self.round_rect(x-r+edge, y-r+edge, 2.0*(r-edge), 2.0*(r-edge), corner*0.55, face);
+        self.stroke_box(x, y, r-edge*1.3, r*0.05, rim);
+        self.glyph(x, y, r * 0.71, sym);
     }
 
     fn joystick(&mut self, x: f32, y: f32, r: f32) {
         // HorizonActivity.joystick, neutral native touch state.
-        let disc = self.color(0x101010, .53);
-        let ring = self.color(0xD5D5D5, .69);
-        let inner = self.color(0xFFFFFF, .22);
+        let disc = self.color(0x101010, 0.53);
+        let ring = self.color(0xD5D5D5, 0.69);
+        let inner = self.color(0xFFFFFF, 0.22);
         self.disc(x, y, r, disc);
-        self.ring(x, y, r * .93, r * .055, ring);
-        self.ring(x, y, r * .67, r * .025, inner);
-        let dark = self.color(0x080808, .86);
-        let face = self.color(0xAAAAAA, .95);
-        let border = self.color(0xF1F1F1, .81);
-        self.disc(x, y + r*.032, r*.42, dark);
-        self.disc(x, y, r*.36, face);
-        self.ring(x, y, r*.34, r*.035, border);
+        self.ring(x, y, r * 0.93, r * 0.055, ring);
+        self.ring(x, y, r * 0.67, r * 0.025, inner);
+        let dark = self.color(0x080808, 0.86);
+        let face = self.color(0xAAAAAA, 0.95);
+        let border = self.color(0xF1F1F1, 0.81);
+        self.disc(x, y + r*0.032, r*0.42, dark);
+        self.disc(x, y, r*0.36, face);
+        self.ring(x, y, r*0.34, r*0.035, border);
     }
 
     fn glyph(&mut self, x: f32, y: f32, unit: f32, glyph: Symbol) {
         let ink = self.color(0xFFFFFF, 1.0);
-        let stroke = unit*.19;
+        let stroke = unit*0.19;
         let mut line = |this: &mut Self, ax: f32, ay: f32, bx: f32, by: f32| {
             this.segment(
                 [x+ax*unit,y+ay*unit],
@@ -216,45 +216,45 @@ impl Painter<'_> {
         };
         match glyph {
             Symbol::Sprint => {
-                line(self,-.69,-.42,-.12,0.0); line(self,-.12,0.0,-.69,.42);
-                line(self,-.05,-.42,.52,0.0); line(self,.52,0.0,-.05,.42);
-                line(self,-.67,-.67,.50,-.67);
+                line(self,-0.69,-0.42,-0.12,0.0); line(self,-0.12,0.0,-0.69,0.42);
+                line(self,-0.05,-0.42,0.52,0.0); line(self,0.52,0.0,-0.05,0.42);
+                line(self,-0.67,-0.67,0.50,-0.67);
             }
             Symbol::Jump => {
-                line(self,-.65,-.05,0.0,-.66); line(self,0.0,-.66,.65,-.05);
-                line(self,0.0,-.50,0.0,.52); line(self,-.55,.68,.55,.68);
+                line(self,-0.65,-0.05,0.0,-0.66); line(self,0.0,-0.66,0.65,-0.05);
+                line(self,0.0,-0.50,0.0,0.52); line(self,-0.55,0.68,0.55,0.68);
             }
             Symbol::Sneak => {
-                line(self,-.65,.02,0.0,.62); line(self,0.0,.62,.65,.02);
-                line(self,0.0,-.62,0.0,.43); line(self,-.55,-.70,.55,-.70);
+                line(self,-0.65,0.02,0.0,0.62); line(self,0.0,0.62,0.65,0.02);
+                line(self,0.0,-0.62,0.0,0.43); line(self,-0.55,-0.70,0.55,-0.70);
             }
             Symbol::Hit => {
-                line(self,-.48,.54,.46,-.42); line(self,.14,-.48,.65,-.70);
-                line(self,.46,-.42,.65,-.70); line(self,-.66,.08,-.12,.61);
-                line(self,-.60,.73,-.30,.40);
+                line(self,-0.48,0.54,0.46,-0.42); line(self,0.14,-0.48,0.65,-0.70);
+                line(self,0.46,-0.42,0.65,-0.70); line(self,-0.66,0.08,-0.12,0.61);
+                line(self,-0.60,0.73,-0.30,0.40);
             }
             Symbol::Use => {
-                let path = [(0.0,-.72),(.66,-.39),(.66,.37),(0.0,.73),(-.66,.37),(-.66,-.39)];
+                let path = [(0.0,-0.72),(0.66,-0.39),(0.66,0.37),(0.0,0.73),(-0.66,0.37),(-0.66,-0.39)];
                 for i in 0..path.len() {
                     let a=path[i]; let b=path[(i+1)%path.len()];
                     line(self,a.0,a.1,b.0,b.1);
                 }
-                line(self,-.66,-.39,0.0,-.07);
-                line(self,.66,-.39,0.0,-.07);
-                line(self,0.0,-.07,0.0,.70);
+                line(self,-0.66,-0.39,0.0,-0.07);
+                line(self,0.66,-0.39,0.0,-0.07);
+                line(self,0.0,-0.07,0.0,0.70);
             }
             Symbol::Inventory => {
-                line(self,-.70,-.53,.70,-.53);
-                line(self,.70,-.53,.70,.59);
-                line(self,.70,.59,-.70,.59);
-                line(self,-.70,.59,-.70,-.53);
-                line(self,-.69,-.10,.69,-.10);
-                line(self,-.22,-.50,-.22,.58);
-                line(self,.24,-.50,.24,.58);
+                line(self,-0.70,-0.53,0.70,-0.53);
+                line(self,0.70,-0.53,0.70,0.59);
+                line(self,0.70,0.59,-0.70,0.59);
+                line(self,-0.70,0.59,-0.70,-0.53);
+                line(self,-0.69,-0.10,0.69,-0.10);
+                line(self,-0.22,-0.50,-0.22,0.58);
+                line(self,0.24,-0.50,0.24,0.58);
             }
             Symbol::Pause => {
-                self.rect(x-.54*unit,y-.70*unit,.42*unit,1.40*unit,ink);
-                self.rect(x+.12*unit,y-.70*unit,.42*unit,1.40*unit,ink);
+                self.rect(x-0.54*unit,y-0.70*unit,0.42*unit,1.40*unit,ink);
+                self.rect(x+0.12*unit,y-0.70*unit,0.42*unit,1.40*unit,ink);
             }
             Symbol::Arrow(direction) => {
                 let angle: f32 = match direction {
@@ -266,11 +266,11 @@ impl Painter<'_> {
                 let rotate = |ax:f32,ay:f32| [
                     x+unit*(ax*cos-ay*sin),y+unit*(ax*sin+ay*cos)
                 ];
-                let pts=[(0.0,-.70),(.66,.06),(.28,.06),(.28,.65),(-.28,.65),(-.28,.06),(-.66,.06)];
+                let pts=[(0.0,-0.70),(0.66,0.06),(0.28,0.06),(0.28,0.65),(-0.28,0.65),(-0.28,0.06),(-0.66,0.06)];
                 for tri in [[0,1,2],[0,2,5],[5,2,3],[5,3,4],[0,5,6]] {
-                    let p=rotate(pts[tri[0]].0,pts[tri[0]].1);
-                    let q=rotate(pts[tri[1]].0,pts[tri[1]].1);
-                    let r=rotate(pts[tri[2]].0,pts[tri[2]].1);
+                    let p=rotate(pts[tri[0]]0.0,pts[tri[0]]0.1);
+                    let q=rotate(pts[tri[1]]0.0,pts[tri[1]]0.1);
+                    let r=rotate(pts[tri[2]]0.0,pts[tri[2]]0.1);
                     self.quad([p,q,r,r],ink);
                 }
             }
@@ -283,14 +283,14 @@ mod tests {
     use super::*;
     #[test]
     fn touch_preview_is_debug_only_and_never_requires_android() {
-        let cfg=Config {scheme:3,scale:1.2,opacity:.72,title:false};
+        let cfg=Config {scheme:3,scale:1.2,opacity:0.72,title:false};
         assert!(cfg.scheme >= 2 && cfg.scheme & 1 == 1);
         assert_eq!(cfg.scale,1.2);
         assert!(!cfg.title);
     }
     #[test]
     fn four_schemes_match_android_modes() {
-        for scheme in 0..4 {
+        for scheme in 0.0.4 {
             let dpad=scheme>=2;
             let crosshair=scheme&1==1;
             assert_eq!((dpad,crosshair),[(false,false),(false,true),(true,false),(true,true)][scheme]);
