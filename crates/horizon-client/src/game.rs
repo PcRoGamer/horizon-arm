@@ -336,6 +336,8 @@ mod trial_spawner;
 mod trial_visuals;
 mod trident;
 mod tutorial;
+#[cfg(all(debug_assertions, not(target_os = "android")))]
+mod touch_preview;
 mod tweaks;
 mod ui_control;
 mod vault;
@@ -15736,6 +15738,14 @@ impl Game<'_> {
         };
         let mut hud = horizon_client::spans::time("hud", || self.hud(size));
         self.flush_ime(&mut hud);
+        // Native debug previews share the game framebuffer and GPU screenshot path.
+        // Android still uses its own non-intercepting Java touch surface.
+        #[cfg(all(debug_assertions, not(target_os = "android")))]
+        if (self.screen == Screen::Playing && self.player.is_some())
+            || touch_preview::title_enabled()
+        {
+            touch_preview::draw(&mut hud, &self.gui.atlas);
+        }
         let title = self.shows_panorama();
         let (yaw, pitch) = if title {
             // PanoramaRenderer: the title cube spins at 0.1 degrees per tick, pitched 10 degrees.
