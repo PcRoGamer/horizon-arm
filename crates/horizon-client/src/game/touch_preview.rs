@@ -15,6 +15,7 @@ struct Config {
     scale: f32,
     opacity: f32,
     title: bool,
+    always_sprint: bool,
 }
 static CONFIG: OnceLock<Option<Config>> = OnceLock::new();
 
@@ -39,6 +40,10 @@ fn config() -> Option<Config> {
             scale: number("HORIZON_TOUCH_PREVIEW_SCALE", 100, 80, 120) as f32 / 100.0,
             opacity: number("HORIZON_TOUCH_PREVIEW_OPACITY", 72, 35, 100) as f32 / 100.0,
             title: std::env::var("HORIZON_TOUCH_PREVIEW_TITLE").ok().as_deref() == Some("1"),
+            always_sprint: std::env::var("HORIZON_TOUCH_PREVIEW_ALWAYS_SPRINT")
+                .ok()
+                .as_deref()
+                == Some("1"),
         })
     })
 }
@@ -57,7 +62,7 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
     }
     let mut draw = Painter { batch, atlas, cfg };
     if cfg.scheme < 2 {
-        draw.joystick(0.11 * w, 0.718 * h, 0.092 * h * cfg.scale);
+        draw.joystick(0.11 * w, 0.705 * h, 0.092 * h * cfg.scale);
     } else {
         let offset = 0.068 * h * cfg.scale * 1.48;
         let dpad_x = (0.11 * w).max(0.205 * h);
@@ -69,7 +74,7 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
         ] {
             draw.control(
                 dpad_x + dx * offset,
-                0.718 * h + dy * offset,
+                0.63 * h + dy * offset,
                 0.043 * h * cfg.scale,
                 Symbol::Arrow(direction),
             );
@@ -78,10 +83,10 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
     // Same normalized centers, radii, and draw order as
     // HorizonActivity.TouchOverlay.onDraw.
     // Same physical-height offsets and dimensions as the Android Canvas.
-    draw.control(w - 0.160 * h, 0.77 * h, 0.051 * h * cfg.scale, Symbol::Jump);
+    draw.control(w - 0.160 * h, 0.72 * h, 0.051 * h * cfg.scale, Symbol::Jump);
     draw.control(
         w - 0.290 * h,
-        0.77 * h,
+        0.73 * h,
         0.040 * h * cfg.scale,
         Symbol::Sneak,
     );
@@ -91,20 +96,24 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
     }
     draw.control(
         0.11 * w + 0.190 * h,
-        0.60 * h,
+        (if cfg.scheme >= 2 { 0.46 } else { 0.57 }) * h,
         0.035 * h * cfg.scale,
         Symbol::Sprint,
     );
-    let gui_scale = (w / 320.0).floor().min((h / 240.0).floor()).max(1.0);
-    let inventory_x =
-        (0.735 * w).max(0.5 * w + 91.0 * gui_scale + 0.030 * h * cfg.scale + (0.015 * h).max(14.0));
+    // The inventory cap is now part of the *real* scaled native hotbar.
+    // A centered top toolbar matches Android's non-intercepting Java overlay.
     draw.control(
-        inventory_x,
-        0.92 * h,
-        0.030 * h * cfg.scale,
-        Symbol::Inventory,
+        0.50 * w - 0.045 * h,
+        0.045 * h,
+        0.028 * h * cfg.scale,
+        Symbol::Chat,
     );
-    draw.control(0.50 * w, 0.072 * h, 0.032 * h * cfg.scale, Symbol::Pause);
+    draw.control(
+        0.50 * w + 0.045 * h,
+        0.045 * h,
+        0.028 * h * cfg.scale,
+        Symbol::Pause,
+    );
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -121,10 +130,70 @@ enum Symbol {
     Sprint,
     Hit,
     Use,
-    Inventory,
+    Chat,
     Pause,
     Arrow(Direction),
 }
+
+// Generated original icon masks. One source for the Java and ARM64 preview.
+// Glyph fingerprint: 19ca2893782bfd8bf20d24aa1ff8f0d21ca1cc09333f621848758b26e8c63af3
+const PIXEL_GLYPHS: [[u32; 24]; 11] = [
+    [
+        0x000000, 0x000000, 0x000000, 0x000000, 0x0FFFF0, 0x1FFFF0, 0x180030, 0x180030, 0x180030,
+        0x1999F0, 0x1BFFF0, 0x1BFFF0, 0x1999F0, 0x180030, 0x180030, 0x1C7FF0, 0x1DFFF0, 0x0FC000,
+        0x0F8000, 0x0F0000, 0x0C0000, 0x000000, 0x000000, 0x000000,
+    ],
+    [
+        0x000000, 0x000000, 0x000000, 0x000000, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0,
+        0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0,
+        0x03C3C0, 0x03C3C0, 0x000000, 0x000000, 0x000000, 0x000000,
+    ],
+    [
+        0x000000, 0x000000, 0x000380, 0x000380, 0x0007C0, 0x000380, 0x3F8700, 0x3F8F80, 0x003FC0,
+        0x7F39F0, 0x7F70FC, 0x00707C, 0x00E000, 0x07E000, 0x0FF800, 0x0FFC00, 0x071E00, 0x0F0E00,
+        0x0E0E00, 0x1C0E00, 0x180C00, 0x000C00, 0x000000, 0x000000,
+    ],
+    [
+        0x000000, 0x000000, 0x000000, 0x001800, 0x003C00, 0x007E00, 0x007E00, 0x00FF00, 0x01FF80,
+        0x03FFC0, 0x07FFE0, 0x007E00, 0x007E00, 0x007E00, 0x007E00, 0x007E00, 0x007E00, 0x007E00,
+        0x000000, 0x000000, 0x1FFFF8, 0x1FFFF8, 0x000000, 0x000000,
+    ],
+    [
+        0x000000, 0x000000, 0x000000, 0x0001C0, 0x0001C0, 0x0003E0, 0x0001C0, 0x000000, 0x000300,
+        0x000700, 0x000E00, 0x03FC00, 0x07FC00, 0x0FFE00, 0x0E77F8, 0x1C6FF8, 0x18EE00, 0x19EC00,
+        0x03DC00, 0x079C00, 0x1FFFFC, 0x1FFFFC, 0x000000, 0x000000,
+    ],
+    [
+        0x000000, 0x000000, 0x00000C, 0x00003C, 0x00007C, 0x00007C, 0x0000FC, 0x0001DC, 0x0003F8,
+        0x0007F8, 0x000FE0, 0x001C00, 0x183800, 0x1C7000, 0x0FE000, 0x07C000, 0x07C000, 0x07C000,
+        0x0FE000, 0x1C7000, 0x383000, 0x300000, 0x000000, 0x000000,
+    ],
+    [
+        0x000000, 0x000000, 0x003C00, 0x00FF00, 0x01FF80, 0x07C3E0, 0x1F00F8, 0x1E0078, 0x1F00F8,
+        0x1FC3F8, 0x19FF98, 0x18FF18, 0x183C18, 0x181818, 0x181818, 0x181818, 0x1E1878, 0x1F18F8,
+        0x07DBE0, 0x01FF80, 0x007F00, 0x003C00, 0x000000, 0x000000,
+    ],
+    [
+        0x000000, 0x000000, 0x000000, 0x001800, 0x003C00, 0x007E00, 0x007E00, 0x00FF00, 0x01FF80,
+        0x03FFC0, 0x07FFE0, 0x0FFFF0, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00,
+        0x00FF00, 0x00FF00, 0x00FF00, 0x000000, 0x000000, 0x000000,
+    ],
+    [
+        0x000000, 0x000000, 0x000000, 0x000000, 0x000800, 0x000C00, 0x000E00, 0x000F00, 0x1FFF80,
+        0x1FFFE0, 0x1FFFF0, 0x1FFFF8, 0x1FFFF8, 0x1FFFF0, 0x1FFFE0, 0x1FFF80, 0x000F00, 0x000E00,
+        0x000C00, 0x000800, 0x000000, 0x000000, 0x000000, 0x000000,
+    ],
+    [
+        0x000000, 0x000000, 0x000000, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00,
+        0x00FF00, 0x00FF00, 0x00FF00, 0x0FFFF0, 0x07FFE0, 0x03FFC0, 0x01FF80, 0x00FF00, 0x007E00,
+        0x007E00, 0x003C00, 0x001800, 0x000000, 0x000000, 0x000000,
+    ],
+    [
+        0x000000, 0x000000, 0x000000, 0x000000, 0x001000, 0x003000, 0x007000, 0x00F000, 0x01FFF8,
+        0x07FFF8, 0x0FFFF8, 0x1FFFF8, 0x1FFFF8, 0x0FFFF8, 0x07FFF8, 0x01FFF8, 0x00F000, 0x007000,
+        0x003000, 0x001000, 0x000000, 0x000000, 0x000000, 0x000000,
+    ],
+];
 
 struct Painter<'a> {
     batch: &'a mut HudBatch,
@@ -242,7 +311,11 @@ impl Painter<'_> {
         let edge = r * 0.075;
         let corner = r * 0.035;
         let shadow = self.color(0x101618, 0.82);
-        let face = self.color(0xC4C8CC, 0.89);
+        let face = if matches!(sym, Symbol::Sprint) && self.cfg.always_sprint {
+            self.color(0x93C79B, 0.89)
+        } else {
+            self.color(0xD0D5D3, 0.89)
+        };
         let rim = self.color(0x454A4D, 1.0);
         self.round_rect(x - r, y - r + edge, 2.0 * r, 2.0 * r, corner, shadow);
         self.round_rect(
@@ -254,7 +327,7 @@ impl Painter<'_> {
             face,
         );
         self.stroke_box(x, y, r - edge * 1.3, r * 0.047, rim);
-        self.glyph(x, y, r * 0.71, sym);
+        self.glyph(x, y, r, sym);
     }
 
     fn joystick(&mut self, x: f32, y: f32, r: f32) {
@@ -273,117 +346,43 @@ impl Painter<'_> {
         self.ring(x, y, r * 0.34, r * 0.035, border);
     }
 
-    fn glyph(&mut self, x: f32, y: f32, unit: f32, glyph: Symbol) {
-        let ink = self.color(0x202427, 1.0);
-        let stroke = unit * 0.17;
-        let line = |this: &mut Self, ax: f32, ay: f32, bx: f32, by: f32| {
-            this.segment(
-                [x + ax * unit, y + ay * unit],
-                [x + bx * unit, y + by * unit],
-                stroke,
-                ink,
-            );
+    // Original 24px glyphs using the exact Java Canvas bitmap masks.
+    fn glyph(&mut self, x: f32, y: f32, radius: f32, glyph: Symbol) {
+        let icon = match glyph {
+            Symbol::Chat => 0,
+            Symbol::Pause => 1,
+            Symbol::Sprint => 2,
+            Symbol::Jump => 3,
+            Symbol::Sneak => 4,
+            Symbol::Hit => 5,
+            Symbol::Use => 6,
+            Symbol::Arrow(Direction::Up) => 7,
+            Symbol::Arrow(Direction::Right) => 8,
+            Symbol::Arrow(Direction::Down) => 9,
+            Symbol::Arrow(Direction::Left) => 10,
         };
-        match glyph {
-            Symbol::Sprint => {
-                line(self, -0.69, -0.42, -0.12, 0.0);
-                line(self, -0.12, 0.0, -0.69, 0.42);
-                line(self, -0.05, -0.42, 0.52, 0.0);
-                line(self, 0.52, 0.0, -0.05, 0.42);
-                line(self, -0.67, -0.67, 0.50, -0.67);
-            }
-            Symbol::Jump => {
-                line(self, -0.65, -0.05, 0.0, -0.66);
-                line(self, 0.0, -0.66, 0.65, -0.05);
-                line(self, 0.0, -0.50, 0.0, 0.52);
-                line(self, -0.55, 0.68, 0.55, 0.68);
-            }
-            Symbol::Sneak => {
-                line(self, -0.65, 0.02, 0.0, 0.62);
-                line(self, 0.0, 0.62, 0.65, 0.02);
-                line(self, 0.0, -0.62, 0.0, 0.43);
-                line(self, -0.55, -0.70, 0.55, -0.70);
-            }
-            Symbol::Hit => {
-                line(self, -0.48, 0.54, 0.46, -0.42);
-                line(self, 0.14, -0.48, 0.65, -0.70);
-                line(self, 0.46, -0.42, 0.65, -0.70);
-                line(self, -0.66, 0.08, -0.12, 0.61);
-                line(self, -0.60, 0.73, -0.30, 0.40);
-            }
-            Symbol::Use => {
-                let path = [
-                    (0.0, -0.72),
-                    (0.66, -0.39),
-                    (0.66, 0.37),
-                    (0.0, 0.73),
-                    (-0.66, 0.37),
-                    (-0.66, -0.39),
-                ];
-                for i in 0..path.len() {
-                    let a = path[i];
-                    let b = path[(i + 1) % path.len()];
-                    line(self, a.0, a.1, b.0, b.1);
+        let pixel = radius * 0.062;
+        let x0 = x - 12.0 * pixel;
+        let y0 = y - 12.0 * pixel;
+        let ink = self.color(0x232D30, 1.0);
+        for (row, bits) in PIXEL_GLYPHS[icon].iter().copied().enumerate() {
+            let mut col = 0;
+            while col < 24 {
+                if bits & (1 << (23 - col)) == 0 {
+                    col += 1;
+                    continue;
                 }
-                line(self, -0.66, -0.39, 0.0, -0.07);
-                line(self, 0.66, -0.39, 0.0, -0.07);
-                line(self, 0.0, -0.07, 0.0, 0.70);
-            }
-            Symbol::Inventory => {
-                line(self, -0.70, -0.53, 0.70, -0.53);
-                line(self, 0.70, -0.53, 0.70, 0.59);
-                line(self, 0.70, 0.59, -0.70, 0.59);
-                line(self, -0.70, 0.59, -0.70, -0.53);
-                line(self, -0.69, -0.10, 0.69, -0.10);
-                line(self, -0.22, -0.50, -0.22, 0.58);
-                line(self, 0.24, -0.50, 0.24, 0.58);
-            }
-            Symbol::Pause => {
+                let first = col;
+                while col < 24 && bits & (1 << (23 - col)) != 0 {
+                    col += 1;
+                }
                 self.rect(
-                    x - 0.54 * unit,
-                    y - 0.70 * unit,
-                    0.42 * unit,
-                    1.40 * unit,
+                    x0 + first as f32 * pixel,
+                    y0 + row as f32 * pixel,
+                    (col - first) as f32 * pixel,
+                    pixel,
                     ink,
                 );
-                self.rect(
-                    x + 0.12 * unit,
-                    y - 0.70 * unit,
-                    0.42 * unit,
-                    1.40 * unit,
-                    ink,
-                );
-            }
-            Symbol::Arrow(direction) => {
-                let angle: f32 = match direction {
-                    Direction::Up => 0.0,
-                    Direction::Right => 90.0,
-                    Direction::Down => 180.0,
-                    Direction::Left => 270.0,
-                };
-                let rad = angle.to_radians();
-                let (sin, cos) = rad.sin_cos();
-                let rotate = |ax: f32, ay: f32| {
-                    [
-                        x + unit * (ax * cos - ay * sin),
-                        y + unit * (ax * sin + ay * cos),
-                    ]
-                };
-                let pts = [
-                    (0.0, -0.70),
-                    (0.66, 0.06),
-                    (0.28, 0.06),
-                    (0.28, 0.65),
-                    (-0.28, 0.65),
-                    (-0.28, 0.06),
-                    (-0.66, 0.06),
-                ];
-                for tri in [[0, 1, 2], [0, 2, 5], [5, 2, 3], [5, 3, 4], [0, 5, 6]] {
-                    let p = rotate(pts[tri[0]].0, pts[tri[0]].1);
-                    let q = rotate(pts[tri[1]].0, pts[tri[1]].1);
-                    let r = rotate(pts[tri[2]].0, pts[tri[2]].1);
-                    self.quad([p, q, r, r], ink);
-                }
             }
         }
     }
@@ -399,6 +398,7 @@ mod tests {
             scale: 1.2,
             opacity: 0.72,
             title: false,
+            always_sprint: false,
         };
         assert!(cfg.scheme >= 2 && cfg.scheme & 1 == 1);
         assert_eq!(cfg.scale, 1.2);

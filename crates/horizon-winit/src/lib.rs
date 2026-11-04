@@ -68,6 +68,8 @@ enum TouchRole {
     Move,
     Look,
     Hotbar,
+    Chat,
+    SprintToggle,
     Ignored,
     Button(u8),
     LeftTrigger,
@@ -81,6 +83,7 @@ struct AndroidTouch {
     gestures: touch_gestures::Recognizer,
     pending: VecDeque<AndroidGesture>,
     target: Option<([f32; 2], Instant)>,
+    sprint_locked: bool,
 }
 
 #[cfg(target_os = "android")]
@@ -92,6 +95,7 @@ impl Default for AndroidTouch {
             gestures: touch_gestures::Recognizer::new(HEIGHT.load(Ordering::Relaxed) as f32),
             pending: VecDeque::new(),
             target: None,
+            sprint_locked: false,
         }
     }
 }
@@ -104,6 +108,8 @@ static TOUCH_MENU: AtomicBool = AtomicBool::new(true);
 static TOUCH_SCHEME: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "android")]
 static TOUCH_SCALE: AtomicU32 = AtomicU32::new(100);
+#[cfg(target_os = "android")]
+static TOUCH_ALWAYS_SPRINT: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "android")]
 static TOUCH_START: OnceLock<Instant> = OnceLock::new();
 #[cfg(target_os = "android")]
@@ -147,12 +153,13 @@ pub fn android_touch_set_menu(menu: bool) {
 }
 
 #[cfg(target_os = "android")]
-pub fn android_touch_set_controls(scheme: u32, scale: u32) {
+pub fn android_touch_set_controls(scheme: u32, scale: u32, always_sprint: bool) {
     let scheme = scheme.min(3);
     let scale = scale.clamp(80, 120);
     let previous = TOUCH_SCHEME.swap(scheme, Ordering::Relaxed);
     let previous_scale = TOUCH_SCALE.swap(scale, Ordering::Relaxed);
-    if previous != scheme || previous_scale != scale {
+    let previous_sprint = TOUCH_ALWAYS_SPRINT.swap(always_sprint, Ordering::Relaxed);
+    if previous != scheme || previous_scale != scale || previous_sprint != always_sprint {
         android_touch_clear();
     }
 }
@@ -189,6 +196,9 @@ pub fn android_touch_button_bits() -> u32 {
             touch.state.buttons
                 | (u32::from(touch.state.triggers[0] > 0.5) << 24)
                 | (u32::from(touch.state.triggers[1] > 0.5) << 25)
+                // Extra UI-only bits, never sent to the gamepad's 16 buttons.
+                | (u32::from(touch.sprint_locked) << 26)
+                | (u32::from(TOUCH_ALWAYS_SPRINT.load(Ordering::Relaxed)) << 27)
         })
         .unwrap_or_default()
 }
@@ -291,6 +301,20 @@ fn press_button(state: &mut AndroidTouchState, bit: u8, down: bool) {
     }
 }
 
+/// A held sprint button is generated only while moving forward. Releasing
+/// the stick resets the game key, allowing the next movement to sprint again
+/// without a double-W gesture. A manual lock can be toggled with one thumb.
+#[cfg(target_os = "android")]
+fn sync_sprint(touch: &mut AndroidTouch) {
+    let forward = touch.state.left[1];
+    let request = touch_gestures::sprint_engaged(
+        forward,
+        touch.sprint_locked,
+        TOUCH_ALWAYS_SPRINT.load(Ordering::Relaxed),
+    );
+    press_button(&mut touch.state, 10, request);
+}
+
 #[cfg(target_os = "android")]
 fn handle_game_touch(t: winit_real::event::Touch) {
     use winit_real::event::TouchPhase;
@@ -303,7 +327,10 @@ fn handle_game_touch(t: winit_real::event::Touch) {
     if matches!(t.phase, TouchPhase::Ended | TouchPhase::Cancelled) {
         if let Some(role) = touch.fingers.remove(&t.id) {
             match role {
-                TouchRole::Move => touch.state.left = [0.0; 2],
+                TouchRole::Move => {
+                    touch.state.left = [0.0; 2];
+                    sync_sprint(&mut touch);
+                }
                 TouchRole::Look => {
                     let action = touch.gestures.up(
                         t.id,
@@ -335,7 +362,12 @@ fn handle_game_touch(t: winit_real::event::Touch) {
                         }
                     }
                 }
-                TouchRole::Ignored => {}
+                TouchRole::Chat => {
+                    if t.phase != TouchPhase::Cancelled {
+                        touch.pending.push_back(AndroidGesture::Chat);
+                    }
+                }
+                TouchRole::SprintToggle | TouchRole::Ignored => {}
                 TouchRole::Button(bit) => {
                     // Two fingers may press the same control at once. Only the
                     // last release should clear its held gamepad button.
@@ -380,21 +412,39 @@ fn handle_game_touch(t: winit_real::event::Touch) {
         } else {
             0.11
         };
-        let gui_scale = (width / 320.0)
-            .floor()
-            .min((height / 240.0).floor())
-            .max(1.0);
-        let inventory_x = (0.735 * width).max(
-            0.5 * width + 91.0 * gui_scale + 0.030 * height * scale + (0.015 * height).max(14.0),
-        );
         let movement_owned = touch.fingers.values().any(|r| matches!(r, TouchRole::Move));
         let role = if hotbar_slot(p).is_some() {
             TouchRole::Hotbar
-        } else if near_square(p, [0.11 + 0.190 / aspect, 0.60], 0.035 * scale, aspect) {
-            TouchRole::Button(10) // Sprint wins over overlapping D-pad movement.
+        } else if touch_gestures::hotbar_inventory(
+            [p[0] as f32, p[1] as f32],
+            [
+                GUI_WIDTH.load(Ordering::Relaxed),
+                GUI_HEIGHT.load(Ordering::Relaxed),
+            ],
+        ) {
+            TouchRole::Button(3) // Native hotbar inventory end-cap.
+        } else if near_square(p, [0.5 - 0.045 / aspect, 0.045], 0.028 * scale, aspect) {
+            TouchRole::Chat
+        } else if near_square(p, [0.5 + 0.045 / aspect, 0.045], 0.028 * scale, aspect) {
+            TouchRole::Button(9) // Top-bound pause button.
+        } else if near_square(
+            p,
+            [0.11 + 0.190 / aspect, if dpad { 0.46 } else { 0.57 }],
+            0.035 * scale,
+            aspect,
+        ) {
+            if !touch
+                .fingers
+                .values()
+                .any(|r| matches!(r, TouchRole::SprintToggle))
+            {
+                touch.sprint_locked = !touch.sprint_locked;
+                sync_sprint(&mut touch);
+            }
+            TouchRole::SprintToggle
         } else if near(
             p,
-            [move_x, 0.718],
+            [move_x, if dpad { 0.63 } else { 0.705 }],
             (if dpad { 0.160 } else { 0.112 }) * scale,
             aspect,
         ) {
@@ -403,9 +453,9 @@ fn handle_game_touch(t: winit_real::event::Touch) {
             } else {
                 TouchRole::Move
             }
-        } else if near_square(p, [1.0 - 0.160 / aspect, 0.77], 0.051 * scale, aspect) {
+        } else if near_square(p, [1.0 - 0.160 / aspect, 0.72], 0.051 * scale, aspect) {
             TouchRole::Button(0) // South: jump
-        } else if near_square(p, [1.0 - 0.290 / aspect, 0.77], 0.040 * scale, aspect) {
+        } else if near_square(p, [1.0 - 0.290 / aspect, 0.73], 0.040 * scale, aspect) {
             TouchRole::Button(11) // Right stick: sneak
         } else if android_touch_crosshair()
             && near_square(p, [1.0 - 0.270 / aspect, 0.56], 0.042 * scale, aspect)
@@ -415,10 +465,6 @@ fn handle_game_touch(t: winit_real::event::Touch) {
             && near_square(p, [1.0 - 0.145 / aspect, 0.52], 0.042 * scale, aspect)
         {
             TouchRole::LeftTrigger // use/place
-        } else if near_square(p, [inventory_x / width, 0.92], 0.030 * scale, aspect) {
-            TouchRole::Button(3) // North: inventory
-        } else if near_square(p, [0.50, 0.072], 0.032 * scale, aspect) {
-            TouchRole::Button(9) // Start: pause
         } else if touch.gestures.down(
             t.id,
             t.location.x as f32,
@@ -452,7 +498,8 @@ fn handle_game_touch(t: winit_real::event::Touch) {
                 width * 0.11
             };
             let dx = (t.location.x - center_x) / radius;
-            let dy = (t.location.y - height * 0.718) / radius;
+            let dy = (t.location.y - height * (if android_touch_dpad() { 0.63 } else { 0.705 }))
+                / radius;
             if android_touch_dpad() {
                 // An 8-way D-pad with a neutral center and intentional diagonal input.
                 let digital = |axis: f64| {
@@ -469,6 +516,7 @@ fn handle_game_touch(t: winit_real::event::Touch) {
                 let length = (dx * dx + dy * dy).sqrt().max(1.0);
                 touch.state.left = [(dx / length) as f32, (-dy / length) as f32];
             }
+            sync_sprint(&mut touch);
         }
         TouchRole::Look => {
             if let Some(AndroidGesture::Look { dx, dy }) =
@@ -484,7 +532,7 @@ fn handle_game_touch(t: winit_real::event::Touch) {
                 touch.target = None;
             }
         }
-        TouchRole::Hotbar | TouchRole::Ignored => {}
+        TouchRole::Hotbar | TouchRole::Chat | TouchRole::SprintToggle | TouchRole::Ignored => {}
         _ => {}
     }
 }

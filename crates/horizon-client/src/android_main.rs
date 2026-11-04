@@ -37,8 +37,13 @@ pub extern "system" fn Java_dev_horizon_android_HorizonActivity_nativeSetControl
     _class: *mut std::ffi::c_void,
     scheme: i32,
     scale: i32,
+    always_sprint: u8,
 ) {
-    winit::android_touch_set_controls(scheme.clamp(0, 3) as u32, scale.clamp(80, 120) as u32);
+    winit::android_touch_set_controls(
+        scheme.clamp(0, 3) as u32,
+        scale.clamp(80, 120) as u32,
+        always_sprint != 0,
+    );
 }
 
 #[unsafe(no_mangle)]

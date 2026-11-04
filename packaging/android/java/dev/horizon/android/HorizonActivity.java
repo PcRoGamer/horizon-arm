@@ -13,6 +13,7 @@ import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
@@ -38,9 +39,10 @@ public final class HorizonActivity extends GameActivity {
     private int scheme;
     private int controlScale;
     private int opacity;
+    private boolean alwaysSprint;
 
     public static native boolean nativeTouchMenu();
-    public static native void nativeSetControls(int scheme, int scale);
+    public static native void nativeSetControls(int scheme, int scale, boolean alwaysSprint);
     public static native int nativeTouchAxes();
     public static native int nativeTouchButtons();
 
@@ -88,6 +90,7 @@ public final class HorizonActivity extends GameActivity {
         scheme = Math.max(0, Math.min(3, prefs.getInt("scheme", 0)));
         controlScale = Math.max(80, Math.min(120, prefs.getInt("scale", 100)));
         opacity = Math.max(35, Math.min(100, prefs.getInt("opacity", 72)));
+        alwaysSprint = prefs.getBoolean("always_sprint", false);
 
         overlay = new TouchOverlay();
         overlay.setClickable(false);
@@ -138,6 +141,7 @@ public final class HorizonActivity extends GameActivity {
                 .putInt("scheme", scheme)
                 .putInt("scale", controlScale)
                 .putInt("opacity", opacity)
+                .putBoolean("always_sprint", alwaysSprint)
                 .apply();
         overlay.scheme = scheme;
         overlay.opacity = opacity;
@@ -150,7 +154,7 @@ public final class HorizonActivity extends GameActivity {
     private void syncNative() {
         if (applied) return;
         try {
-            nativeSetControls(scheme, controlScale);
+            nativeSetControls(scheme, controlScale, alwaysSprint);
             applied = true;
         } catch (UnsatisfiedLinkError ignored) {
             // Native library may finish loading after Activity.onCreate.
@@ -170,7 +174,7 @@ public final class HorizonActivity extends GameActivity {
                     saveControls();
                     d.dismiss();
                 })
-                .setNeutralButton("Size & opacity", (d, w) -> showAppearanceDialog())
+                .setNeutralButton("HUD & sprint", (d, w) -> showAppearanceDialog())
                 .setNegativeButton("Cancel", null)
                 .create();
         dialog.setOnShowListener(d -> dialog.getWindow().getDecorView()
@@ -208,6 +212,19 @@ public final class HorizonActivity extends GameActivity {
         content.addView(opacityLabel);
         content.addView(alpha);
 
+        CheckBox sprint = new CheckBox(this);
+        sprint.setText("Always sprint when moving forward");
+        sprint.setTextColor(0xFFFFFFFF);
+        sprint.setTextSize(15);
+        sprint.setChecked(alwaysSprint);
+        sprint.setPadding(0, dp(14), 0, dp(6));
+        content.addView(sprint);
+        TextView sprintHelp = settingLabel(
+                "Sprint lock: tap the running button above the joystick to turn "
+                + "sprint on or off without double-tapping movement.");
+        sprintHelp.setTextColor(0xFFBBBBBB);
+        content.addView(sprintHelp);
+
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("Customize touch controls")
                 .setView(content)
@@ -215,11 +232,13 @@ public final class HorizonActivity extends GameActivity {
                 .setNeutralButton("Reset", (d, w) -> {
                     controlScale = 100;
                     opacity = 72;
+                    alwaysSprint = false;
                     saveControls();
                 })
                 .setPositiveButton("Apply", (d, w) -> {
                     controlScale = 80 + size.getProgress();
                     opacity = 35 + alpha.getProgress();
+                    alwaysSprint = sprint.isChecked();
                     saveControls();
                 }).create();
         dialog.show();
@@ -275,7 +294,6 @@ public final class HorizonActivity extends GameActivity {
     /** Non-intercepting, hardware-accelerated vector artwork. */
     private final class TouchOverlay extends View {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final Path path = new Path();
         boolean menu = true;
         int scheme = 0;
         int opacity = 72;
@@ -303,97 +321,80 @@ public final class HorizonActivity extends GameActivity {
                     | (rgb & 0xFFFFFF);
         }
 
-        private void glyph(Canvas c, String name, float r) {
-            c.save();
-            c.scale(r * .71f, r * .71f);
-            color(alpha(0xFF202427, 1f), Paint.Style.STROKE, .17f);
-            switch (name) {
-                case "sprint":
-                    c.drawLine(-.69f, -.42f, -.12f, 0f, paint);
-                    c.drawLine(-.12f, 0f, -.69f, .42f, paint);
-                    c.drawLine(-.05f, -.42f, .52f, 0f, paint);
-                    c.drawLine(.52f, 0f, -.05f, .42f, paint);
-                    c.drawLine(-.67f, -.67f, .50f, -.67f, paint);
-                    break;
-                case "jump":
-                    c.drawLine(-.65f, -.05f, 0f, -.66f, paint);
-                    c.drawLine(0f, -.66f, .65f, -.05f, paint);
-                    c.drawLine(0f, -.50f, 0f, .52f, paint);
-                    c.drawLine(-.55f, .68f, .55f, .68f, paint);
-                    break;
-                case "sneak":
-                    c.drawLine(-.65f, .02f, 0f, .62f, paint);
-                    c.drawLine(0f, .62f, .65f, .02f, paint);
-                    c.drawLine(0f, -.62f, 0f, .43f, paint);
-                    c.drawLine(-.55f, -.70f, .55f, -.70f, paint);
-                    break;
-                case "hit":
-                    c.drawLine(-.48f, .54f, .46f, -.42f, paint);
-                    c.drawLine(.14f, -.48f, .65f, -.70f, paint);
-                    c.drawLine(.46f, -.42f, .65f, -.70f, paint);
-                    c.drawLine(-.66f, .08f, -.12f, .61f, paint);
-                    c.drawLine(-.60f, .73f, -.30f, .40f, paint);
-                    break;
-                case "use":
-                    path.reset();
-                    path.moveTo(0f, -.72f);
-                    path.lineTo(.66f, -.39f);
-                    path.lineTo(.66f, .37f);
-                    path.lineTo(0f, .73f);
-                    path.lineTo(-.66f, .37f);
-                    path.lineTo(-.66f, -.39f);
-                    path.close();
-                    c.drawPath(path, paint);
-                    c.drawLine(-.66f, -.39f, 0f, -.07f, paint);
-                    c.drawLine(.66f, -.39f, 0f, -.07f, paint);
-                    c.drawLine(0f, -.07f, 0f, .70f, paint);
-                    break;
-                case "inventory":
-                    c.drawRect(-.70f, -.53f, .70f, .59f, paint);
-                    c.drawLine(-.69f, -.10f, .69f, -.10f, paint);
-                    c.drawLine(-.22f, -.50f, -.22f, .58f, paint);
-                    c.drawLine(.24f, -.50f, .24f, .58f, paint);
-                    break;
-                case "pause":
-                    color(alpha(0xFF202427, 1f), Paint.Style.FILL, 0);
-                    c.drawRect(-.54f, -.70f, -.12f, .70f, paint);
-                    c.drawRect(.12f, -.70f, .54f, .70f, paint);
-                    break;
-                case "up": arrow(c, 0);
-                    break;
-                case "right": arrow(c, 90);
-                    break;
-                case "down": arrow(c, 180);
-                    break;
-                case "left": arrow(c, 270);
-                    break;
-                default: break;
+        // Original 24px-grid icons rasterized once into reusable Canvas paths.
+        // Pixel masks are identical to the ARM64 Rust GPU preview.
+        // Glyph fingerprint: 19ca2893782bfd8bf20d24aa1ff8f0d21ca1cc09333f621848758b26e8c63af3
+        private static final int[][] PIXEL_GLYPHS = {
+    {0x000000, 0x000000, 0x000000, 0x000000, 0x0FFFF0, 0x1FFFF0, 0x180030, 0x180030, 0x180030, 0x1999F0, 0x1BFFF0, 0x1BFFF0, 0x1999F0, 0x180030, 0x180030, 0x1C7FF0, 0x1DFFF0, 0x0FC000, 0x0F8000, 0x0F0000, 0x0C0000, 0x000000, 0x000000, 0x000000},
+    {0x000000, 0x000000, 0x000000, 0x000000, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x000000, 0x000000, 0x000000, 0x000000},
+    {0x000000, 0x000000, 0x000380, 0x000380, 0x0007C0, 0x000380, 0x3F8700, 0x3F8F80, 0x003FC0, 0x7F39F0, 0x7F70FC, 0x00707C, 0x00E000, 0x07E000, 0x0FF800, 0x0FFC00, 0x071E00, 0x0F0E00, 0x0E0E00, 0x1C0E00, 0x180C00, 0x000C00, 0x000000, 0x000000},
+    {0x000000, 0x000000, 0x000000, 0x001800, 0x003C00, 0x007E00, 0x007E00, 0x00FF00, 0x01FF80, 0x03FFC0, 0x07FFE0, 0x007E00, 0x007E00, 0x007E00, 0x007E00, 0x007E00, 0x007E00, 0x007E00, 0x000000, 0x000000, 0x1FFFF8, 0x1FFFF8, 0x000000, 0x000000},
+    {0x000000, 0x000000, 0x000000, 0x0001C0, 0x0001C0, 0x0003E0, 0x0001C0, 0x000000, 0x000300, 0x000700, 0x000E00, 0x03FC00, 0x07FC00, 0x0FFE00, 0x0E77F8, 0x1C6FF8, 0x18EE00, 0x19EC00, 0x03DC00, 0x079C00, 0x1FFFFC, 0x1FFFFC, 0x000000, 0x000000},
+    {0x000000, 0x000000, 0x00000C, 0x00003C, 0x00007C, 0x00007C, 0x0000FC, 0x0001DC, 0x0003F8, 0x0007F8, 0x000FE0, 0x001C00, 0x183800, 0x1C7000, 0x0FE000, 0x07C000, 0x07C000, 0x07C000, 0x0FE000, 0x1C7000, 0x383000, 0x300000, 0x000000, 0x000000},
+    {0x000000, 0x000000, 0x003C00, 0x00FF00, 0x01FF80, 0x07C3E0, 0x1F00F8, 0x1E0078, 0x1F00F8, 0x1FC3F8, 0x19FF98, 0x18FF18, 0x183C18, 0x181818, 0x181818, 0x181818, 0x1E1878, 0x1F18F8, 0x07DBE0, 0x01FF80, 0x007F00, 0x003C00, 0x000000, 0x000000},
+    {0x000000, 0x000000, 0x000000, 0x001800, 0x003C00, 0x007E00, 0x007E00, 0x00FF00, 0x01FF80, 0x03FFC0, 0x07FFE0, 0x0FFFF0, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x000000, 0x000000, 0x000000},
+    {0x000000, 0x000000, 0x000000, 0x000000, 0x000800, 0x000C00, 0x000E00, 0x000F00, 0x1FFF80, 0x1FFFE0, 0x1FFFF0, 0x1FFFF8, 0x1FFFF8, 0x1FFFF0, 0x1FFFE0, 0x1FFF80, 0x000F00, 0x000E00, 0x000C00, 0x000800, 0x000000, 0x000000, 0x000000, 0x000000},
+    {0x000000, 0x000000, 0x000000, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x0FFFF0, 0x07FFE0, 0x03FFC0, 0x01FF80, 0x00FF00, 0x007E00, 0x007E00, 0x003C00, 0x001800, 0x000000, 0x000000, 0x000000},
+    {0x000000, 0x000000, 0x000000, 0x000000, 0x001000, 0x003000, 0x007000, 0x00F000, 0x01FFF8, 0x07FFF8, 0x0FFFF8, 0x1FFFF8, 0x1FFFF8, 0x0FFFF8, 0x07FFF8, 0x01FFF8, 0x00F000, 0x007000, 0x003000, 0x001000, 0x000000, 0x000000, 0x000000, 0x000000}
+        };
+        private final Path[] pixelPaths = buildPixelPaths();
+
+        private Path[] buildPixelPaths() {
+            Path[] result = new Path[PIXEL_GLYPHS.length];
+            for (int icon = 0; icon < result.length; icon++) {
+                Path path = new Path();
+                for (int y = 0; y < 24; y++) {
+                    int bits = PIXEL_GLYPHS[icon][y];
+                    int x = 0;
+                    while (x < 24) {
+                        if ((bits & (1 << (23 - x))) == 0) { x++; continue; }
+                        int left = x;
+                        do { x++; } while (x < 24 && (bits & (1 << (23-x))) != 0);
+                        path.addRect(left, y, x, y + 1, Path.Direction.CW);
+                    }
+                }
+                result[icon] = path;
             }
-            c.restore();
+            return result;
         }
 
-        private void arrow(Canvas c, int degrees) {
-            c.save();
-            c.rotate(degrees);
-            path.reset();
-            path.moveTo(0f, -.70f);
-            path.lineTo(.66f, .06f);
-            path.lineTo(.28f, .06f);
-            path.lineTo(.28f, .65f);
-            path.lineTo(-.28f, .65f);
-            path.lineTo(-.28f, .06f);
-            path.lineTo(-.66f, .06f);
-            path.close();
-            color(alpha(0xFF202427, 1f), Paint.Style.FILL, 0);
-            c.drawPath(path, paint);
-            c.restore();
+        private int pixelIcon(String name) {
+            switch (name) {
+                case "chat": return 0;
+                case "pause": return 1;
+                case "sprint": return 2;
+                case "jump": return 3;
+                case "sneak": return 4;
+                case "hit": return 5;
+                case "use": return 6;
+                case "up": return 7;
+                case "right": return 8;
+                case "down": return 9;
+                case "left": return 10;
+                default: return -1;
+            }
+        }
+
+        private void glyph(Canvas canvas, String name, float radius) {
+            int index = pixelIcon(name);
+            if (index < 0) return;
+            canvas.save();
+            // 24x24 pixel glyph fits inside the beveled key's face.
+            canvas.scale(radius * .062f, radius * .062f);
+            canvas.translate(-12f, -12f);
+            color(alpha(0xFF232D30, 1f), Paint.Style.FILL, 0);
+            paint.setAntiAlias(false);
+            canvas.drawPath(pixelPaths[index], paint);
+            canvas.restore();
         }
 
         private void control(Canvas c, float nx, float ny, float radius, String name) {
             float x = nx * getWidth();
             float y = ny * getHeight();
             float r = radius * getHeight() * scale;
-            boolean pressed = (name.equals("jump") && (buttons & 1) != 0)
+            boolean pressed = (name.equals("sprint")
+                    && (buttons & ((1 << 26) | (1 << 27))) != 0)
+                    || (name.equals("jump") && (buttons & 1) != 0)
                     || (name.equals("sneak") && (buttons & (1 << 11)) != 0)
                     || (name.equals("sprint") && (buttons & (1 << 10)) != 0)
                     || (name.equals("inventory") && (buttons & (1 << 3)) != 0)
@@ -412,7 +413,8 @@ public final class HorizonActivity extends GameActivity {
             color(alpha(0xFF101618, .82f), Paint.Style.FILL, 0);
             c.drawRoundRect(new RectF(-r, -r + edge, r, r + edge),
                     corner, corner, paint);
-            color(alpha(pressed ? 0xFF88949B : 0xFFC4C8CC, .89f),
+            color(alpha(pressed && name.equals("sprint")
+                    ? 0xFF93C79B : pressed ? 0xFF88949B : 0xFFD0D5D3, .89f),
                     Paint.Style.FILL, 0);
             c.drawRoundRect(new RectF(-r + edge, -r + edge,
                     r - edge, r - edge), corner * .55f, corner * .55f, paint);
@@ -427,7 +429,7 @@ public final class HorizonActivity extends GameActivity {
         private void joystick(Canvas c) {
             float h = getHeight();
             float x = .11f * getWidth();
-            float y = .718f * h;
+            float y = .705f * h;
             float r = .092f * h * scale;
             color(alpha(0xFF33383C, .38f), Paint.Style.FILL, 0);
             c.drawCircle(x, y, r, paint);
@@ -457,7 +459,7 @@ public final class HorizonActivity extends GameActivity {
                 // A height-based inset prevents clipping on 4:3 tablets
                 // when controls are scaled up to 120%.
                 float centerX = Math.max(.11f * getWidth(), .205f * getHeight());
-                float centerY = .718f * getHeight();
+                float centerY = .63f * getHeight();
                 String[] directions = {"up", "right", "down", "left"};
                 float[][] vectors = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}};
                 for (int i = 0; i < 4; ++i) {
@@ -470,21 +472,17 @@ public final class HorizonActivity extends GameActivity {
             // Physical-height offsets keep the right-hand cluster coherent
             // on tablets, tall phones, and ultra-wide landscape displays.
             float aspect = getWidth() / (float) getHeight();
-            control(canvas, 1f - .160f / aspect, .77f, .051f, "jump");
-            control(canvas, 1f - .290f / aspect, .77f, .040f, "sneak");
+            control(canvas, 1f - .160f / aspect, .72f, .051f, "jump");
+            control(canvas, 1f - .290f / aspect, .73f, .040f, "sneak");
             if ((scheme & 1) == 1) {
                 control(canvas, 1f - .270f / aspect, .56f, .042f, "hit");
                 control(canvas, 1f - .145f / aspect, .52f, .042f, "use");
             }
-            control(canvas, .11f + .190f / aspect, .60f, .035f, "sprint");
-            // Inventory sits beyond the hotbar, not over the held item.
-            int guiScale = Math.max(1, Math.min(getWidth() / 320, getHeight() / 240));
-            float inventoryX = Math.max(.735f * getWidth(),
-                    .5f * getWidth() + 91f * guiScale
-                    + .030f * getHeight() * scale
-                    + Math.max(14f, .015f * getHeight()));
-            control(canvas, inventoryX / getWidth(), .92f, .030f, "inventory");
-            control(canvas, .50f, .072f, .032f, "pause");
+            control(canvas, .11f + .190f / aspect, scheme >= 2 ? .46f : .57f, .035f, "sprint");
+            // Inventory is rendered as an attached hotbar end-cap by the
+            // *native game HUD*, not as a floating Java overlay key.
+            control(canvas, .5f - .045f / aspect, .045f, .028f, "chat");
+            control(canvas, .5f + .045f / aspect, .045f, .028f, "pause");
         }
     }
 }

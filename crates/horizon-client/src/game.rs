@@ -330,6 +330,7 @@ mod text_displays;
 mod titles;
 mod tnt;
 mod totem;
+mod touch_hotbar;
 #[cfg(all(debug_assertions, not(target_os = "android")))]
 mod touch_preview;
 mod trading;
@@ -8505,6 +8506,7 @@ impl Game<'_> {
                         offhand_pop: (f32::from(g.hotbar_pop[9]) - partial).max(0.0),
                         attack: (indicator == 2).then_some(strength),
                     };
+                    let first = batch.vertices.len();
                     let draws = hud_layout::hotbar(wi, hi, &inputs);
                     hud_layout::paint(batch, &g.gui.atlas, &draws);
                     for d in &draws {
@@ -8519,6 +8521,8 @@ impl Game<'_> {
                             }
                         }
                     }
+                    touch_hotbar::transform_hotbar(batch, first);
+                    touch_hotbar::inventory_cap(batch, &g.gui.atlas);
                 }
             });
             self.gui_layer("minecraft:effects", &mut batch, |g, batch| {
@@ -8554,6 +8558,7 @@ impl Game<'_> {
             // bar (with its background) or the experience bar, with the level
             // number that a survival player always has.
             self.gui_layer("minecraft:contextual_info_bar", &mut batch, |g, batch| {
+                let first = batch.vertices.len();
                 if contextual == ContextualBar::JumpableVehicle {
                     g.draw_jump_bar(batch, wi, hi);
                 }
@@ -8587,6 +8592,7 @@ impl Game<'_> {
                     let draws = g.locator_bar_draws(wi, hi);
                     hud_layout::paint(batch, &g.gui.atlas, &draws);
                 }
+                touch_hotbar::lift_stats(batch, first);
             });
             if !self.creative
                 && !spectator
@@ -8639,7 +8645,9 @@ impl Game<'_> {
                 // The rows draw in one pass here, so a mod's `player_health`
                 // layer stands for the armor, food and air rows too.
                 self.gui_layer("minecraft:player_health", &mut batch, |g, batch| {
+                    let first = batch.vertices.len();
                     hud_layout::paint(batch, &g.gui.atlas, &draws);
+                    touch_hotbar::lift_stats(batch, first);
                 });
                 bar_height = self
                     .health_hud

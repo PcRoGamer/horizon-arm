@@ -191,6 +191,11 @@ impl Game<'_> {
             // decides whether the targeted object should be attacked or used.
             for gesture in winit::android_touch_gestures() {
                 match gesture {
+                    winit::AndroidGesture::Chat
+                        if self.title.is_none() && self.screen == Screen::Playing =>
+                    {
+                        self.open_chat_method("");
+                    }
                     winit::AndroidGesture::Hotbar(slot)
                         if self.title.is_none() && self.screen == Screen::Playing =>
                     {
