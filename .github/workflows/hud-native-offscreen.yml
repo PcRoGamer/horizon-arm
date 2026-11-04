@@ -1,0 +1,52 @@
+name: Native HUD-only render
+on:
+  workflow_dispatch:
+  push:
+    branches: [tools/native-hud-offscreen-preview]
+
+jobs:
+  render-production-canvas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+      - name: Validate source extraction and build HUD-only APK
+        run: |
+          python3 tools/extract_horizon_overlay.py --source packaging/android/java/dev/horizon/android/HorizonActivity.java --output packaging/hud-preview/build/generated/horizon/java/dev/horizon/hudpreview/HudPreviewOverlay.java
+          gradle -p packaging/hud-preview assembleDebug --no-daemon --stacktrace
+      - name: Render production Canvas on headless Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          force-avd-creation: false
+          disable-animations: true
+          emulator-options: '-no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim'
+          script: |
+            set -e
+            mkdir -p artifacts
+            adb install -r packaging/hud-preview/build/outputs/apk/debug/hud-preview-debug.apk
+            adb shell wm size 1280x800
+            adb shell wm density 240
+            adb shell am start -n dev.horizon.hudpreview/.HudPreviewActivity --ei scheme 1 --ei scale 100 --ei opacity 72
+            sleep 3
+            adb exec-out screencap -p > artifacts/android-hud-joystick-1280x800.png
+            adb shell am start -n dev.horizon.hudpreview/.HudPreviewActivity --ei scheme 3 --ei scale 100 --ei opacity 72
+            sleep 1
+            adb exec-out screencap -p > artifacts/android-hud-dpad-1280x800.png
+            file artifacts/*.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-horizon-hud-captures
+          path: artifacts/*.png
+          if-no-files-found: warn
