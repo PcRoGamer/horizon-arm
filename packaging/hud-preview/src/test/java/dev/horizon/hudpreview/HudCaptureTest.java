@@ -27,7 +27,7 @@ import static org.junit.Assert.*;
 @Config(sdk = 34)
 public class HudCaptureTest {
     @Test public void renderAllFourModesInNativeSkia() throws Exception {
-        File dir = new File("../../../artifacts/hud-native-skia");
+        File dir = new File("../../artifacts/hud-native-skia");
         if (!dir.isDirectory() && !dir.mkdirs()) throw new IllegalStateException("mkdir " + dir);
         int[][] sizes = {{1280, 800}, {1600, 900}, {1200, 630}};
         String[] names = {"joystick-tap", "joystick-crosshair", "dpad-tap", "dpad-crosshair"};
