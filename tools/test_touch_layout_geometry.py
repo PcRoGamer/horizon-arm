@@ -91,10 +91,10 @@ def layout(w,h,scheme,scale):
             "joystick":box(.11*w,.705*h,.092*h*scale),
         })
     else:
-        off=.132*h*scale
-        r=.060*h*scale
+        off=.147*h*scale
+        r=.068*h*scale
         cx=max(.11*w,.23*h*scale)
-        cy=.71*h
+        cy=.72*h
         if cx+r > rect_bar[0]-9:
             cy=min(cy,rect_bar[1]-9-off-r)
         controls["sprint"]=box(cx+1.55*off,cy-1.45*off,.035*h*scale)
