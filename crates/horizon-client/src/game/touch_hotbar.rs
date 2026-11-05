@@ -68,23 +68,21 @@ pub(super) fn anchor_health_to_top(batch: &mut HudBatch, first: usize) {
         b[1] = b[1].min(vertex.pos[1]);
         b[2] = b[2].max(vertex.pos[0]);
     }
-    let inset = 4.0;
-    let top = 3.0;
-    let shifts: [[f32; 2]; 2] = std::array::from_fn(|side| {
-        let [min_x, min_y, max_x] = bounds[side];
-        if !min_x.is_finite() {
-            return [0.0, 0.0];
-        }
-        if side == 0 {
-            [inset - min_x, top - min_y]
-        } else {
-            [batch.width - inset - max_x, top - min_y]
-        }
-    });
+    // Bedrock's status icons are larger than Java Edition's default 9px
+    // sprites. Scale actual atlas vertices, not replacement bitmap graphics.
+    const STATUS_SCALE: f32 = 1.25;
+    const INSET: f32 = 4.0;
+    const TOP: f32 = 3.0;
     for vertex in &mut batch.vertices[first..] {
         let side = usize::from(vertex.pos[0] >= center);
-        vertex.pos[0] += shifts[side][0];
-        vertex.pos[1] += shifts[side][1];
+        let [min_x, min_y, max_x] = bounds[side];
+        if !min_x.is_finite() { continue; }
+        vertex.pos[0] = if side == 0 {
+            INSET + (vertex.pos[0] - min_x) * STATUS_SCALE
+        } else {
+            batch.width - INSET - (max_x - vertex.pos[0]) * STATUS_SCALE
+        };
+        vertex.pos[1] = TOP + (vertex.pos[1] - min_y) * STATUS_SCALE;
     }
 }
 
