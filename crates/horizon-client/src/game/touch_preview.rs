@@ -59,7 +59,7 @@ fn dpad_geometry(w: f32, h: f32, scale: f32) -> (f32, f32, f32, f32) {
     // physical pixels using the corresponding auto GUI scale.
     let hotbar_scale = super::touch_hotbar::magnification(w);
     let bar_left = w * 0.5 - 91.0 * hotbar_scale;
-    let bar_top = h - 18.0 - 22.0 * hotbar_scale;
+    let bar_top = h - 15.0 - 22.0 * hotbar_scale;
     let r = 0.068 * h * scale;
     let off = 0.147 * h * scale;
     let cx = (0.11 * w).max(0.23 * h * scale);
@@ -77,7 +77,7 @@ fn joystick_y(w: f32, h: f32, scale: f32) -> f32 {
     let r = 0.092 * h * scale;
     let mag = super::touch_hotbar::magnification(w);
     let bar_left = w * 0.5 - 91.0 * mag;
-    let bar_top = h - 18.0 - 22.0 * mag;
+    let bar_top = h - 15.0 - 22.0 * mag;
     let mut y = 0.705 * h;
     if 0.11 * w + r > bar_left - 9.0 {
         y = y.min(bar_top - 9.0 - r);
