@@ -17,9 +17,9 @@ pub enum Action {
 /// Hit test the actual vanilla hotbar, independent of device resolution.
 /// The HUD draws 9 slots, each 20 GUI pixels wide, centred on the window,
 /// with the bottommost 22 GUI pixels occupied by the hotbar background.
-pub const HOTBAR_SCALE: f32 = 1.30;
-pub const HOTBAR_BOTTOM: f32 = 18.0;
-pub const INVENTORY_CAP: f32 = 27.0;
+pub const HOTBAR_SCALE: f32 = 1.36;
+pub const HOTBAR_BOTTOM: f32 = 15.0;
+pub const INVENTORY_CAP: f32 = 20.0;
 
 /// Same minimum-width safety clamp as game/touch_hotbar.rs.
 /// Hitboxes must follow rendered vertices, not an independent preset.
