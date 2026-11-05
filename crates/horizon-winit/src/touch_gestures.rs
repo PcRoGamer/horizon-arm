@@ -10,8 +10,6 @@ pub enum Action {
     HoldBegin { x: f32, y: f32 },
     HoldEnd,
     Look { dx: f32, dy: f32 },
-    Hotbar(usize),
-    Chat,
 }
 
 /// Hit test the actual vanilla hotbar, independent of device resolution.
@@ -293,5 +291,8 @@ mod tests {
     fn thresholds_scale_without_exploding_on_tablets() {
         assert_eq!(Recognizer::new(360.0).slop_px, 10.0);
         assert_eq!(Recognizer::new(2160.0).slop_px, 26.0);
+        let mut recognizer = Recognizer::new(360.0);
+        recognizer.set_screen_height(2160.0);
+        assert_eq!(recognizer.slop_px, 26.0);
     }
 }
