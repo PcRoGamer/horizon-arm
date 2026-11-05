@@ -101,17 +101,66 @@ def render(resources, width, height, selected=0):
     return canvas
 
 
+def render_survival_icons(canvas, resources, width, height):
+    """Actual Minecraft heart/food textures at production health anchor."""
+    gui = gui_scale(width, height)
+    gw = math.ceil(width / gui)
+    sprite_root = resources / "assets/minecraft/textures/gui/sprites/hud"
+    for i in range(10):
+        # HealthHud::layout emits 9px sprites at x_left+n*8 and
+        # x_right-n*8-9; anchor_health_to_top scales real vertices 1.25.
+        left = (4.0 + i * 8.0 * 1.25) * gui
+        right = (gw - 4.0 - (9.0 + i * 8.0) * 1.25) * gui
+        y = 3.0 * gui
+        for path, x in (("heart/container", left), ("heart/full", left),
+                        ("food_empty", right), ("food_full", right)):
+            sprite(canvas, sprite_root / (path + ".png"), x, y,
+                   9.0 * 1.25 * gui, 9.0 * 1.25 * gui)
+
+
+def render_experience(canvas, resources, width, height, progress):
+    """Production atlas textures and touch_hotbar::transform_experience."""
+    if not 0 <= progress <= 1:
+        raise ValueError("XP progress must be in [0,1]")
+    gui = gui_scale(width, height)
+    gw, gh = math.ceil(width / gui), math.ceil(height / gui)
+    cfg = constants()
+    s = min(cfg["MAGNIFICATION"],
+            (gw * .5 - 10.0) / (91.0 + cfg["INVENTORY_CAP"]))
+    x = (gw * .5 - 91.0 * s) * gui
+    y = (gh - cfg["BOTTOM_GAP"] - 22.0 * s - 9.0) * gui
+    dest_w, dest_h = 182.0 * s * gui, 5.0 * s * gui
+    root = resources / "assets/minecraft/textures/gui/sprites/hud"
+    sprite(canvas, root / "experience_bar_background.png",
+           x, y, dest_w, dest_h)
+    if progress > 0:
+        bar = Image.open(root / "experience_bar_progress.png").convert("RGBA")
+        portion = max(1, round(bar.width * progress))
+        fill = bar.crop((0, 0, portion, bar.height))
+        canvas.alpha_composite(fill.resize(
+            (round(dest_w * progress), round(dest_h)),
+            Image.Resampling.NEAREST), (round(x), round(y)))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--resources", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--size", default="1200x630", help="Physical pixels, e.g. 1200x630")
     parser.add_argument("--slot", type=int, default=0)
+    parser.add_argument("--survival", action="store_true",
+                        help="Preview healthy survival hearts/hunger from actual sprite files")
+    parser.add_argument("--xp", type=float, default=None,
+                        help="Optional experience bar progress 0..1")
     parser.add_argument("--android-png", type=Path,
                         help="Native Skia production Android Canvas capture, same viewport")
     args = parser.parse_args()
     width, height = map(int, args.size.lower().split("x"))
     image = render(args.resources, width, height, args.slot)
+    if args.xp is not None:
+        render_experience(image, args.resources, width, height, args.xp)
+    if args.survival:
+        render_survival_icons(image, args.resources, width, height)
     if args.android_png:
         overlay = Image.open(args.android_png).convert("RGBA")
         if overlay.size != image.size:
