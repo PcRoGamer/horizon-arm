@@ -3,10 +3,16 @@
 //! renderer unless the opt-in Windows ARM64 visual debugger is enabled.
 use horizon_client::hud::{HudAtlas, HudBatch, rgba};
 
-pub(super) const MAGNIFICATION: f32 = 1.22;
-pub(super) const BOTTOM_GAP: f32 = 15.0;
+pub(super) const MAGNIFICATION: f32 = 1.30;
+pub(super) const BOTTOM_GAP: f32 = 18.0;
 pub(super) const STAT_LIFT: f32 = 20.0;
 pub(super) const INVENTORY_CAP: f32 = 27.0;
+
+/// Cap the Bedrock-matched 1.30 magnification at the minimum GUI width.
+/// The 10 GUI-pixel edge clearance remains a hard invariant.
+pub(super) fn magnification(width: f32) -> f32 {
+    MAGNIFICATION.min((width * 0.5 - 10.0) / (91.0 + INVENTORY_CAP))
+}
 
 pub(super) fn enabled() -> bool {
     cfg!(target_os = "android")
@@ -23,9 +29,10 @@ pub(super) fn transform_hotbar(batch: &mut HudBatch, first: usize) {
         return;
     }
     let (cx, bottom) = (batch.width * 0.5, batch.height - BOTTOM_GAP);
+    let s = magnification(batch.width);
     for vertex in &mut batch.vertices[first..] {
-        vertex.pos[0] = cx + (vertex.pos[0] - cx) * MAGNIFICATION;
-        vertex.pos[1] = bottom + (vertex.pos[1] - batch.height) * MAGNIFICATION;
+        vertex.pos[0] = cx + (vertex.pos[0] - cx) * s;
+        vertex.pos[1] = bottom + (vertex.pos[1] - batch.height) * s;
     }
 }
 
@@ -44,7 +51,7 @@ pub(super) fn inventory_cap(batch: &mut HudBatch, atlas: &HudAtlas) {
     if !enabled() {
         return;
     }
-    let s = MAGNIFICATION;
+    let s = magnification(batch.width);
     let side = 22.0 * s;
     let cap = INVENTORY_CAP * s;
     let x = batch.width * 0.5 + 91.0 * s - 1.0;
@@ -76,9 +83,10 @@ mod tests {
     fn mobile_geometry_fits_minimum_gui_width() {
         // 320x240 is the minimum GUI size used by Horizon's auto GUI scale.
         for width in [320.0, 360.0, 426.0, 480.0, 640.0] {
-            let right = width * 0.5 + (91.0 + INVENTORY_CAP) * MAGNIFICATION;
+            let s = magnification(width);
+            let right = width * 0.5 + (91.0 + INVENTORY_CAP) * s;
             assert!(right <= width - 10.0, "inventory cap clips at {width}");
-            let left = width * 0.5 - 91.0 * MAGNIFICATION;
+            let left = width * 0.5 - 91.0 * s;
             assert!(left > 10.0);
         }
     }
