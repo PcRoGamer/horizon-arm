@@ -184,8 +184,9 @@ fn android_dpad_geometry(width: f64, height: f64, scale: f64) -> (f64, f64, f64,
         gui += 1;
     }
     let (gw, gh) = ((width / f64::from(gui)).ceil(), (height / f64::from(gui)).ceil());
-    let bar_left = (gw * 0.5 - 91.0 * 1.22) * f64::from(gui);
-    let bar_top = (gh - 15.0 - 22.0 * 1.22) * f64::from(gui);
+    let hotbar_scale = 1.30_f64.min((gw * 0.5 - 10.0) / (91.0 + 27.0));
+    let bar_left = (gw * 0.5 - 91.0 * hotbar_scale) * f64::from(gui);
+    let bar_top = (gh - 18.0 - 22.0 * hotbar_scale) * f64::from(gui);
     let r = 0.068 * height * scale;
     let offset = 0.147 * height * scale;
     let cx = (0.11 * width).max(0.23 * height * scale);
