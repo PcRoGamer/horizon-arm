@@ -17,9 +17,9 @@ Then, without launching Minecraft:
 
 ```powershell
 adb shell wm size 1280x800
-adb shell am start -n dev.horizon.hudpreview/.HudPreviewActivity --ei scheme 1 --ei scale 100 --ei opacity 72
+adb shell am start -n dev.horizon.hudpreview/.HudPreviewActivity --ei scheme 1 --ei scale 100 --ei opacity 35
 # Use tools/Capture-HorizonHud.ps1 for safe binary capture in PowerShell
-.\tools\Capture-HorizonHud.ps1 -Scheme 1 -Scale 100 -Opacity 72 -Output hud.png
+.\tools\Capture-HorizonHud.ps1 -Scheme 1 -Scale 100 -Opacity 35 -Output hud.png
 ```
 
 Re-running the `am start` command updates the activity immediately. Schemes 0/1 are joystick, 2/3 D-pad; 1/3 use crosshair controls. `--ei buttons 1024` previews the sprint-pressed state. CI also builds the Android harness and captures real screenshots with an emulator on every push to the tools branch.
