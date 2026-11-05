@@ -429,10 +429,26 @@ public final class HorizonActivity extends GameActivity {
             c.restore();
         }
 
+        private float joystickY() {
+            float w = getWidth(), h = getHeight();
+            float r = .092f * h * scale;
+            float y = .705f * h;
+            int gui = 1;
+            while ((int)w / (gui + 1) >= 320 && (int)h / (gui + 1) >= 240) gui++;
+            float gw = (float) Math.ceil(w / gui);
+            float gh = (float) Math.ceil(h / gui);
+            float barScale = Math.min(1.30f, (gw * .5f - 10f) / (91f + 27f));
+            float barLeft = (gw * .5f - 91f * barScale) * gui;
+            float barTop = (gh - 18f - 22f * barScale) * gui;
+            if (.11f * w + r > barLeft - 9f)
+                y = Math.min(y, barTop - 9f - r);
+            return y;
+        }
+
         private void joystick(Canvas c) {
             float h = getHeight();
             float x = .11f * getWidth();
-            float y = .705f * h;
+            float y = joystickY();
             float r = .092f * h * scale;
             // A clear movement ring, without the unnecessary nested circles.
             color(alpha(0xFF13171B, .22f), Paint.Style.FILL, 0);
