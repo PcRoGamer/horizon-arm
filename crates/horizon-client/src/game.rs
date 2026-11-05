@@ -8647,7 +8647,7 @@ impl Game<'_> {
                 self.gui_layer("minecraft:player_health", &mut batch, |g, batch| {
                     let first = batch.vertices.len();
                     hud_layout::paint(batch, &g.gui.atlas, &draws);
-                    touch_hotbar::lift_stats(batch, first);
+                    touch_hotbar::anchor_health_to_top(batch, first);
                 });
                 bar_height = self
                     .health_hud
