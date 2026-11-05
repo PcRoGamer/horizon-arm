@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [feat/bedrock-touch-polish]
 
+concurrency:
+  group: hud-native-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   render-production-canvas:
     runs-on: ubuntu-latest
