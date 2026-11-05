@@ -17,6 +17,24 @@ PREVIEW=read("crates/horizon-client/src/game/touch_preview.rs")
 INPUT=read("crates/horizon-winit/src/lib.rs")
 GESTURE=read("crates/horizon-winit/src/touch_gestures.rs")
 HOTBAR=read("crates/horizon-client/src/game/touch_hotbar.rs")
+# The native Skia Android overlay and Windows Rust preview MUST share exactly
+# the same 11 pixel icons. Geometry tests alone cannot catch icon drift.
+import re
+def icon_masks(code):
+    pos=code.index("PIXEL_GLYPHS")
+    block=code[pos:code.index("};",pos)] if "private final int[][]" in code[pos-70:pos+70] else code[pos:code.index("\\n];",pos)]
+    # Rust's array type contains an early '];', so extract only after '= ['.
+    if "const PIXEL_GLYPHS" in code:
+        pos=code.index("const PIXEL_GLYPHS")
+        block=code[code.index("= [",pos)+3:code.index("\\n];",pos)]
+    return re.findall(r"0x[0-9a-fA-F]{6}", block)
+java_masks=icon_masks(JAVA)
+rust_masks=icon_masks(PREVIEW)
+assert len(java_masks)==len(rust_masks)==264, "Expected 11 24x24 glyphs"
+assert [m.lower() for m in java_masks]==[m.lower() for m in rust_masks], "Android/Rust pixel glyphs have diverged"
+# Distinctly recognisable Bedrock crouch: downward arrow above a floor bar.
+assert int(java_masks[4*24+20],16)!=0 and int(java_masks[4*24+21],16)!=0
+
 NATIVE=read("crates/horizon-client/src/android_main.rs")
 PAD=read("crates/horizon-client/src/game/pad.rs")
 GAME=read("crates/horizon-client/src/game.rs")
