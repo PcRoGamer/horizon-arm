@@ -43,7 +43,7 @@ public final class HudPreviewActivity extends Activity {
         overlay.menu = false;
         overlay.scheme = clamp(intent.getIntExtra("scheme", 1), 0, 3);
         overlay.scale = clamp(intent.getIntExtra("scale", 100), 80, 120) / 100f;
-        overlay.opacity = clamp(intent.getIntExtra("opacity", 72), 35, 100);
+        overlay.opacity = clamp(intent.getIntExtra("opacity", 35), 35, 100);
         overlay.buttons = intent.getIntExtra("buttons", 0);
         overlay.joyX = clampFloat(intent.getFloatExtra("joy_x", 0f), -1f, 1f);
         overlay.joyY = clampFloat(intent.getFloatExtra("joy_y", 0f), -1f, 1f);
