@@ -317,16 +317,16 @@ impl Painter<'_> {
         // Production Android Canvas layers, with square pixel-snapped edges.
         let edge = (r * 0.095).max(1.0);
         let lip = (r * 0.07).max(0.5);
-        let shadow = self.color(0x080B0D, 0.96);
-        let border = self.color(0x131718, 1.0);
-        let inner = self.color(0x545B5C, 0.96);
+        let shadow = self.color(0x080B0D, 1.85);
+        let border = self.color(0x131718, 1.8);
+        let inner = self.color(0x545B5C, 1.55);
         let face = if matches!(sym, Symbol::Sprint) && self.cfg.always_sprint {
             self.color(0x91B89B, 0.88)
         } else {
             self.color(0xA5ABA8, 0.88)
         };
         let shine = self.color(0xDDE0DD, 0.54);
-        let bottom = self.color(0x2D3334, 0.91);
+        let bottom = self.color(0x2D3334, 1.55);
         self.rect(x-r, y-r+lip, 2.0*r, 2.0*r, shadow);
         self.rect(x-r, y-r, 2.0*r, 2.0*r, border);
         self.rect(x-r+edge, y-r+edge, 2.0*(r-edge), 2.0*(r-edge), inner);
@@ -341,9 +341,9 @@ impl Painter<'_> {
 
     fn joystick(&mut self, x: f32, y: f32, r: f32) {
         let disc = self.color(0x13171B, 0.22);
-        let ring = self.color(0xF4F7F8, 0.84);
-        let dark = self.color(0x0C0F11, 0.92);
-        let face = self.color(0xE4E9EB, 0.98);
+        let ring = self.color(0xF4F7F8, 2.45);
+        let dark = self.color(0x0C0F11, 1.80);
+        let face = self.color(0xE4E9EB, 2.15);
         self.disc(x, y, r, disc);
         self.ring(x, y, r*0.95, r*0.041, ring);
         self.disc(x, y+r*0.032, r*0.42, dark);
@@ -368,7 +368,7 @@ impl Painter<'_> {
         let pixel = radius * 0.062;
         let x0 = x - 12.0 * pixel;
         let y0 = y - 12.0 * pixel;
-        let ink = self.color(0x111516, 1.0);
+        let ink = self.color(0x111516, 1.9);
         for (row, bits) in PIXEL_GLYPHS[icon].iter().copied().enumerate() {
             let mut col = 0;
             while col < 24 {
