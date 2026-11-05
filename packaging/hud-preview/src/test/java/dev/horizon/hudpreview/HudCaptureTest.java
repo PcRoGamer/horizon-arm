@@ -38,7 +38,7 @@ public class HudCaptureTest {
                 overlay.menu = false;
                 overlay.scheme = scheme;
                 overlay.scale = 1.0f;
-                overlay.opacity = 72;
+                overlay.opacity = 35;
                 overlay.buttons = 0;
                 overlay.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
                     View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
@@ -64,7 +64,7 @@ public class HudCaptureTest {
                 // Pixel-level optimisation against the supplied Bedrock capture:
                 // capture *the real Android Canvas* at controlled opacity values.
                 if (width == 1200 && height == 630 && scheme == 2) {
-                    for (int opacity : new int[] {40, 50, 60, 85}) {
+                    for (int opacity : new int[] {38, 40, 50, 60, 72, 85}) {
                         overlay.opacity = opacity;
                         Bitmap candidate = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
                         candidate.eraseColor(Color.TRANSPARENT);
