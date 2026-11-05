@@ -111,6 +111,8 @@ def layout(w,h,scheme,scale):
         r=.068*h*scale
         cx=max(.11*w,.23*h*scale)
         cy=.72*h
+        if cx+off+r > rect_bar[0]-9:
+            cy=min(cy,rect_bar[1]-9-r)
         if cx+r > rect_bar[0]-9:
             cy=min(cy,rect_bar[1]-9-off-r)
         controls["sprint"]=box(cx+1.55*off,cy-1.45*off,.035*h*scale)
