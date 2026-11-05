@@ -8592,7 +8592,11 @@ impl Game<'_> {
                     let draws = g.locator_bar_draws(wi, hi);
                     hud_layout::paint(batch, &g.gui.atlas, &draws);
                 }
-                touch_hotbar::lift_stats(batch, first);
+                if contextual == ContextualBar::Experience {
+                    touch_hotbar::transform_experience(batch, first);
+                } else {
+                    touch_hotbar::lift_stats(batch, first);
+                }
             });
             if !self.creative
                 && !spectator
