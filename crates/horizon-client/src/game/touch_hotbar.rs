@@ -45,6 +45,49 @@ pub(super) fn lift_stats(batch: &mut HudBatch, first: usize) {
     }
 }
 
+/// Bedrock's survival HUD uses opposite TOP corners for health/armour and
+/// hunger/air rather than Java's rows above the item hotbar.
+///
+/// The source UI has already emitted the real atlas sprites into HudBatch.
+/// Relocate those vertices only, preserving their art, animation and order.
+/// A left/right split at the GUI centre is safe for vanilla's health rows,
+/// which are entirely in separate halves of the original GUI.
+pub(super) fn anchor_health_to_top(batch: &mut HudBatch, first: usize) {
+    if !enabled() || first >= batch.vertices.len() {
+        return;
+    }
+    let center = batch.width * 0.5;
+    let mut bounds = [
+        [f32::INFINITY, f32::INFINITY, f32::NEG_INFINITY],
+        [f32::INFINITY, f32::INFINITY, f32::NEG_INFINITY],
+    ];
+    for vertex in &batch.vertices[first..] {
+        let side = usize::from(vertex.pos[0] >= center);
+        let b = &mut bounds[side];
+        b[0] = b[0].min(vertex.pos[0]);
+        b[1] = b[1].min(vertex.pos[1]);
+        b[2] = b[2].max(vertex.pos[0]);
+    }
+    let inset = 4.0;
+    let top = 3.0;
+    let shifts: [[f32; 2]; 2] = std::array::from_fn(|side| {
+        let [min_x, min_y, max_x] = bounds[side];
+        if !min_x.is_finite() {
+            return [0.0, 0.0];
+        }
+        if side == 0 {
+            [inset - min_x, top - min_y]
+        } else {
+            [batch.width - inset - max_x, top - min_y]
+        }
+    });
+    for vertex in &mut batch.vertices[first..] {
+        let side = usize::from(vertex.pos[0] >= center);
+        vertex.pos[0] += shifts[side][0];
+        vertex.pos[1] += shifts[side][1];
+    }
+}
+
 /// Inventory is attached to the hotbar's right border, sized as a tenth
 /// (end-cap) cell. The press/click region lives in horizon-winit::touch_gestures.
 pub(super) fn inventory_cap(batch: &mut HudBatch, atlas: &HudAtlas) {
