@@ -21,13 +21,11 @@ HOTBAR=read("crates/horizon-client/src/game/touch_hotbar.rs")
 # the same 11 pixel icons. Geometry tests alone cannot catch icon drift.
 import re
 def icon_masks(code):
+    # Both files define exactly 11 rows of 24 pixel-mask values. Never
+    # depend on Java/Rust bracket syntax when reading this contract.
     pos=code.index("PIXEL_GLYPHS")
-    block=code[pos:code.index("};",pos)] if "private final int[][]" in code[pos-70:pos+70] else code[pos:code.index("\\n];",pos)]
-    # Rust's array type contains an early '];', so extract only after '= ['.
-    if "const PIXEL_GLYPHS" in code:
-        pos=code.index("const PIXEL_GLYPHS")
-        block=code[code.index("= [",pos)+3:code.index("\\n];",pos)]
-    return re.findall(r"0x[0-9a-fA-F]{6}", block)
+    masks=re.findall(r"0x[0-9a-fA-F]{6}", code[pos:])
+    return masks[:11*24]
 java_masks=icon_masks(JAVA)
 rust_masks=icon_masks(PREVIEW)
 assert len(java_masks)==len(rust_masks)==264, "Expected 11 24x24 glyphs"
