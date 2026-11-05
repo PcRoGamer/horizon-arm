@@ -49,8 +49,18 @@ jobs:
           cp "$apk" artifacts/horizon-hud-preview-debug.apk
       - name: Capture actual production Canvas quickly with native Skia
         run: |
-          gradle -p packaging/hud-preview testDebugUnitTest --tests dev.horizon.hudpreview.HudCaptureTest --no-daemon --stacktrace
-          find artifacts/hud-native-skia -maxdepth 1 -type f -name '*.png' -print
+          set -euo pipefail
+          # Robolectric sometimes receives transient HTTP errors downloading
+          # its Android 34 instrumented jar on a fresh GitHub runner.
+          for attempt in 1 2 3; do
+            if gradle -p packaging/hud-preview testDebugUnitTest --tests dev.horizon.hudpreview.HudCaptureTest --no-daemon --stacktrace; then
+              find artifacts/hud-native-skia -maxdepth 1 -type f -name '*.png' -print
+              exit 0
+            fi
+            echo "Robolectric attempt $attempt failed; retrying transient download"
+            sleep 5
+          done
+          exit 1
       - name: Retain fast HUD-only renders even if emulator fails
         uses: actions/upload-artifact@v4
         if: always()
@@ -326,6 +336,7 @@ jobs:
           TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
           export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$TOOLCHAIN/x86_64-linux-android28-clang"
           export CC_x86_64_linux_android="$TOOLCHAIN/x86_64-linux-android28-clang"
+          export CXX_x86_64_linux_android="$TOOLCHAIN/x86_64-linux-android28-clang++"
           export AR_x86_64_linux_android="$TOOLCHAIN/llvm-ar"
           cargo build -p horizon-android --target x86_64-linux-android --profile fast
           mkdir -p .local/android/gradle-jni/x86_64
@@ -363,6 +374,7 @@ jobs:
               exit 1
             fi
             adb shell pidof dev.horizon.android || { echo 'App exited before runtime check'; exit 1; }
+            grep -q 'HorizonNative STAGE 00' .local/android/x86-smoke/logcat.txt || { echo 'GameActivity never entered Horizon android_main'; exit 1; }
             echo 'NATIVE_X86_ANDROID_STARTUP_OK'
       - uses: actions/upload-artifact@v4
         if: always()
