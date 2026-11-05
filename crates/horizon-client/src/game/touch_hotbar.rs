@@ -3,10 +3,10 @@
 //! renderer unless the opt-in Windows ARM64 visual debugger is enabled.
 use horizon_client::hud::{HudAtlas, HudBatch, rgba};
 
-pub(super) const MAGNIFICATION: f32 = 1.30;
-pub(super) const BOTTOM_GAP: f32 = 18.0;
+pub(super) const MAGNIFICATION: f32 = 1.36;
+pub(super) const BOTTOM_GAP: f32 = 15.0;
 pub(super) const STAT_LIFT: f32 = 20.0;
-pub(super) const INVENTORY_CAP: f32 = 27.0;
+pub(super) const INVENTORY_CAP: f32 = 20.0;
 
 /// Cap the Bedrock-matched 1.30 magnification at the minimum GUI width.
 /// The 10 GUI-pixel edge clearance remains a hard invariant.
