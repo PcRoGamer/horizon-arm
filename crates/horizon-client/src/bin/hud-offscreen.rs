@@ -7,8 +7,8 @@
 //! HORIZON_TOUCH_PREVIEW=1 cargo run -p horizon-client --bin hud-offscreen \
 //!   -- <resource-root> <output.png> 1200 630
 #![forbid(unsafe_code)]
-use horizon_client::{
-    hud::{HudAtlas, HudBatch, HudVertex},
+use horizon_client_render::{
+    hud::{HudAtlas, HudBatch},
     hud_layout::{self, HotbarInputs},
 };
 use std::{env, error::Error, fs::File, path::Path};
