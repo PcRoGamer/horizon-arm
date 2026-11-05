@@ -59,10 +59,10 @@ fn dpad_geometry(w: f32, h: f32, scale: f32) -> (f32, f32, f32, f32) {
     // physical pixels using the corresponding auto GUI scale.
     let bar_left = w * 0.5 - 91.0 * 1.22;
     let bar_top = h - 15.0 - 22.0 * 1.22;
-    let r = 0.060 * h * scale;
-    let off = 0.132 * h * scale;
+    let r = 0.068 * h * scale;
+    let off = 0.147 * h * scale;
     let cx = (0.11 * w).max(0.23 * h * scale);
-    let mut cy = 0.71 * h;
+    let mut cy = 0.72 * h;
     if cx + r > bar_left - 9.0 {
         cy = cy.min(bar_top - 9.0 - off - r);
     }
