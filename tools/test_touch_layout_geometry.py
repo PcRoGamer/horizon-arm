@@ -47,6 +47,8 @@ for code,expected in (
 
 assert 'control(canvas, inventoryX' not in JAVA, "Floating inventory button resurfaced"
 assert "TouchRole::Button(3) // Native hotbar inventory" in INPUT
+assert "android_dpad_geometry" in INPUT and "dpadGeometry()" in JAVA
+assert "centre sneak key" in INPUT
 assert "((x-left)/(20.0*HOTBAR_SCALE))" in GESTURE.replace(" ",""), "Hotbar hit geometry changed"
 
 def box(x,y,r):
@@ -63,7 +65,7 @@ def layout(w,h,scheme,scale):
     rect_bar=(
         (gw/2-91*mag)*gui,
         (gh-15-22*mag)*gui,
-        (gw/2+91*mag+27*mag)*gui,
+        (gw/2+(91+27)*mag)*gui,
         (gh-15)*gui,
     )
     cap=(
@@ -73,24 +75,32 @@ def layout(w,h,scheme,scale):
         (gh-15)*gui,
     )
     controls={
-      "jump": box(w-.160*h,.72*h,.051*h*scale),
-      "sneak":box(w-.290*h,.73*h,.040*h*scale),
-      "pause":box(.5*w+.045*h,.045*h,.028*h*scale),
-      "chat":box(.5*w-.045*h,.045*h,.028*h*scale),
-      "sprint":box(.11*w+.190*h,(.46 if scheme>=2 else .57)*h,.035*h*scale),
+        "jump":box(w-.160*h,.72*h,.051*h*scale),
+        "pause":box(.5*w+.045*h,.045*h,.028*h*scale),
+        "chat":box(.5*w-.045*h,.045*h,.028*h*scale),
     }
     if scheme & 1:
         controls.update({
-          "attack":box(w-.270*h,.56*h,.042*h*scale),
-          "use":box(w-.145*h,.52*h,.042*h*scale),
+            "attack":box(w-.270*h,.56*h,.042*h*scale),
+            "use":box(w-.145*h,.52*h,.042*h*scale),
         })
-    if scheme<2:
-        controls["joystick"]=box(.11*w,.705*h,.092*h*scale)
+    if scheme < 2:
+        controls.update({
+            "sneak":box(w-.290*h,.73*h,.040*h*scale),
+            "sprint":box(.11*w+.190*h,.57*h,.035*h*scale),
+            "joystick":box(.11*w,.705*h,.092*h*scale),
+        })
     else:
-        center=max(.11*w,.205*h)
-        off=.068*1.48*h*scale
+        off=.132*h*scale
+        r=.060*h*scale
+        cx=max(.11*w,.23*h*scale)
+        cy=.71*h
+        if cx+r > rect_bar[0]-9:
+            cy=min(cy,rect_bar[1]-9-off-r)
+        controls["sprint"]=box(cx+1.55*off,cy-1.45*off,.035*h*scale)
+        controls["sneak"]=box(cx,cy,r)
         for name,dx,dy in [("up",0,-1),("right",1,0),("down",0,1),("left",-1,0)]:
-            controls["dpad_"+name]=box(center+dx*off,.63*h+dy*off,.043*h*scale)
+            controls["dpad_"+name]=box(cx+dx*off,cy+dy*off,r)
     return controls,rect_bar,cap
 
 screens=((800,600),(1280,720),(1280,800),(1600,900),(1600,1200),
