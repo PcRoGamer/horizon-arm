@@ -38,7 +38,7 @@ fn config() -> Option<Config> {
         Some(Config {
             scheme: number("HORIZON_TOUCH_PREVIEW_SCHEME", 1, 0, 3) as u8,
             scale: number("HORIZON_TOUCH_PREVIEW_SCALE", 100, 80, 120) as f32 / 100.0,
-            opacity: number("HORIZON_TOUCH_PREVIEW_OPACITY", 72, 35, 100) as f32 / 100.0,
+            opacity: number("HORIZON_TOUCH_PREVIEW_OPACITY", 35, 35, 100) as f32 / 100.0,
             title: std::env::var("HORIZON_TOUCH_PREVIEW_TITLE").ok().as_deref() == Some("1"),
             always_sprint: std::env::var("HORIZON_TOUCH_PREVIEW_ALWAYS_SPRINT")
                 .ok()
@@ -400,7 +400,7 @@ mod tests {
         let cfg = Config {
             scheme: 3,
             scale: 1.2,
-            opacity: 0.72,
+            opacity: 0.35,
             title: false,
             always_sprint: false,
         };
