@@ -317,7 +317,7 @@ public final class HorizonActivity extends GameActivity {
         }
 
         private int alpha(int rgb, float factor) {
-            return ((Math.round(255 * opacity / 100f * factor) & 0xFF) << 24)
+            return (Math.min(255, Math.max(0, Math.round(255 * opacity / 100f * factor))) << 24)
                     | (rgb & 0xFFFFFF);
         }
 
@@ -382,7 +382,7 @@ public final class HorizonActivity extends GameActivity {
             // 24x24 pixel glyph fits inside the beveled key's face.
             canvas.scale(radius * .062f, radius * .062f);
             canvas.translate(-12f, -12f);
-            color(alpha(0xFF111516, 1f), Paint.Style.FILL, 0);
+            color(alpha(0xFF111516, 1.9f), Paint.Style.FILL, 0);
             paint.setAntiAlias(false);
             canvas.drawPath(pixelPaths[index], paint);
             canvas.restore();
@@ -408,11 +408,11 @@ public final class HorizonActivity extends GameActivity {
             c.translate(Math.round(x), Math.round(y) + (pressed ? r * .028f : 0));
             float edge = Math.max(2f, Math.round(r * .095f));
             float lip = Math.max(1f, Math.round(r * .07f));
-            color(alpha(0xFF080B0D, .96f), Paint.Style.FILL, 0);
+            color(alpha(0xFF080B0D, 1.85f), Paint.Style.FILL, 0);
             c.drawRect(-r, -r + lip, r, r + lip, paint);
-            color(alpha(0xFF131718, 1f), Paint.Style.FILL, 0);
+            color(alpha(0xFF131718, 1.8f), Paint.Style.FILL, 0);
             c.drawRect(-r, -r, r, r, paint);
-            color(alpha(0xFF545B5C, .96f), Paint.Style.FILL, 0);
+            color(alpha(0xFF545B5C, 1.55f), Paint.Style.FILL, 0);
             c.drawRect(-r + edge, -r + edge, r - edge, r - edge, paint);
             int face = pressed && name.equals("sprint") ? 0xFF91B89B
                     : pressed ? 0xFF858F8D : 0xFFA5ABA8;
@@ -422,7 +422,7 @@ public final class HorizonActivity extends GameActivity {
             color(alpha(0xFFDDE0DD, .54f), Paint.Style.FILL, 0);
             c.drawRect(-r + edge, -r + edge,
                     r - edge, -r + edge + Math.max(1f, lip * .75f), paint);
-            color(alpha(0xFF2D3334, .91f), Paint.Style.FILL, 0);
+            color(alpha(0xFF2D3334, 1.55f), Paint.Style.FILL, 0);
             c.drawRect(-r + edge, r - edge * 1.65f, r - edge, r - edge, paint);
             // Keep the icon crisp at both 80% and 120% UI scale.
             glyph(c, name, r);
@@ -453,13 +453,13 @@ public final class HorizonActivity extends GameActivity {
             // A clear movement ring, without the unnecessary nested circles.
             color(alpha(0xFF13171B, .22f), Paint.Style.FILL, 0);
             c.drawCircle(x, y, r, paint);
-            color(alpha(0xFFF4F7F8, .84f), Paint.Style.STROKE, Math.max(2f, r * .041f));
+            color(alpha(0xFFF4F7F8, 2.45f), Paint.Style.STROKE, Math.max(2f, r * .041f));
             c.drawCircle(x, y, r * .95f, paint);
             float tx = x + joyX * r * .70f;
             float ty = y - joyY * r * .70f;
-            color(alpha(0xFF0C0F11, .92f), Paint.Style.FILL, 0);
+            color(alpha(0xFF0C0F11, 1.80f), Paint.Style.FILL, 0);
             c.drawCircle(tx, ty + r * .032f, r * .42f, paint);
-            color(alpha(0xFFE4E9EB, .98f), Paint.Style.FILL, 0);
+            color(alpha(0xFFE4E9EB, 2.15f), Paint.Style.FILL, 0);
             c.drawCircle(tx, ty, r * .36f, paint);
         }
 
