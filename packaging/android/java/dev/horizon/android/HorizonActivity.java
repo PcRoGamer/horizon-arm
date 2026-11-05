@@ -451,10 +451,10 @@ public final class HorizonActivity extends GameActivity {
         // raised Rust hotbar. Shared constants are validated in Python and Rust.
         private float[] dpadGeometry() {
             float w = getWidth(), h = getHeight();
-            float r = .060f * h * scale;
-            float off = .132f * h * scale;
+            float r = .068f * h * scale;
+            float off = .147f * h * scale;
             float cx = Math.max(.11f * w, .23f * h * scale);
-            float cy = .71f * h;
+            float cy = .72f * h;
             int gui = 1;
             while ((int)w / (gui + 1) >= 320 && (int)h / (gui + 1) >= 240) gui++;
             float guiW = (float) Math.ceil(w / gui);
