@@ -57,8 +57,9 @@ pub(super) fn title_enabled() -> bool {
 fn dpad_geometry(w: f32, h: f32, scale: f32) -> (f32, f32, f32, f32) {
     // HudBatch works in GUI pixels; Java computes the same bounds in
     // physical pixels using the corresponding auto GUI scale.
-    let bar_left = w * 0.5 - 91.0 * 1.22;
-    let bar_top = h - 15.0 - 22.0 * 1.22;
+    let hotbar_scale = super::touch_hotbar::magnification(w);
+    let bar_left = w * 0.5 - 91.0 * hotbar_scale;
+    let bar_top = h - 18.0 - 22.0 * hotbar_scale;
     let r = 0.068 * h * scale;
     let off = 0.147 * h * scale;
     let cx = (0.11 * w).max(0.23 * h * scale);
