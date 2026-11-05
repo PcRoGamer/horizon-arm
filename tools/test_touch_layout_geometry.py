@@ -65,7 +65,7 @@ assert 'control(canvas, inventoryX' not in JAVA, "Floating inventory button resu
 assert "TouchRole::Button(3) // Native hotbar inventory" in INPUT
 assert "android_dpad_geometry" in INPUT and "dpadGeometry()" in JAVA
 assert "centre sneak key" in INPUT
-assert "((x-left)/(20.0*HOTBAR_SCALE))" in GESTURE.replace(" ",""), "Hotbar hit geometry changed"
+assert "((x-left)/(20.0*s))" in GESTURE.replace(" ",""), "Adaptive hotbar hit geometry changed"
 
 def box(x,y,r):
     return (x-r,y-r,x+r,y+r)
