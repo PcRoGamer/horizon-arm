@@ -1,7 +1,7 @@
 param(
     [ValidateSet(0,1,2,3)][int]$Scheme = 1,
     [ValidateRange(80,120)][int]$Scale = 100,
-    [ValidateRange(35,100)][int]$Opacity = 72,
+    [ValidateRange(35,100)][int]$Opacity = 35,
     [int]$Width = 1280,
     [int]$Height = 800,
     [string]$Output = 'horizon-hud.png'
