@@ -54,6 +54,21 @@ pub(super) fn title_enabled() -> bool {
     config().is_some_and(|c| c.title)
 }
 
+fn dpad_geometry(w: f32, h: f32, scale: f32) -> (f32, f32, f32, f32) {
+    // HudBatch works in GUI pixels; Java computes the same bounds in
+    // physical pixels using the corresponding auto GUI scale.
+    let bar_left = w * 0.5 - 91.0 * 1.22;
+    let bar_top = h - 15.0 - 22.0 * 1.22;
+    let r = 0.060 * h * scale;
+    let off = 0.132 * h * scale;
+    let cx = (0.11 * w).max(0.23 * h * scale);
+    let mut cy = 0.71 * h;
+    if cx + r > bar_left - 9.0 {
+        cy = cy.min(bar_top - 9.0 - off - r);
+    }
+    (cx, cy, off, r)
+}
+
 pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
     let Some(cfg) = config() else { return };
     let (w, h) = (batch.width, batch.height);
@@ -63,57 +78,33 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
     let mut draw = Painter { batch, atlas, cfg };
     if cfg.scheme < 2 {
         draw.joystick(0.11 * w, 0.705 * h, 0.092 * h * cfg.scale);
+        draw.control(w - 0.290 * h, 0.73 * h, 0.040 * h * cfg.scale, Symbol::Sneak);
+        draw.control(0.11 * w + 0.190 * h, 0.57 * h,
+                     0.035 * h * cfg.scale, Symbol::Sprint);
     } else {
-        let offset = 0.068 * h * cfg.scale * 1.48;
-        let dpad_x = (0.11 * w).max(0.205 * h);
+        let (cx, cy, offset, r) = dpad_geometry(w, h, cfg.scale);
         for (direction, dx, dy) in [
             (Direction::Up, 0.0, -1.0),
             (Direction::Right, 1.0, 0.0),
             (Direction::Down, 0.0, 1.0),
             (Direction::Left, -1.0, 0.0),
         ] {
-            draw.control(
-                dpad_x + dx * offset,
-                0.63 * h + dy * offset,
-                0.043 * h * cfg.scale,
-                Symbol::Arrow(direction),
-            );
+            draw.control(cx + dx * offset, cy + dy * offset, r, Symbol::Arrow(direction));
         }
+        draw.control(cx, cy, r, Symbol::Sneak);
+        draw.control(cx + 1.55 * offset, cy - 1.45 * offset,
+                     0.035 * h * cfg.scale, Symbol::Sprint);
     }
-    // Same normalized centers, radii, and draw order as
-    // HorizonActivity.TouchOverlay.onDraw.
-    // Same physical-height offsets and dimensions as the Android Canvas.
     draw.control(w - 0.160 * h, 0.72 * h, 0.051 * h * cfg.scale, Symbol::Jump);
-    draw.control(
-        w - 0.290 * h,
-        0.73 * h,
-        0.040 * h * cfg.scale,
-        Symbol::Sneak,
-    );
     if cfg.scheme & 1 == 1 {
         draw.control(w - 0.270 * h, 0.56 * h, 0.042 * h * cfg.scale, Symbol::Hit);
         draw.control(w - 0.145 * h, 0.52 * h, 0.042 * h * cfg.scale, Symbol::Use);
     }
-    draw.control(
-        0.11 * w + 0.190 * h,
-        (if cfg.scheme >= 2 { 0.46 } else { 0.57 }) * h,
-        0.035 * h * cfg.scale,
-        Symbol::Sprint,
-    );
-    // The inventory cap is now part of the *real* scaled native hotbar.
-    // A centered top toolbar matches Android's non-intercepting Java overlay.
-    draw.control(
-        0.50 * w - 0.045 * h,
-        0.045 * h,
-        0.028 * h * cfg.scale,
-        Symbol::Chat,
-    );
-    draw.control(
-        0.50 * w + 0.045 * h,
-        0.045 * h,
-        0.028 * h * cfg.scale,
-        Symbol::Pause,
-    );
+    // Native hotbar end-cap is painted by touch_hotbar, not this overlay.
+    draw.control(0.50 * w - 0.045 * h, 0.045 * h,
+                 0.028 * h * cfg.scale, Symbol::Chat);
+    draw.control(0.50 * w + 0.045 * h, 0.045 * h,
+                 0.028 * h * cfg.scale, Symbol::Pause);
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -307,43 +298,40 @@ impl Painter<'_> {
     }
 
     fn control(&mut self, x: f32, y: f32, r: f32, sym: Symbol) {
-        // HorizonActivity.control: dark offset shadow, inner face and rim.
-        let edge = r * 0.075;
-        let corner = r * 0.035;
-        let shadow = self.color(0x101618, 0.82);
+        // Production Android Canvas layers, with square pixel-snapped edges.
+        let edge = (r * 0.095).max(1.0);
+        let lip = (r * 0.07).max(0.5);
+        let shadow = self.color(0x080B0D, 0.96);
+        let border = self.color(0x131718, 1.0);
+        let inner = self.color(0x545B5C, 0.96);
         let face = if matches!(sym, Symbol::Sprint) && self.cfg.always_sprint {
-            self.color(0x93C79B, 0.89)
+            self.color(0x91B89B, 0.88)
         } else {
-            self.color(0xD0D5D3, 0.89)
+            self.color(0xA5ABA8, 0.88)
         };
-        let rim = self.color(0x454A4D, 1.0);
-        self.round_rect(x - r, y - r + edge, 2.0 * r, 2.0 * r, corner, shadow);
-        self.round_rect(
-            x - r + edge,
-            y - r + edge,
-            2.0 * (r - edge),
-            2.0 * (r - edge),
-            corner * 0.55,
-            face,
-        );
-        self.stroke_box(x, y, r - edge * 1.3, r * 0.047, rim);
+        let shine = self.color(0xDDE0DD, 0.54);
+        let bottom = self.color(0x2D3334, 0.91);
+        self.rect(x-r, y-r+lip, 2.0*r, 2.0*r, shadow);
+        self.rect(x-r, y-r, 2.0*r, 2.0*r, border);
+        self.rect(x-r+edge, y-r+edge, 2.0*(r-edge), 2.0*(r-edge), inner);
+        self.rect(x-r+edge, y-r+edge, 2.0*(r-edge),
+                  2.0*r-2.65*edge, face);
+        self.rect(x-r+edge, y-r+edge, 2.0*(r-edge),
+                  lip*0.75, shine);
+        self.rect(x-r+edge, y+r-1.65*edge,
+                  2.0*(r-edge), 0.65*edge, bottom);
         self.glyph(x, y, r, sym);
     }
 
     fn joystick(&mut self, x: f32, y: f32, r: f32) {
-        // HorizonActivity.joystick, neutral native touch state.
-        let disc = self.color(0x33383C, 0.38);
-        let ring = self.color(0xDCE1E5, 0.78);
-        let inner = self.color(0xFFFFFF, 0.22);
+        let disc = self.color(0x13171B, 0.22);
+        let ring = self.color(0xF4F7F8, 0.84);
+        let dark = self.color(0x0C0F11, 0.92);
+        let face = self.color(0xE4E9EB, 0.98);
         self.disc(x, y, r, disc);
-        self.ring(x, y, r * 0.93, r * 0.055, ring);
-        self.ring(x, y, r * 0.67, r * 0.025, inner);
-        let dark = self.color(0x080808, 0.86);
-        let face = self.color(0xC6C9CC, 0.95);
-        let border = self.color(0xF1F1F1, 0.81);
-        self.disc(x, y + r * 0.032, r * 0.42, dark);
-        self.disc(x, y, r * 0.36, face);
-        self.ring(x, y, r * 0.34, r * 0.035, border);
+        self.ring(x, y, r*0.95, r*0.041, ring);
+        self.disc(x, y+r*0.032, r*0.42, dark);
+        self.disc(x, y, r*0.36, face);
     }
 
     // Original 24px glyphs using the exact Java Canvas bitmap masks.
@@ -364,7 +352,7 @@ impl Painter<'_> {
         let pixel = radius * 0.062;
         let x0 = x - 12.0 * pixel;
         let y0 = y - 12.0 * pixel;
-        let ink = self.color(0x232D30, 1.0);
+        let ink = self.color(0x111516, 1.0);
         for (row, bits) in PIXEL_GLYPHS[icon].iter().copied().enumerate() {
             let mut col = 0;
             while col < 24 {
