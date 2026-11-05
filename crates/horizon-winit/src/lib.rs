@@ -191,6 +191,9 @@ fn android_dpad_geometry(width: f64, height: f64, scale: f64) -> (f64, f64, f64,
     let offset = 0.147 * height * scale;
     let cx = (0.11 * width).max(0.23 * height * scale);
     let mut cy = 0.72 * height;
+    if cx + offset + r > bar_left - 9.0 {
+        cy = cy.min(bar_top - 9.0 - r);
+    }
     if cx + r > bar_left - 9.0 {
         cy = cy.min(bar_top - 9.0 - offset - r);
     }
