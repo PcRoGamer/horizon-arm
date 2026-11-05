@@ -48,7 +48,9 @@ pub(super) fn lift_stats(batch: &mut HudBatch, first: usize) {
 /// Scale/raise the real contextual experience bar with the mobile hotbar,
 /// keeping the vanilla GUI draw calls and progression sprites unchanged.
 pub(super) fn transform_experience(batch: &mut HudBatch, first: usize) {
-    if !enabled() { return; }
+    if !enabled() {
+        return;
+    }
     let s = magnification(batch.width);
     let cx = batch.width * 0.5;
     // ExperienceBar.extractBackground emits its sprite at GUI h - 29.
@@ -91,7 +93,9 @@ pub(super) fn anchor_health_to_top(batch: &mut HudBatch, first: usize) {
     for vertex in &mut batch.vertices[first..] {
         let side = usize::from(vertex.pos[0] >= center);
         let [min_x, min_y, max_x] = bounds[side];
-        if !min_x.is_finite() { continue; }
+        if !min_x.is_finite() {
+            continue;
+        }
         vertex.pos[0] = if side == 0 {
             INSET + (vertex.pos[0] - min_x) * STATUS_SCALE
         } else {
@@ -118,22 +122,52 @@ pub(super) fn inventory_cap(batch: &mut HudBatch, atlas: &HudAtlas) {
     // nearly black inset previously used here. The slot-compatible bevel
     // and bottom shadow provide depth without swallowing the icon.
     batch.fill(atlas, x, y, cap, side, rgba(19, 22, 23, 246));
-    batch.fill(atlas, x + 1.0 * s, y + 1.0 * s,
-               cap - 2.0 * s, side - 2.0 * s, rgba(118, 126, 124, 248));
-    batch.fill(atlas, x + 2.5 * s, y + 2.5 * s,
-               cap - 5.0 * s, side - 5.0 * s, rgba(149, 157, 153, 246));
-    batch.fill(atlas, x + 2.5 * s, y + 2.5 * s,
-               cap - 5.0 * s, 1.0 * s, rgba(198, 205, 200, 242));
-    batch.fill(atlas, x + 2.5 * s, y + side - 3.5 * s,
-               cap - 5.0 * s, 1.0 * s, rgba(75, 82, 80, 235));
+    batch.fill(
+        atlas,
+        x + 1.0 * s,
+        y + 1.0 * s,
+        cap - 2.0 * s,
+        side - 2.0 * s,
+        rgba(118, 126, 124, 248),
+    );
+    batch.fill(
+        atlas,
+        x + 2.5 * s,
+        y + 2.5 * s,
+        cap - 5.0 * s,
+        side - 5.0 * s,
+        rgba(149, 157, 153, 246),
+    );
+    batch.fill(
+        atlas,
+        x + 2.5 * s,
+        y + 2.5 * s,
+        cap - 5.0 * s,
+        1.0 * s,
+        rgba(198, 205, 200, 242),
+    );
+    batch.fill(
+        atlas,
+        x + 2.5 * s,
+        y + side - 3.5 * s,
+        cap - 5.0 * s,
+        1.0 * s,
+        rgba(75, 82, 80, 235),
+    );
     let dot = 3.5 * s;
     let gap = 2.5 * s;
     let total = 3.0 * dot + 2.0 * gap;
     let dx = x + (cap - total) * 0.5;
     let dy = y + (side - dot) * 0.5;
     for i in 0..3 {
-        batch.fill(atlas, dx + i as f32 * (dot + gap), dy,
-                   dot, dot, rgba(236, 243, 239, 252));
+        batch.fill(
+            atlas,
+            dx + i as f32 * (dot + gap),
+            dy,
+            dot,
+            dot,
+            rgba(236, 243, 239, 252),
+        );
     }
 }
 

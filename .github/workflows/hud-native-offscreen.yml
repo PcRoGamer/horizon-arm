@@ -215,6 +215,7 @@ jobs:
               raise SystemExit(f'APK unexpectedly bundles Minecraft-owned files: {forbidden[:5]}')
           print(f'APK verified: {apk} ({len(names)} ZIP entries)')
           PY
+          python3 tools/check_android_elf_align.py "$APK"
           cp "$APK" horizon-clean-arm64-debug.apk
       - uses: actions/upload-artifact@v4
         with:
@@ -278,4 +279,96 @@ jobs:
             .local/android/emulator/*.png
             .local/android/emulator/logcat.txt
             .local/android/emulator/activity.txt
+          if-no-files-found: warn
+  # Compare native x86_64 with ARM-translated Android to isolate JNI failures.
+  android-x86-native-smoke:
+    needs: android-arm64
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.95.0
+          targets: x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: android-native-x86-smoke
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - uses: actions/download-artifact@v4
+        with:
+          name: horizon-clean-arm64-debug-apk
+          path: .local/android/arm-artifact
+      - name: Extract Horizon-only engine bundle from compiled ARM artifact
+        run: |
+          mkdir -p .local/android/gradle-assets
+          python3 - <<'PY'
+          import zipfile
+          with zipfile.ZipFile('.local/android/arm-artifact/horizon-clean-arm64-debug.apk') as z:
+              data = z.read('assets/engine-data.zip')
+          with open('.local/android/gradle-assets/engine-data.zip','wb') as f:
+              f.write(data)
+          print('Prepared resource bytes:', len(data))
+          PY
+      - name: Compile actual x86_64 Android native game library
+        run: |
+          set -euo pipefail
+          NDK="$ANDROID_NDK_ROOT"
+          if [[ -z "$NDK" || ! -d "$NDK/toolchains/llvm/prebuilt/linux-x86_64" ]]; then
+            NDK="$(find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 -type d -print | sort -V | tail -n1)"
+          fi
+          TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$TOOLCHAIN/x86_64-linux-android28-clang"
+          export CC_x86_64_linux_android="$TOOLCHAIN/x86_64-linux-android28-clang"
+          export AR_x86_64_linux_android="$TOOLCHAIN/llvm-ar"
+          cargo build -p horizon-android --target x86_64-linux-android --profile fast
+          mkdir -p .local/android/gradle-jni/x86_64
+          cp target/x86_64-linux-android/fast/libhorizon_android.so .local/android/gradle-jni/x86_64/
+          gradle -p packaging/android assembleDebug -Pabi=x86_64 --no-daemon
+          find .local/android -type f -name '*.apk' -print
+          apk="$(find .local/android -type f -name '*.apk' -print -quit)"
+          test -n "$apk"
+          cp "$apk" .local/android/horizon-x86-debug.apk
+      - name: Boot native x86 Android emulator and diagnose JNI startup
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          ram-size: 4096M
+          disable-animations: true
+          emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -gpu swiftshader_indirect
+          script: |
+            set -euo pipefail
+            mkdir -p .local/android/x86-smoke
+            adb install -r .local/android/horizon-x86-debug.apk
+            adb shell settings put system accelerometer_rotation 0
+            adb shell settings put system user_rotation 1
+            adb logcat -c
+            adb shell am start -n dev.horizon.android/.HorizonActivity
+            sleep 8
+            adb logcat -d -v time > .local/android/x86-smoke/logcat.txt
+            adb shell screencap -p /sdcard/horizon-x86.png
+            adb pull /sdcard/horizon-x86.png .local/android/x86-smoke/horizon-x86.png
+            adb shell dumpsys activity activities > .local/android/x86-smoke/activity.txt
+            if grep -q 'Expected an exception after ExceptionCheck' .local/android/x86-smoke/logcat.txt; then
+              echo 'JNI exception-check panic reproduces on native x86_64'
+              exit 1
+            fi
+            adb shell pidof dev.horizon.android || { echo 'App exited before runtime check'; exit 1; }
+            echo 'NATIVE_X86_ANDROID_STARTUP_OK'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: horizon-native-x86-smoke
+          path: |
+            .local/android/x86-smoke/*.png
+            .local/android/x86-smoke/*.txt
           if-no-files-found: warn

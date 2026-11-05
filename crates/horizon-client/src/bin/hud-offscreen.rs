@@ -30,21 +30,36 @@ fn rasterize(batch: &HudBatch, atlas: &HudAtlas, size: [u32; 2]) -> Vec<u8> {
     let atlas_rgba = pixels.as_ref();
     let scale = batch.scale;
     for triangle in batch.vertices.chunks_exact(3) {
-        let vertices: [[f32; 2]; 3] = std::array::from_fn(|i| {
-            [triangle[i].pos[0] * scale, triangle[i].pos[1] * scale]
-        });
+        let vertices: [[f32; 2]; 3] =
+            std::array::from_fn(|i| [triangle[i].pos[0] * scale, triangle[i].pos[1] * scale]);
         let area = edge(vertices[0], vertices[1], vertices[2]);
         if area.abs() < 0.00001 {
             continue;
         }
-        let min_x = (vertices.iter().map(|v| v[0]).fold(f32::INFINITY, f32::min)
-            .floor() as i32).clamp(0, width as i32);
-        let max_x = (vertices.iter().map(|v| v[0]).fold(f32::NEG_INFINITY, f32::max)
-            .ceil() as i32).clamp(0, width as i32);
-        let min_y = (vertices.iter().map(|v| v[1]).fold(f32::INFINITY, f32::min)
-            .floor() as i32).clamp(0, height as i32);
-        let max_y = (vertices.iter().map(|v| v[1]).fold(f32::NEG_INFINITY, f32::max)
-            .ceil() as i32).clamp(0, height as i32);
+        let min_x = (vertices
+            .iter()
+            .map(|v| v[0])
+            .fold(f32::INFINITY, f32::min)
+            .floor() as i32)
+            .clamp(0, width as i32);
+        let max_x = (vertices
+            .iter()
+            .map(|v| v[0])
+            .fold(f32::NEG_INFINITY, f32::max)
+            .ceil() as i32)
+            .clamp(0, width as i32);
+        let min_y = (vertices
+            .iter()
+            .map(|v| v[1])
+            .fold(f32::INFINITY, f32::min)
+            .floor() as i32)
+            .clamp(0, height as i32);
+        let max_y = (vertices
+            .iter()
+            .map(|v| v[1])
+            .fold(f32::NEG_INFINITY, f32::max)
+            .ceil() as i32)
+            .clamp(0, height as i32);
         let tint = triangle[0].color.to_le_bytes(); // HudBatch::rgba -> R,G,B,A
         for y in min_y..max_y {
             for x in min_x..max_x {
@@ -67,8 +82,7 @@ fn rasterize(batch: &HudBatch, atlas: &HudAtlas, size: [u32; 2]) -> Vec<u8> {
                 let ty = ty.clamp(0, atlas.height as i32 - 1) as u32;
                 let src_idx = ((ty * atlas.width + tx) * 4) as usize;
                 let dst_idx = ((y as u32 * width + x as u32) * 4) as usize;
-                let src_a = atlas_rgba[src_idx + 3] as f32 * tint[3] as f32
-                    / (255.0 * 255.0);
+                let src_a = atlas_rgba[src_idx + 3] as f32 * tint[3] as f32 / (255.0 * 255.0);
                 if src_a <= 0.0001 {
                     continue;
                 }
@@ -78,12 +92,11 @@ fn rasterize(batch: &HudBatch, atlas: &HudAtlas, size: [u32; 2]) -> Vec<u8> {
                     continue;
                 }
                 for channel in 0..3 {
-                    let src = atlas_rgba[src_idx + channel] as f32
-                        * tint[channel] as f32 / 255.0;
+                    let src = atlas_rgba[src_idx + channel] as f32 * tint[channel] as f32 / 255.0;
                     let dst = out[dst_idx + channel] as f32;
-                    out[dst_idx + channel] = ((src * src_a
-                        + dst * dst_a * (1.0 - src_a)) / out_a)
-                        .round().clamp(0.0, 255.0) as u8;
+                    out[dst_idx + channel] = ((src * src_a + dst * dst_a * (1.0 - src_a)) / out_a)
+                        .round()
+                        .clamp(0.0, 255.0) as u8;
                 }
                 out[dst_idx + 3] = (out_a * 255.0).round().clamp(0.0, 255.0) as u8;
             }
@@ -110,17 +123,22 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     let atlas = HudAtlas::build(root)?;
     let have_hotbar = atlas.sprites.contains_key("gui/sprites/hud/hotbar");
-    let have_selection = atlas.sprites.contains_key("gui/sprites/hud/hotbar_selection");
+    let have_selection = atlas
+        .sprites
+        .contains_key("gui/sprites/hud/hotbar_selection");
     if !(have_hotbar && have_selection) {
         return Err(format!(
             "Missing real hotbar sprites (bar={have_hotbar}, selection={have_selection}); \
             check the resource root: {}",
             root.display()
-        ).into());
+        )
+        .into());
     }
     let mut batch = HudBatch::new([width, height]);
     let first = batch.vertices.len();
-    let draws = hud_layout::hotbar(batch.width as i32, batch.height as i32,
+    let draws = hud_layout::hotbar(
+        batch.width as i32,
+        batch.height as i32,
         &HotbarInputs {
             selected: 0,
             right_handed: true,
@@ -128,7 +146,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             slots: [None; 9],
             offhand_pop: 0.0,
             attack: None,
-        });
+        },
+    );
     hud_layout::paint(&mut batch, &atlas, &draws);
     touch_hotbar::transform_hotbar(&mut batch, first);
     touch_hotbar::inventory_cap(&mut batch, &atlas);
@@ -146,8 +165,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     writer.write_header()?.write_image_data(&output)?;
     println!(
         "HUD_OFFSCREEN_OK path={} size={}x{} gui={}x{} gui_scale={} vertices={}",
-        path.display(), width, height, batch.width, batch.height,
-        batch.scale, batch.vertices.len()
+        path.display(),
+        width,
+        height,
+        batch.width,
+        batch.height,
+        batch.scale,
+        batch.vertices.len()
     );
     Ok(())
 }

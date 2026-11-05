@@ -94,9 +94,18 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
     let mut draw = Painter { batch, atlas, cfg };
     if cfg.scheme < 2 {
         draw.joystick(0.11 * w, joystick_y(w, h, cfg.scale), 0.092 * h * cfg.scale);
-        draw.control(w - 0.290 * h, 0.73 * h, 0.040 * h * cfg.scale, Symbol::Sneak);
-        draw.control(0.11 * w + 0.190 * h, 0.57 * h,
-                     0.035 * h * cfg.scale, Symbol::Sprint);
+        draw.control(
+            w - 0.290 * h,
+            0.73 * h,
+            0.040 * h * cfg.scale,
+            Symbol::Sneak,
+        );
+        draw.control(
+            0.11 * w + 0.190 * h,
+            0.57 * h,
+            0.035 * h * cfg.scale,
+            Symbol::Sprint,
+        );
     } else {
         let (cx, cy, offset, r) = dpad_geometry(w, h, cfg.scale);
         for (direction, dx, dy) in [
@@ -105,11 +114,20 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
             (Direction::Down, 0.0, 1.0),
             (Direction::Left, -1.0, 0.0),
         ] {
-            draw.control(cx + dx * offset, cy + dy * offset, r, Symbol::Arrow(direction));
+            draw.control(
+                cx + dx * offset,
+                cy + dy * offset,
+                r,
+                Symbol::Arrow(direction),
+            );
         }
         draw.control(cx, cy, r, Symbol::Sneak);
-        draw.control(cx + 1.55 * offset, cy - 1.45 * offset,
-                     0.035 * h * cfg.scale, Symbol::Sprint);
+        draw.control(
+            cx + 1.55 * offset,
+            cy - 1.45 * offset,
+            0.035 * h * cfg.scale,
+            Symbol::Sprint,
+        );
     }
     draw.control(w - 0.160 * h, 0.72 * h, 0.051 * h * cfg.scale, Symbol::Jump);
     if cfg.scheme & 1 == 1 {
@@ -117,10 +135,18 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
         draw.control(w - 0.145 * h, 0.52 * h, 0.042 * h * cfg.scale, Symbol::Use);
     }
     // Native hotbar end-cap is painted by touch_hotbar, not this overlay.
-    draw.control(0.50 * w - 0.045 * h, 0.045 * h,
-                 0.028 * h * cfg.scale, Symbol::Chat);
-    draw.control(0.50 * w + 0.045 * h, 0.045 * h,
-                 0.028 * h * cfg.scale, Symbol::Pause);
+    draw.control(
+        0.50 * w - 0.045 * h,
+        0.045 * h,
+        0.028 * h * cfg.scale,
+        Symbol::Chat,
+    );
+    draw.control(
+        0.50 * w + 0.045 * h,
+        0.045 * h,
+        0.028 * h * cfg.scale,
+        Symbol::Pause,
+    );
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -327,15 +353,36 @@ impl Painter<'_> {
         };
         let shine = self.color(0xDDE0DD, 0.54);
         let bottom = self.color(0x2D3334, 1.55);
-        self.rect(x-r, y-r+lip, 2.0*r, 2.0*r, shadow);
-        self.rect(x-r, y-r, 2.0*r, 2.0*r, border);
-        self.rect(x-r+edge, y-r+edge, 2.0*(r-edge), 2.0*(r-edge), inner);
-        self.rect(x-r+edge, y-r+edge, 2.0*(r-edge),
-                  2.0*r-2.65*edge, face);
-        self.rect(x-r+edge, y-r+edge, 2.0*(r-edge),
-                  lip*0.75, shine);
-        self.rect(x-r+edge, y+r-1.65*edge,
-                  2.0*(r-edge), 0.65*edge, bottom);
+        self.rect(x - r, y - r + lip, 2.0 * r, 2.0 * r, shadow);
+        self.rect(x - r, y - r, 2.0 * r, 2.0 * r, border);
+        self.rect(
+            x - r + edge,
+            y - r + edge,
+            2.0 * (r - edge),
+            2.0 * (r - edge),
+            inner,
+        );
+        self.rect(
+            x - r + edge,
+            y - r + edge,
+            2.0 * (r - edge),
+            2.0 * r - 2.65 * edge,
+            face,
+        );
+        self.rect(
+            x - r + edge,
+            y - r + edge,
+            2.0 * (r - edge),
+            lip * 0.75,
+            shine,
+        );
+        self.rect(
+            x - r + edge,
+            y + r - 1.65 * edge,
+            2.0 * (r - edge),
+            0.65 * edge,
+            bottom,
+        );
         self.glyph(x, y, r, sym);
     }
 
@@ -345,9 +392,9 @@ impl Painter<'_> {
         let dark = self.color(0x0C0F11, 1.80);
         let face = self.color(0xE4E9EB, 2.15);
         self.disc(x, y, r, disc);
-        self.ring(x, y, r*0.95, r*0.041, ring);
-        self.disc(x, y+r*0.032, r*0.42, dark);
-        self.disc(x, y, r*0.36, face);
+        self.ring(x, y, r * 0.95, r * 0.041, ring);
+        self.disc(x, y + r * 0.032, r * 0.42, dark);
+        self.disc(x, y, r * 0.36, face);
     }
 
     // Original 24px glyphs using the exact Java Canvas bitmap masks.

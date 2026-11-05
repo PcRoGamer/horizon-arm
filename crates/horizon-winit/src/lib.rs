@@ -183,7 +183,10 @@ fn android_dpad_geometry(width: f64, height: f64, scale: f64) -> (f64, f64, f64,
     while w / (gui + 1) >= 320 && h / (gui + 1) >= 240 {
         gui += 1;
     }
-    let (gw, gh) = ((width / f64::from(gui)).ceil(), (height / f64::from(gui)).ceil());
+    let (gw, gh) = (
+        (width / f64::from(gui)).ceil(),
+        (height / f64::from(gui)).ceil(),
+    );
     let hotbar_scale = 1.36_f64.min((gw * 0.5 - 10.0) / (91.0 + 20.0));
     let bar_left = (gw * 0.5 - 91.0 * hotbar_scale) * f64::from(gui);
     let bar_top = (gh - 15.0 - 22.0 * hotbar_scale) * f64::from(gui);
@@ -207,7 +210,10 @@ fn android_joystick_y(width: f64, height: f64, scale: f64) -> f64 {
     while w / (gui + 1) >= 320 && h / (gui + 1) >= 240 {
         gui += 1;
     }
-    let (gw, gh) = ((width / f64::from(gui)).ceil(), (height / f64::from(gui)).ceil());
+    let (gw, gh) = (
+        (width / f64::from(gui)).ceil(),
+        (height / f64::from(gui)).ceil(),
+    );
     let mag = 1.36_f64.min((gw * 0.5 - 10.0) / (91.0 + 20.0));
     let bar_left = (gw * 0.5 - 91.0 * mag) * f64::from(gui);
     let bar_top = (gh - 15.0 - 22.0 * mag) * f64::from(gui);
@@ -452,13 +458,18 @@ fn handle_game_touch(t: winit_real::event::Touch) {
         // fractions of screen height so phones and tablets keep square controls.
         let scale = android_touch_scale();
         let dpad = android_touch_dpad();
-        let (dpad_x, dpad_y, dpad_offset, dpad_r) =
-            android_dpad_geometry(width, height, scale);
+        let (dpad_x, dpad_y, dpad_offset, dpad_r) = android_dpad_geometry(width, height, scale);
         let move_x = if dpad { dpad_x / width } else { 0.11 };
-        let move_y = if dpad { dpad_y / height } else { android_joystick_y(width, height, scale) / height };
+        let move_y = if dpad {
+            dpad_y / height
+        } else {
+            android_joystick_y(width, height, scale) / height
+        };
         let sprint_at = if dpad {
-            [(dpad_x + 1.55 * dpad_offset) / width,
-             (dpad_y - 1.45 * dpad_offset) / height]
+            [
+                (dpad_x + 1.55 * dpad_offset) / width,
+                (dpad_y - 1.45 * dpad_offset) / height,
+            ]
         } else {
             [0.11 + 0.190 / aspect, 0.57]
         };
@@ -477,12 +488,7 @@ fn handle_game_touch(t: winit_real::event::Touch) {
             TouchRole::Chat
         } else if near_square(p, [0.5 + 0.045 / aspect, 0.045], 0.028 * scale, aspect) {
             TouchRole::Button(9) // Top-bound pause button.
-        } else if near_square(
-            p,
-            sprint_at,
-            0.035 * scale,
-            aspect,
-        ) {
+        } else if near_square(p, sprint_at, 0.035 * scale, aspect) {
             if !touch
                 .fingers
                 .values()
@@ -492,9 +498,7 @@ fn handle_game_touch(t: winit_real::event::Touch) {
                 sync_sprint(&mut touch);
             }
             TouchRole::SprintToggle
-        } else if dpad && near_square(
-            p, [move_x, move_y], dpad_r / height, aspect,
-        ) {
+        } else if dpad && near_square(p, [move_x, move_y], dpad_r / height, aspect) {
             TouchRole::Button(11) // Bedrock D-pad's centre sneak key
         } else if near(
             p,
@@ -547,8 +551,16 @@ fn handle_game_touch(t: winit_real::event::Touch) {
             let scale = android_touch_scale();
             let (dpad_x, dpad_y, _, _) = android_dpad_geometry(width, height, scale);
             let radius = height * (if android_touch_dpad() { 0.136 } else { 0.092 }) * scale;
-            let center_x = if android_touch_dpad() { dpad_x } else { width * 0.11 };
-            let center_y = if android_touch_dpad() { dpad_y } else { android_joystick_y(width, height, scale) };
+            let center_x = if android_touch_dpad() {
+                dpad_x
+            } else {
+                width * 0.11
+            };
+            let center_y = if android_touch_dpad() {
+                dpad_y
+            } else {
+                android_joystick_y(width, height, scale)
+            };
             let dx = (t.location.x - center_x) / radius;
             let dy = (t.location.y - center_y) / radius;
             if android_touch_dpad() {
