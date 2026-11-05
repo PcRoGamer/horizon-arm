@@ -89,7 +89,7 @@ public final class HorizonActivity extends GameActivity {
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         scheme = Math.max(0, Math.min(3, prefs.getInt("scheme", 0)));
         controlScale = Math.max(80, Math.min(120, prefs.getInt("scale", 100)));
-        opacity = Math.max(35, Math.min(100, prefs.getInt("opacity", 72)));
+        opacity = Math.max(35, Math.min(100, prefs.getInt("opacity", 35)));
         alwaysSprint = prefs.getBoolean("always_sprint", false);
 
         overlay = new TouchOverlay();
@@ -231,7 +231,7 @@ public final class HorizonActivity extends GameActivity {
                 .setNegativeButton("Cancel", null)
                 .setNeutralButton("Reset", (d, w) -> {
                     controlScale = 100;
-                    opacity = 72;
+                    opacity = 35;
                     alwaysSprint = false;
                     saveControls();
                 })
@@ -296,7 +296,7 @@ public final class HorizonActivity extends GameActivity {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         boolean menu = true;
         int scheme = 0;
-        int opacity = 72;
+        int opacity = 35;
         float scale = 1f;
         int buttons = 0;
         float joyX, joyY;
