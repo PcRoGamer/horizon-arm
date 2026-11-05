@@ -64,6 +64,9 @@ fn dpad_geometry(w: f32, h: f32, scale: f32) -> (f32, f32, f32, f32) {
     let off = 0.147 * h * scale;
     let cx = (0.11 * w).max(0.23 * h * scale);
     let mut cy = 0.72 * h;
+    if cx + off + r > bar_left - 9.0 {
+        cy = cy.min(bar_top - 9.0 - r);
+    }
     if cx + r > bar_left - 9.0 {
         cy = cy.min(bar_top - 9.0 - off - r);
     }
