@@ -437,9 +437,9 @@ public final class HorizonActivity extends GameActivity {
             while ((int)w / (gui + 1) >= 320 && (int)h / (gui + 1) >= 240) gui++;
             float gw = (float) Math.ceil(w / gui);
             float gh = (float) Math.ceil(h / gui);
-            float barScale = Math.min(1.30f, (gw * .5f - 10f) / (91f + 27f));
+            float barScale = Math.min(1.36f, (gw * .5f - 10f) / (91f + 20f));
             float barLeft = (gw * .5f - 91f * barScale) * gui;
-            float barTop = (gh - 18f - 22f * barScale) * gui;
+            float barTop = (gh - 15f - 22f * barScale) * gui;
             if (.11f * w + r > barLeft - 9f)
                 y = Math.min(y, barTop - 9f - r);
             return y;
@@ -476,9 +476,9 @@ public final class HorizonActivity extends GameActivity {
             float guiW = (float) Math.ceil(w / gui);
             float guiH = (float) Math.ceil(h / gui);
             // Exactly the same 10-GUI-pixel hotbar edge clamp as Rust.
-            float hotbarScale = Math.min(1.30f, (guiW * .5f - 10f) / (91f + 27f));
+            float hotbarScale = Math.min(1.36f, (guiW * .5f - 10f) / (91f + 20f));
             float barLeft = (guiW * .5f - 91f * hotbarScale) * gui;
-            float barTop = (guiH - 18f - 22f * hotbarScale) * gui;
+            float barTop = (guiH - 15f - 22f * hotbarScale) * gui;
             if (cx + off + r > barLeft - 9f) cy = Math.min(cy, barTop - 9f - r);
             if (cx + r > barLeft - 9f) cy = Math.min(cy, barTop - 9f - off - r);
             return new float[] {cx, cy, off, r};
