@@ -37,12 +37,12 @@ NATIVE=read("crates/horizon-client/src/android_main.rs")
 PAD=read("crates/horizon-client/src/game/pad.rs")
 GAME=read("crates/horizon-client/src/game.rs")
 for code,expected in (
-    (HOTBAR,("pub(super) const MAGNIFICATION: f32 = 1.22;",
-             "pub(super) const BOTTOM_GAP: f32 = 15.0;",
+    (HOTBAR,("pub(super) const MAGNIFICATION: f32 = 1.30;",
+             "pub(super) const BOTTOM_GAP: f32 = 18.0;",
              "pub(super) const INVENTORY_CAP: f32 = 27.0;",
              "transform_hotbar", "inventory_cap")),
-    (GESTURE,("pub const HOTBAR_SCALE: f32 = 1.22;",
-              "pub const HOTBAR_BOTTOM: f32 = 15.0;",
+    (GESTURE,("pub const HOTBAR_SCALE: f32 = 1.30;",
+              "pub const HOTBAR_BOTTOM: f32 = 18.0;",
               "pub const INVENTORY_CAP: f32 = 27.0;",
               "pub fn hotbar_inventory", "pub fn hotbar_slot")),
     (GAME,("touch_hotbar::transform_hotbar","touch_hotbar::inventory_cap",
@@ -77,18 +77,18 @@ def layout(w,h,scheme,scale):
     gui=1
     while w//(gui+1)>=320 and h//(gui+1)>=240: gui+=1
     gw,gh=math.ceil(w/gui),math.ceil(h/gui)
-    mag=1.22
+    mag=min(1.30,(gw/2-10.0)/(91+27))
     rect_bar=(
         (gw/2-91*mag)*gui,
-        (gh-15-22*mag)*gui,
+        (gh-18-22*mag)*gui,
         (gw/2+(91+27)*mag)*gui,
-        (gh-15)*gui,
+        (gh-18)*gui,
     )
     cap=(
         (gw/2+91*mag-1)*gui,
-        (gh-15-22*mag)*gui,
+        (gh-18-22*mag)*gui,
         (gw/2+91*mag-1+27*mag)*gui,
-        (gh-15)*gui,
+        (gh-18)*gui,
     )
     controls={
         "jump":box(w-.160*h,.72*h,.051*h*scale),
