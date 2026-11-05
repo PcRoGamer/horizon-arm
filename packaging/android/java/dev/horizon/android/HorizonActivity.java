@@ -382,7 +382,7 @@ public final class HorizonActivity extends GameActivity {
             // 24x24 pixel glyph fits inside the beveled key's face.
             canvas.scale(radius * .062f, radius * .062f);
             canvas.translate(-12f, -12f);
-            color(alpha(0xFF232D30, 1f), Paint.Style.FILL, 0);
+            color(alpha(0xFF111516, 1f), Paint.Style.FILL, 0);
             paint.setAntiAlias(false);
             canvas.drawPath(pixelPaths[index], paint);
             canvas.restore();
@@ -396,8 +396,6 @@ public final class HorizonActivity extends GameActivity {
                     && (buttons & ((1 << 26) | (1 << 27))) != 0)
                     || (name.equals("jump") && (buttons & 1) != 0)
                     || (name.equals("sneak") && (buttons & (1 << 11)) != 0)
-                    || (name.equals("sprint") && (buttons & (1 << 10)) != 0)
-                    || (name.equals("inventory") && (buttons & (1 << 3)) != 0)
                     || (name.equals("pause") && (buttons & (1 << 9)) != 0)
                     || (name.equals("hit") && (buttons & (1 << 25)) != 0)
                     || (name.equals("use") && (buttons & (1 << 24)) != 0)
@@ -406,22 +404,27 @@ public final class HorizonActivity extends GameActivity {
                     || (name.equals("down") && joyY < -.28f)
                     || (name.equals("left") && joyX < -.28f);
             c.save();
-            c.translate(x, y + (pressed ? r * .035f : 0));
-            // Flat, compact, high-contrast Minecraft-style touch key.
-            float corner = r * .035f;
-            float edge = r * .075f;
-            color(alpha(0xFF101618, .82f), Paint.Style.FILL, 0);
-            c.drawRoundRect(new RectF(-r, -r + edge, r, r + edge),
-                    corner, corner, paint);
-            color(alpha(pressed && name.equals("sprint")
-                    ? 0xFF93C79B : pressed ? 0xFF88949B : 0xFFD0D5D3, .89f),
-                    Paint.Style.FILL, 0);
-            c.drawRoundRect(new RectF(-r + edge, -r + edge,
-                    r - edge, r - edge), corner * .55f, corner * .55f, paint);
-            color(alpha(pressed ? 0xFF171C20 : 0xFF454A4D, 1f),
-                    Paint.Style.STROKE, r * .047f);
-            c.drawRect(-r + edge * 1.3f, -r + edge * 1.3f,
-                    r - edge * 1.3f, r - edge * 1.3f, paint);
+            // Square, pixel-snapped Minecraft-style bevel, never rounded mobile UI.
+            c.translate(Math.round(x), Math.round(y) + (pressed ? r * .028f : 0));
+            float edge = Math.max(2f, Math.round(r * .095f));
+            float lip = Math.max(1f, Math.round(r * .07f));
+            color(alpha(0xFF080B0D, .96f), Paint.Style.FILL, 0);
+            c.drawRect(-r, -r + lip, r, r + lip, paint);
+            color(alpha(0xFF131718, 1f), Paint.Style.FILL, 0);
+            c.drawRect(-r, -r, r, r, paint);
+            color(alpha(0xFF545B5C, .96f), Paint.Style.FILL, 0);
+            c.drawRect(-r + edge, -r + edge, r - edge, r - edge, paint);
+            int face = pressed && name.equals("sprint") ? 0xFF91B89B
+                    : pressed ? 0xFF858F8D : 0xFFA5ABA8;
+            color(alpha(face, .88f), Paint.Style.FILL, 0);
+            c.drawRect(-r + edge, -r + edge,
+                    r - edge, r - edge * 1.65f, paint);
+            color(alpha(0xFFDDE0DD, .54f), Paint.Style.FILL, 0);
+            c.drawRect(-r + edge, -r + edge,
+                    r - edge, -r + edge + Math.max(1f, lip * .75f), paint);
+            color(alpha(0xFF2D3334, .91f), Paint.Style.FILL, 0);
+            c.drawRect(-r + edge, r - edge * 1.65f, r - edge, r - edge, paint);
+            // Keep the icon crisp at both 80% and 120% UI scale.
             glyph(c, name, r);
             c.restore();
         }
@@ -431,56 +434,67 @@ public final class HorizonActivity extends GameActivity {
             float x = .11f * getWidth();
             float y = .705f * h;
             float r = .092f * h * scale;
-            color(alpha(0xFF33383C, .38f), Paint.Style.FILL, 0);
+            // A clear movement ring, without the unnecessary nested circles.
+            color(alpha(0xFF13171B, .22f), Paint.Style.FILL, 0);
             c.drawCircle(x, y, r, paint);
-            color(alpha(0xFFDCE1E5, .78f), Paint.Style.STROKE, r * .055f);
-            c.drawCircle(x, y, r * .93f, paint);
-            color(alpha(0xFFFFFFFF, .22f), Paint.Style.STROKE, r * .025f);
-            c.drawCircle(x, y, r * .67f, paint);
+            color(alpha(0xFFF4F7F8, .84f), Paint.Style.STROKE, Math.max(2f, r * .041f));
+            c.drawCircle(x, y, r * .95f, paint);
             float tx = x + joyX * r * .70f;
             float ty = y - joyY * r * .70f;
-            color(alpha(0xFF080808, .86f), Paint.Style.FILL, 0);
+            color(alpha(0xFF0C0F11, .92f), Paint.Style.FILL, 0);
             c.drawCircle(tx, ty + r * .032f, r * .42f, paint);
-            color(alpha(0xFFC6C9CC, .95f), Paint.Style.FILL, 0);
+            color(alpha(0xFFE4E9EB, .98f), Paint.Style.FILL, 0);
             c.drawCircle(tx, ty, r * .36f, paint);
-            color(alpha(0xFFF1F1F1, .81f), Paint.Style.STROKE, r * .035f);
-            c.drawCircle(tx, ty, r * .34f, paint);
+        }
+
+        // The D-pad adapts to tablet widths without colliding with the genuine
+        // raised Rust hotbar. Shared constants are validated in Python and Rust.
+        private float[] dpadGeometry() {
+            float w = getWidth(), h = getHeight();
+            float r = .060f * h * scale;
+            float off = .132f * h * scale;
+            float cx = Math.max(.11f * w, .23f * h * scale);
+            float cy = .71f * h;
+            int gui = 1;
+            while ((int)w / (gui + 1) >= 320 && (int)h / (gui + 1) >= 240) gui++;
+            float guiW = (float) Math.ceil(w / gui);
+            float guiH = (float) Math.ceil(h / gui);
+            float barLeft = (guiW * .5f - 91f * 1.22f) * gui;
+            float barTop = (guiH - 15f - 22f * 1.22f) * gui;
+            if (cx + r > barLeft - 9f) cy = Math.min(cy, barTop - 9f - off - r);
+            return new float[] {cx, cy, off, r};
         }
 
         @Override protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
             if (menu || getWidth() < 1 || getHeight() < 1) return;
+            float h = getHeight();
+            float aspect = getWidth() / h;
             if (scheme < 2) {
                 joystick(canvas);
+                control(canvas, 1f - .290f / aspect, .73f, .040f, "sneak");
+                control(canvas, .11f + .190f / aspect, .57f, .035f, "sprint");
             } else {
-                // D-pad's four independent visual keys share one virtual-stick
-                // hit region; Rust quantizes movement into directional axes.
-                float unit = .068f * getHeight() * scale;
-                // A height-based inset prevents clipping on 4:3 tablets
-                // when controls are scaled up to 120%.
-                float centerX = Math.max(.11f * getWidth(), .205f * getHeight());
-                float centerY = .63f * getHeight();
+                float[] dpad = dpadGeometry();
+                float cx = dpad[0], cy = dpad[1], off = dpad[2], r = dpad[3];
                 String[] directions = {"up", "right", "down", "left"};
                 float[][] vectors = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}};
                 for (int i = 0; i < 4; ++i) {
-                    float xx = centerX + vectors[i][0] * unit * 1.48f;
-                    float yy = centerY + vectors[i][1] * unit * 1.48f;
-                    control(canvas, xx / getWidth(), yy / getHeight(),
-                            .043f, directions[i]);
+                    float xx = cx + vectors[i][0] * off;
+                    float yy = cy + vectors[i][1] * off;
+                    control(canvas, xx / getWidth(), yy / h, r / (h * scale), directions[i]);
                 }
+                // Bedrock's fifth D-pad key: crouch occupies the neutral centre.
+                control(canvas, cx / getWidth(), cy / h, r / (h * scale), "sneak");
+                control(canvas, (cx + 1.55f * off) / getWidth(),
+                        (cy - 1.45f * off) / h, .035f, "sprint");
             }
-            // Physical-height offsets keep the right-hand cluster coherent
-            // on tablets, tall phones, and ultra-wide landscape displays.
-            float aspect = getWidth() / (float) getHeight();
             control(canvas, 1f - .160f / aspect, .72f, .051f, "jump");
-            control(canvas, 1f - .290f / aspect, .73f, .040f, "sneak");
             if ((scheme & 1) == 1) {
                 control(canvas, 1f - .270f / aspect, .56f, .042f, "hit");
                 control(canvas, 1f - .145f / aspect, .52f, .042f, "use");
             }
-            control(canvas, .11f + .190f / aspect, scheme >= 2 ? .46f : .57f, .035f, "sprint");
-            // Inventory is rendered as an attached hotbar end-cap by the
-            // *native game HUD*, not as a floating Java overlay key.
+            // Inventory is the genuine Rust hotbar end-cap, not a floating key.
             control(canvas, .5f - .045f / aspect, .045f, .028f, "chat");
             control(canvas, .5f + .045f / aspect, .045f, .028f, "pause");
         }
