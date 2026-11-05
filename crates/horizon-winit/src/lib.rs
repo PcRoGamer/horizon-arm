@@ -201,6 +201,25 @@ fn android_dpad_geometry(width: f64, height: f64, scale: f64) -> (f64, f64, f64,
 }
 
 #[cfg(target_os = "android")]
+fn android_joystick_y(width: f64, height: f64, scale: f64) -> f64 {
+    let (w, h) = (width as u32, height as u32);
+    let mut gui = 1u32;
+    while w / (gui + 1) >= 320 && h / (gui + 1) >= 240 {
+        gui += 1;
+    }
+    let (gw, gh) = ((width / f64::from(gui)).ceil(), (height / f64::from(gui)).ceil());
+    let mag = 1.30_f64.min((gw * 0.5 - 10.0) / (91.0 + 27.0));
+    let bar_left = (gw * 0.5 - 91.0 * mag) * f64::from(gui);
+    let bar_top = (gh - 18.0 - 22.0 * mag) * f64::from(gui);
+    let radius = 0.092 * height * scale;
+    let mut y = 0.705 * height;
+    if 0.11 * width + radius > bar_left - 9.0 {
+        y = y.min(bar_top - 9.0 - radius);
+    }
+    y
+}
+
+#[cfg(target_os = "android")]
 fn android_touch_scale() -> f64 {
     f64::from(TOUCH_SCALE.load(Ordering::Relaxed)) / 100.0
 }
@@ -436,7 +455,7 @@ fn handle_game_touch(t: winit_real::event::Touch) {
         let (dpad_x, dpad_y, dpad_offset, dpad_r) =
             android_dpad_geometry(width, height, scale);
         let move_x = if dpad { dpad_x / width } else { 0.11 };
-        let move_y = if dpad { dpad_y / height } else { 0.705 };
+        let move_y = if dpad { dpad_y / height } else { android_joystick_y(width, height, scale) / height };
         let sprint_at = if dpad {
             [(dpad_x + 1.55 * dpad_offset) / width,
              (dpad_y - 1.45 * dpad_offset) / height]
@@ -529,7 +548,7 @@ fn handle_game_touch(t: winit_real::event::Touch) {
             let (dpad_x, dpad_y, _, _) = android_dpad_geometry(width, height, scale);
             let radius = height * (if android_touch_dpad() { 0.136 } else { 0.092 }) * scale;
             let center_x = if android_touch_dpad() { dpad_x } else { width * 0.11 };
-            let center_y = if android_touch_dpad() { dpad_y } else { height * 0.705 };
+            let center_y = if android_touch_dpad() { dpad_y } else { android_joystick_y(width, height, scale) };
             let dx = (t.location.x - center_x) / radius;
             let dy = (t.location.y - center_y) / radius;
             if android_touch_dpad() {
