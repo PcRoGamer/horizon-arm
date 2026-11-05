@@ -101,10 +101,14 @@ def layout(w,h,scheme,scale):
             "use":box(w-.145*h,.52*h,.042*h*scale),
         })
     if scheme < 2:
+        joystick_r=.092*h*scale
+        joystick_y=.705*h
+        if .11*w+joystick_r > rect_bar[0]-9:
+            joystick_y=min(joystick_y,rect_bar[1]-9-joystick_r)
         controls.update({
             "sneak":box(w-.290*h,.73*h,.040*h*scale),
             "sprint":box(.11*w+.190*h,.57*h,.035*h*scale),
-            "joystick":box(.11*w,.705*h,.092*h*scale),
+            "joystick":box(.11*w,joystick_y,joystick_r),
         })
     else:
         off=.147*h*scale
