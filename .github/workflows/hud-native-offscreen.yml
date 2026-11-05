@@ -23,6 +23,12 @@ jobs:
         run: |
           python3 tools/extract_horizon_overlay.py --source packaging/android/java/dev/horizon/android/HorizonActivity.java --output packaging/hud-preview/build/generated/horizon/java/dev/horizon/hudpreview/HudPreviewOverlay.java
           gradle -p packaging/hud-preview assembleDebug --no-daemon --stacktrace
+          echo 'Built APK candidates:'
+          find . -type f -name '*debug*.apk' -print
+          apk=$(find . -type f -name '*debug*.apk' -print -quit)
+          test -n "$apk"
+          mkdir -p artifacts
+          cp "$apk" artifacts/horizon-hud-preview-debug.apk
       - name: Render production Canvas on headless Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -36,7 +42,7 @@ jobs:
           script: |
             set -e
             mkdir -p artifacts
-            adb install -r packaging/hud-preview/build/outputs/apk/debug/hud-preview-debug.apk
+            adb install -r artifacts/horizon-hud-preview-debug.apk
             adb shell wm size 1280x800
             adb shell wm density 240
             adb shell am start -n dev.horizon.hudpreview/.HudPreviewActivity --ei scheme 1 --ei scale 100 --ei opacity 72
@@ -50,5 +56,7 @@ jobs:
         if: always()
         with:
           name: native-horizon-hud-captures
-          path: artifacts/*.png
+          path: |
+            artifacts/*.png
+            artifacts/*.apk
           if-no-files-found: warn
