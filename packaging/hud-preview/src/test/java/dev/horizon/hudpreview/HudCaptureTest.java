@@ -61,6 +61,23 @@ public class HudCaptureTest {
                 System.out.println("HUD_NATIVE_SKIA_CAPTURE " + output.getAbsolutePath()
                     + " bytes=" + output.length() + " pixels=" + nonTransparent);
                 bitmap.recycle();
+                // Pixel-level optimisation against the supplied Bedrock capture:
+                // capture *the real Android Canvas* at controlled opacity values.
+                if (width == 1200 && height == 630 && scheme == 2) {
+                    for (int opacity : new int[] {40, 50, 60, 85}) {
+                        overlay.opacity = opacity;
+                        Bitmap candidate = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+                        candidate.eraseColor(Color.TRANSPARENT);
+                        overlay.draw(new Canvas(candidate));
+                        File variant = new File(dir, "dpad-tap-opacity" + opacity
+                                + "-" + width + "x" + height + ".png");
+                        try (FileOutputStream stream = new FileOutputStream(variant)) {
+                            assertTrue(candidate.compress(Bitmap.CompressFormat.PNG, 100, stream));
+                        }
+                        assertTrue(variant.length() > 1000);
+                        candidate.recycle();
+                    }
+                }
             }
         }
     }
