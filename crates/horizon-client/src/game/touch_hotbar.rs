@@ -45,6 +45,21 @@ pub(super) fn lift_stats(batch: &mut HudBatch, first: usize) {
     }
 }
 
+/// Scale/raise the real contextual experience bar with the mobile hotbar,
+/// keeping the vanilla GUI draw calls and progression sprites unchanged.
+pub(super) fn transform_experience(batch: &mut HudBatch, first: usize) {
+    if !enabled() { return; }
+    let s = magnification(batch.width);
+    let cx = batch.width * 0.5;
+    // ExperienceBar.extractBackground emits its sprite at GUI h - 29.
+    let original_top = batch.height - 29.0;
+    let target_top = batch.height - BOTTOM_GAP - 22.0 * s - 9.0;
+    for vertex in &mut batch.vertices[first..] {
+        vertex.pos[0] = cx + (vertex.pos[0] - cx) * s;
+        vertex.pos[1] = target_top + (vertex.pos[1] - original_top) * s;
+    }
+}
+
 /// Bedrock's survival HUD uses opposite TOP corners for health/armour and
 /// hunger/air rather than Java's rows above the item hotbar.
 ///
