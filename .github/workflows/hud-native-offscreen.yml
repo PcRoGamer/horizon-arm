@@ -23,7 +23,7 @@ jobs:
       - name: Verify native mobile layout and icon parity
         run: python3 tools/test_touch_layout_geometry.py
       - name: Type-check genuine Rust atlas renderer without game startup
-        run: cargo check --locked --no-default-features -p horizon-client --bin hud-offscreen
+        run: cargo check --no-default-features -p horizon-client --bin hud-offscreen
 
   render-production-canvas:
     runs-on: ubuntu-latest
