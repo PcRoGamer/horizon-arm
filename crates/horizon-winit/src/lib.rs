@@ -186,10 +186,10 @@ fn android_dpad_geometry(width: f64, height: f64, scale: f64) -> (f64, f64, f64,
     let (gw, gh) = ((width / f64::from(gui)).ceil(), (height / f64::from(gui)).ceil());
     let bar_left = (gw * 0.5 - 91.0 * 1.22) * f64::from(gui);
     let bar_top = (gh - 15.0 - 22.0 * 1.22) * f64::from(gui);
-    let r = 0.060 * height * scale;
-    let offset = 0.132 * height * scale;
+    let r = 0.068 * height * scale;
+    let offset = 0.147 * height * scale;
     let cx = (0.11 * width).max(0.23 * height * scale);
-    let mut cy = 0.71 * height;
+    let mut cy = 0.72 * height;
     if cx + r > bar_left - 9.0 {
         cy = cy.min(bar_top - 9.0 - offset - r);
     }
