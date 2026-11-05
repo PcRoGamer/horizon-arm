@@ -29,6 +29,17 @@ jobs:
           test -n "$apk"
           mkdir -p artifacts
           cp "$apk" artifacts/horizon-hud-preview-debug.apk
+      - name: Capture actual production Canvas quickly with native Skia
+        run: |
+          gradle -p packaging/hud-preview testDebugUnitTest --tests dev.horizon.hudpreview.HudCaptureTest --no-daemon --stacktrace
+          find artifacts/hud-native-skia -maxdepth 1 -type f -name '*.png' -print
+      - name: Retain fast HUD-only renders even if emulator fails
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: horizon-hud-native-skia
+          path: artifacts/hud-native-skia/*.png
+          if-no-files-found: warn
       - name: Render production Canvas on headless Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
