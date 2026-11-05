@@ -459,8 +459,10 @@ public final class HorizonActivity extends GameActivity {
             while ((int)w / (gui + 1) >= 320 && (int)h / (gui + 1) >= 240) gui++;
             float guiW = (float) Math.ceil(w / gui);
             float guiH = (float) Math.ceil(h / gui);
-            float barLeft = (guiW * .5f - 91f * 1.22f) * gui;
-            float barTop = (guiH - 15f - 22f * 1.22f) * gui;
+            // Exactly the same 10-GUI-pixel hotbar edge clamp as Rust.
+            float hotbarScale = Math.min(1.30f, (guiW * .5f - 10f) / (91f + 27f));
+            float barLeft = (guiW * .5f - 91f * hotbarScale) * gui;
+            float barTop = (guiH - 18f - 22f * hotbarScale) * gui;
             if (cx + r > barLeft - 9f) cy = Math.min(cy, barTop - 9f - off - r);
             return new float[] {cx, cy, off, r};
         }
