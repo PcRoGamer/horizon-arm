@@ -56,11 +56,11 @@ def render(resources, width, height, selected=0):
     if width < 320 or height < 240 or selected not in range(9):
         raise ValueError("Invalid viewport or slot")
     config = constants()
-    mag = config["MAGNIFICATION"]
     bottom = config["BOTTOM_GAP"]
     cap_width = config["INVENTORY_CAP"]
     gui = gui_scale(width, height)
     gw, gh = math.ceil(width / gui), math.ceil(height / gui)
+    mag = min(config["MAGNIFICATION"], (gw * .5 - 10.0) / (91.0 + cap_width))
     cx = gw * .5
     center = gw // 2
     base = gh - bottom
