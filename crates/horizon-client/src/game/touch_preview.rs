@@ -73,6 +73,18 @@ fn dpad_geometry(w: f32, h: f32, scale: f32) -> (f32, f32, f32, f32) {
     (cx, cy, off, r)
 }
 
+fn joystick_y(w: f32, h: f32, scale: f32) -> f32 {
+    let r = 0.092 * h * scale;
+    let mag = super::touch_hotbar::magnification(w);
+    let bar_left = w * 0.5 - 91.0 * mag;
+    let bar_top = h - 18.0 - 22.0 * mag;
+    let mut y = 0.705 * h;
+    if 0.11 * w + r > bar_left - 9.0 {
+        y = y.min(bar_top - 9.0 - r);
+    }
+    y
+}
+
 pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
     let Some(cfg) = config() else { return };
     let (w, h) = (batch.width, batch.height);
@@ -81,7 +93,7 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
     }
     let mut draw = Painter { batch, atlas, cfg };
     if cfg.scheme < 2 {
-        draw.joystick(0.11 * w, 0.705 * h, 0.092 * h * cfg.scale);
+        draw.joystick(0.11 * w, joystick_y(w, h, cfg.scale), 0.092 * h * cfg.scale);
         draw.control(w - 0.290 * h, 0.73 * h, 0.040 * h * cfg.scale, Symbol::Sneak);
         draw.control(0.11 * w + 0.190 * h, 0.57 * h,
                      0.035 * h * cfg.scale, Symbol::Sprint);
