@@ -46,36 +46,26 @@ pub(super) fn inventory_cap(batch: &mut HudBatch, atlas: &HudAtlas) {
     }
     let s = MAGNIFICATION;
     let side = 22.0 * s;
+    let cap = INVENTORY_CAP * s;
     let x = batch.width * 0.5 + 91.0 * s - 1.0;
     let y = batch.height - BOTTOM_GAP - side;
-    // Solid shared edge and three-step Minecraft pixel bevel.
-    batch.fill(atlas, x, y, INVENTORY_CAP * s, side, rgba(17, 20, 22, 235));
-    batch.fill(
-        atlas,
-        x + 2.0,
-        y + 2.0,
-        INVENTORY_CAP * s - 4.0,
-        side - 4.0,
-        rgba(92, 98, 100, 230),
-    );
-    batch.fill(
-        atlas,
-        x + 4.0,
-        y + 4.0,
-        INVENTORY_CAP * s - 8.0,
-        side - 8.0,
-        rgba(174, 183, 182, 242),
-    );
-    let unit = (side * 0.095).max(1.0);
-    let ix = x + (INVENTORY_CAP * s - 5.0 * unit) * 0.5;
-    let iy = y + (side - 5.0 * unit) * 0.5;
-    // Nine inventory slots as a sharp, reproducible, resolution-independent icon.
-    for row in 0..3 {
-        for col in 0..3 {
-            let px = ix + col as f32 * (unit * 1.6);
-            let py = iy + row as f32 * (unit * 1.6);
-            batch.fill(atlas, px, py, unit * 1.2, unit * 1.2, rgba(31, 39, 42, 255));
-        }
+    // Bedrock-style ellipsis is a muted extension of the hotbar, not an
+    // independently raised 3x3 app-grid button.
+    batch.fill(atlas, x, y, cap, side, rgba(11, 15, 16, 231));
+    batch.fill(atlas, x + 1.5 * s, y + 1.5 * s,
+               cap - 3.0 * s, side - 3.0 * s, rgba(57, 63, 64, 203));
+    batch.fill(atlas, x + 2.5 * s, y + 2.5 * s,
+               cap - 5.0 * s, side - 5.0 * s, rgba(102, 108, 106, 119));
+    batch.fill(atlas, x + 2.5 * s, y + side - 3.3 * s,
+               cap - 5.0 * s, 0.8 * s, rgba(29, 34, 36, 226));
+    let dot = 3.5 * s;
+    let gap = 2.5 * s;
+    let total = 3.0 * dot + 2.0 * gap;
+    let dx = x + (cap - total) * 0.5;
+    let dy = y + (side - dot) * 0.5;
+    for i in 0..3 {
+        batch.fill(atlas, dx + i as f32 * (dot + gap), dy,
+                   dot, dot, rgba(219, 227, 224, 235));
     }
 }
 
