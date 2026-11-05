@@ -85,19 +85,22 @@ def render(resources, width, height, selected=0):
     x = (gw*.5 + 91*mag - 1)*gui
     y = (gh-bottom-side)*gui
     p = lambda a: a*gui
-    blend_rect(canvas, x, y, p(cap), p(side), (11,15,16,231))
-    blend_rect(canvas, x+p(1.5*mag), y+p(1.5*mag),
-               p(cap-3*mag), p(side-3*mag), (57,63,64,203))
+    # Same bright face, inset bevel and bottom shadow as production Rust.
+    blend_rect(canvas, x, y, p(cap), p(side), (19,22,23,246))
+    blend_rect(canvas, x+p(1.0*mag), y+p(1.0*mag),
+               p(cap-2*mag), p(side-2*mag), (118,126,124,248))
     blend_rect(canvas, x+p(2.5*mag), y+p(2.5*mag),
-               p(cap-5*mag), p(side-5*mag), (102,108,106,119))
-    blend_rect(canvas, x+p(2.5*mag), y+p(side-3.3*mag),
-               p(cap-5*mag), p(.8*mag), (29,34,36,226))
+               p(cap-5*mag), p(side-5*mag), (149,157,153,246))
+    blend_rect(canvas, x+p(2.5*mag), y+p(2.5*mag),
+               p(cap-5*mag), p(1.0*mag), (198,205,200,242))
+    blend_rect(canvas, x+p(2.5*mag), y+p(side-3.5*mag),
+               p(cap-5*mag), p(1.0*mag), (75,82,80,235))
     dot, gap = 3.5*mag, 2.5*mag
     dx = x+p((cap-(3*dot+2*gap))*.5)
     dy = y+p((side-dot)*.5)
     for n in range(3):
         blend_rect(canvas, dx+p(n*(dot+gap)), dy, p(dot), p(dot),
-                   (219,227,224,235))
+                   (236,243,239,252))
     return canvas
 
 
