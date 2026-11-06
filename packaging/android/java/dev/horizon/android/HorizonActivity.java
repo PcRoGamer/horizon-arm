@@ -3,6 +3,8 @@ package dev.horizon.android;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Path;
@@ -20,6 +22,8 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 
 import com.google.androidgamesdk.GameActivity;
+
+import java.io.File;
 
 /**
  * Bedrock-inspired touch surface. The Canvas overlay never consumes gameplay
@@ -264,6 +268,9 @@ public final class HorizonActivity extends GameActivity {
     private final Runnable poll = new Runnable() {
         @Override public void run() {
             syncNative();
+            // Horizon's native first-run bootstrap populates this cache. Reuse
+            // the same verified Mojang asset tree, never a second downloader.
+            if (overlay.refreshStoneTexture()) overlay.invalidate();
             boolean menu = inMenu();
             int bits = 0;
             float x = 0f, y = 0f;
@@ -294,6 +301,8 @@ public final class HorizonActivity extends GameActivity {
     /** Non-intercepting, hardware-accelerated vector artwork. */
     private final class TouchOverlay extends View {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private Bitmap buttonStone;
+        private long nextStoneProbeMs;
         boolean menu = true;
         int scheme = 0;
         int opacity = 72;
@@ -304,6 +313,41 @@ public final class HorizonActivity extends GameActivity {
         TouchOverlay() {
             super(HorizonActivity.this);
             setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        }
+
+        /**
+         * Reuse the assets Horizon already downloaded into its normal versioned
+         * resource root. This is Minecraft's authentic block/stone.png, not a
+         * hand-generated noise tile. The APK ships no Minecraft-owned PNGs.
+         *
+         * Android's Canvas overlay is separate from the game's WGPU HudAtlas;
+         * both read this same prepared vanilla resource tree. Probe at most
+         * once every three seconds until first-run bootstrap finishes.
+         */
+        boolean refreshStoneTexture() {
+            if (buttonStone != null) return false;
+            long now = android.os.SystemClock.uptimeMillis();
+            if (now < nextStoneProbeMs) return false;
+            nextStoneProbeMs = now + 3000;
+            File cache = new File(getContext().getFilesDir(), ".local/horizon-client");
+            File[] versions = cache.listFiles(File::isDirectory);
+            if (versions == null) return false;
+            for (File version : versions) {
+                File png = new File(version, "assets/minecraft/textures/block/stone.png");
+                if (!png.isFile() || png.length() > 1024 * 1024) continue;
+                BitmapFactory.Options options = new BitmapFactory.Options();
+                options.inScaled = false;
+                Bitmap candidate = BitmapFactory.decodeFile(png.getAbsolutePath(), options);
+                if (candidate == null) continue;
+                if (candidate.getWidth() < 8 || candidate.getHeight() < 8
+                        || candidate.getWidth() > 256 || candidate.getHeight() > 256) {
+                    candidate.recycle();
+                    continue;
+                }
+                buttonStone = candidate;
+                return true;
+            }
+            return false;
         }
 
         private void color(int argb, Paint.Style style, float stroke) {
@@ -418,9 +462,26 @@ public final class HorizonActivity extends GameActivity {
             c.drawRect(-r + inset, -r + inset, r - inset, r - inset, paint);
             int face = pressed && name.equals("sprint") ? 0xFF94B29C
                     : pressed ? 0xFF959A98 : 0xFFC5C5C2;
-            color(alpha(face, 1.0f), Paint.Style.FILL, 0f);
-            paint.setAntiAlias(false);
-            c.drawRect(-r + edge, -r + edge, r - edge, r - edge, paint);
+            if (buttonStone != null) {
+                // Pixel-nearest scaled native Minecraft stone. Preserve each
+                // original texel as a crisp block, with zero blur/mipmap.
+                color(alpha(0xFFFFFFFF, 1.0f), Paint.Style.FILL, 0f);
+                paint.setAntiAlias(false);
+                paint.setFilterBitmap(false);
+                c.drawBitmap(buttonStone, null,
+                        new RectF(-r + edge, -r + edge, r - edge, r - edge), paint);
+                // Neutral bevel lighting, not an invented replacement texture.
+                color(alpha(pressed ? 0xFF303838 : 0xFFDDDDDA,
+                        pressed ? .28f : .18f), Paint.Style.FILL, 0f);
+                paint.setAntiAlias(false);
+                c.drawRect(-r + edge, -r + edge, r - edge, r - edge, paint);
+            } else {
+                // Before bootstrap, retain functional controls and their full
+                // hitboxes. Switch to genuine assets once Horizon downloads.
+                color(alpha(face, 1.0f), Paint.Style.FILL, 0f);
+                paint.setAntiAlias(false);
+                c.drawRect(-r + edge, -r + edge, r - edge, r - edge, paint);
+            }
             float lip = Math.max(1f, Math.round(r * .024f));
             color(alpha(0xFFECF0EA, .74f), Paint.Style.FILL, 0f);
             paint.setAntiAlias(false);
