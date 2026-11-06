@@ -490,11 +490,21 @@ fn handle_game_touch(t: winit_real::event::Touch) {
             ],
         ) {
             TouchRole::Button(3) // Native hotbar inventory end-cap.
-        } else if near_square(p, [0.5 + (0.050 - 0.067 * scale) / aspect, 0.045], 0.028 * scale, aspect) {
+        } else if near_square(
+            p,
+            [0.5 + (0.050 - 0.067 * scale) / aspect, 0.045],
+            0.028 * scale,
+            aspect,
+        ) {
             TouchRole::Perspective
         } else if near_square(p, [0.5 + 0.050 / aspect, 0.045], 0.028 * scale, aspect) {
             TouchRole::Chat
-        } else if near_square(p, [0.5 + (0.050 + 0.067 * scale) / aspect, 0.045], 0.028 * scale, aspect) {
+        } else if near_square(
+            p,
+            [0.5 + (0.050 + 0.067 * scale) / aspect, 0.045],
+            0.028 * scale,
+            aspect,
+        ) {
             TouchRole::Button(9) // Top-bound pause button.
         } else if near_square(p, sprint_at, 0.035 * scale, aspect) {
             if !touch
@@ -603,7 +613,11 @@ fn handle_game_touch(t: winit_real::event::Touch) {
                 touch.target = None;
             }
         }
-        TouchRole::Hotbar | TouchRole::Chat | TouchRole::Perspective | TouchRole::SprintToggle | TouchRole::Ignored => {}
+        TouchRole::Hotbar
+        | TouchRole::Chat
+        | TouchRole::Perspective
+        | TouchRole::SprintToggle
+        | TouchRole::Ignored => {}
         _ => {}
     }
 }
