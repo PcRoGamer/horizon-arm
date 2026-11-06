@@ -353,8 +353,8 @@ impl Painter<'_> {
 
 
     fn control(&mut self, x: f32, y: f32, r: f32, sym: Symbol) {
-        // Neutral stone-grey material matching production Android Canvas. Strong
-        // monochrome contrast at the actual default opacity, no green tint.
+        // Texture-backed stone material from Horizon's existing packed Mojang
+        // atlas, matching the production Android Canvas resource lookup.
         let edge = (r * 0.047).round().max(1.25);
         let face = if matches!(sym, Symbol::Sprint) && self.cfg.always_sprint {
             self.color(0x94B29C, 1.0)
@@ -365,9 +365,33 @@ impl Painter<'_> {
         let highlight = self.color(0xECF0EA, 0.74);
         let bottom = self.color(0x4B5050, 0.90);
         let lip = (r * 0.024).round().max(1.0);
-        // Four thin outside bands, not a dark filled backdrop.
+        // Same prepared Mojang "block/stone" texture already in HudAtlas.
+        // Texture-pack overrides naturally apply because the atlas is shared.
         self.stroke_box(x, y, r, edge, outline);
-        self.rect(x-r+edge, y-r+edge, 2.0*(r-edge), 2.0*(r-edge), face);
+        let left = x - r + edge;
+        let top = y - r + edge;
+        let width = 2.0 * (r - edge);
+        if self.atlas.sprites.contains_key("block/stone") {
+            let texture_tint = self.color(0xFFFFFF, 1.0);
+            self.batch.sprite_scaled(
+                self.atlas,
+                "block/stone",
+                left,
+                top,
+                width,
+                width,
+                texture_tint,
+            );
+            let light = if matches!(sym, Symbol::Sprint) && self.cfg.always_sprint {
+                self.color(0x303838, 0.28)
+            } else {
+                self.color(0xDDDDDA, 0.18)
+            };
+            self.rect(left, top, width, width, light);
+        } else {
+            // Before Mojang's first-run bootstrap finishes.
+            self.rect(left, top, width, width, face);
+        }
         self.rect(x-r+edge, y-r+edge, 2.0*(r-edge), lip, highlight);
         self.rect(x-r+edge, y+r-edge-lip, 2.0*(r-edge), lip, bottom);
         self.glyph(x, y, r, sym);
