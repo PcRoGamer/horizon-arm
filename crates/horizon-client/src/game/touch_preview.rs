@@ -129,7 +129,7 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
             Symbol::Sprint,
         );
     }
-    draw.control(w - 0.160 * h, 0.72 * h, 0.051 * h * cfg.scale, Symbol::Jump);
+    draw.control(w - 0.133 * h, 0.72 * h, 0.066 * h * cfg.scale, Symbol::Jump);
     if cfg.scheme & 1 == 1 {
         draw.control(w - 0.270 * h, 0.56 * h, 0.042 * h * cfg.scale, Symbol::Hit);
         draw.control(w - 0.145 * h, 0.52 * h, 0.042 * h * cfg.scale, Symbol::Use);
