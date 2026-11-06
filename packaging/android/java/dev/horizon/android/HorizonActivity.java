@@ -407,25 +407,25 @@ public final class HorizonActivity extends GameActivity {
                     || (name.equals("down") && joyY < -.28f)
                     || (name.equals("left") && joyX < -.28f);
             c.save();
-            // Bedrock controls are translucent windowpanes, not solid concrete blocks.
-            // The face is never painted over an opaque backing; only its 1-2px
-            // frame, top reflection and bottom lip are separate layers.
+            // Neutral Bedrock-like stone-grey material. Previous tinted translucent
+            // face lost contrast against grass and forest backdrops. Keep the
+            // outline, face, top reflection and bottom lip as distinct layers.
             c.translate(Math.round(x), Math.round(y) + (pressed ? Math.max(1f, r * .028f) : 0f));
             float edge = Math.max(1.25f, Math.round(r * .047f));
             float inset = edge * .5f;
-            color(alpha(0xFF151B1B, .90f), Paint.Style.STROKE, edge);
+            color(alpha(0xFF222629, 1.08f), Paint.Style.STROKE, edge);
             paint.setAntiAlias(false);
             c.drawRect(-r + inset, -r + inset, r - inset, r - inset, paint);
-            int face = pressed && name.equals("sprint") ? 0xFF97B39F
-                    : pressed ? 0xFF7E8E8A : 0xFFAFB4AE;
-            color(alpha(face, .76f), Paint.Style.FILL, 0f);
+            int face = pressed && name.equals("sprint") ? 0xFF94B29C
+                    : pressed ? 0xFF959A98 : 0xFFC5C5C2;
+            color(alpha(face, 1.0f), Paint.Style.FILL, 0f);
             paint.setAntiAlias(false);
             c.drawRect(-r + edge, -r + edge, r - edge, r - edge, paint);
             float lip = Math.max(1f, Math.round(r * .024f));
-            color(alpha(0xFFE0E4DB, .24f), Paint.Style.FILL, 0f);
+            color(alpha(0xFFECF0EA, .74f), Paint.Style.FILL, 0f);
             paint.setAntiAlias(false);
             c.drawRect(-r + edge, -r + edge, r - edge, -r + edge + lip, paint);
-            color(alpha(0xFF283231, .38f), Paint.Style.FILL, 0f);
+            color(alpha(0xFF4B5050, .90f), Paint.Style.FILL, 0f);
             paint.setAntiAlias(false);
             c.drawRect(-r + edge, r - edge - lip, r - edge, r - edge, paint);
             glyph(c, name, r);
