@@ -91,10 +91,11 @@ fn get_bytes(url: &str, limit: u64) -> Result<Vec<u8>> {
                 return Ok(bytes);
             }
             Err(error) if attempt < 2 => {
-                log::warn!("Mojang metadata request attempt {} failed: {error}", attempt + 1);
-                std::thread::sleep(std::time::Duration::from_millis(
-                    750 * (attempt + 1),
-                ));
+                log::warn!(
+                    "Mojang metadata request attempt {} failed: {error}",
+                    attempt + 1
+                );
+                std::thread::sleep(std::time::Duration::from_millis(750 * (attempt + 1)));
             }
             Err(error) => return Err(error.into()),
         }
