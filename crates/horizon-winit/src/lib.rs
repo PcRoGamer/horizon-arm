@@ -519,7 +519,7 @@ fn handle_game_touch(t: winit_real::event::Touch) {
             } else {
                 TouchRole::Move
             }
-        } else if near_square(p, [1.0 - 0.160 / aspect, 0.72], 0.051 * scale, aspect) {
+        } else if near_square(p, [1.0 - 0.133 / aspect, 0.72], 0.066 * scale, aspect) {
             TouchRole::Button(0) // South: jump
         } else if !dpad && near_square(p, [1.0 - 0.290 / aspect, 0.73], 0.040 * scale, aspect) {
             TouchRole::Button(11) // Right stick: sneak
