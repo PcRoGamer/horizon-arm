@@ -176,6 +176,14 @@ jobs:
             echo "CXX_aarch64_linux_android=$TOOLCHAIN/aarch64-linux-android28-clang++"
             echo "AR_aarch64_linux_android=$TOOLCHAIN/llvm-ar"
           } >> "$GITHUB_ENV"
+      - name: Prepare larger native game-loop thread stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fetch --locked
+          SDK="$(python3 tools/prepare_android_game_stack.py)"
+          test -f "$SDK/game-activity/prefab-src/modules/game-activity/src/game-activity/native_app_glue/android_native_app_glue.c"
+          echo "ANDROID_GAMES_SDK=$SDK" >> "$GITHUB_ENV"
       - name: Android compile check
         run: cargo check -p horizon-android --target aarch64-linux-android
       - name: Build native arm64 library
@@ -346,6 +354,14 @@ jobs:
               f.write(data)
           print('Prepared resource bytes:', len(data))
           PY
+      - name: Prepare larger native game-loop thread stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fetch --locked
+          SDK="$(python3 tools/prepare_android_game_stack.py)"
+          test -f "$SDK/game-activity/prefab-src/modules/game-activity/src/game-activity/native_app_glue/android_native_app_glue.c"
+          echo "ANDROID_GAMES_SDK=$SDK" >> "$GITHUB_ENV"
       - name: Compile actual x86_64 Android native game library
         run: |
           set -euo pipefail
