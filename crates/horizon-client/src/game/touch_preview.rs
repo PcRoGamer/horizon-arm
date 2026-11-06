@@ -424,7 +424,13 @@ impl Painter<'_> {
             let highlight = self.color(0xECF0EA, 0.74);
             let bottom = self.color(0x4B5050, 0.90);
             let lip = (r * 0.024).round().max(1.0);
-            self.rect(x - r + edge, y - r + edge, 2.0 * (r - edge), 2.0 * (r - edge), face);
+            self.rect(
+                x - r + edge,
+                y - r + edge,
+                2.0 * (r - edge),
+                2.0 * (r - edge),
+                face,
+            );
             self.stroke_box(x, y, r, edge, outline);
             self.rect(x - r + edge, y - r + edge, 2.0 * (r - edge), lip, highlight);
             self.rect(
