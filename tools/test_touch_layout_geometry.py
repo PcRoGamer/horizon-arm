@@ -70,7 +70,8 @@ assert "centre sneak key" in INPUT
 # The actual textured face must read the game assets Horizon already prepares.
 # Android uses the private game-home path, Rust uses its existing HudAtlas.
 assert 'getContext().getFilesDir()' in JAVA
-assert 'assets/minecraft/textures/block/stone.png' in JAVA
+assert '"assets/minecraft/textures/" + path + ".png"' in JAVA
+assert 'decodeCachedTexture(version, "block/stone")' in JAVA
 assert 'refreshStoneTexture()' in JAVA
 assert 'self.atlas.sprites.contains_key("block/stone")' in PREVIEW
 assert 'self.batch.sprite_scaled(' in PREVIEW
