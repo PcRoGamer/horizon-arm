@@ -37,7 +37,7 @@ for item in paths:
     p = ASSET_ROOT / item
     assert p.is_file(), f"TouchController source sprite missing: {item}"
     data = p.read_bytes()
-    assert data[:8] == b"\\x89PNG\\r\\n\\x1a\\n".decode("unicode_escape").encode("latin1"), item
+    assert data[:8] == bytes.fromhex("89504e470d0a1a0a"), item
     width, height = struct.unpack(">II", data[16:24])
     assert 12 <= width <= 128 and 12 <= height <= 128, (item, width, height)
     name = item.removesuffix(".png")
