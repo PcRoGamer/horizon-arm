@@ -235,8 +235,8 @@ const PIXEL_GLYPHS: [[u32; 24]; 12] = [
     ],
     [
         0x000000, 0x000000, 0x000000, 0x1FFF00, 0x100100, 0x100100, 0x100100, 0x100100, 0x100100,
-        0x107FFC, 0x104104, 0x104104, 0x104944, 0x104944, 0x104104, 0x1FFF04, 0x004004,
-        0x004FC4, 0x004004, 0x004004, 0x004004, 0x007FFC, 0x000000, 0x000000
+        0x107FFC, 0x104104, 0x104104, 0x104944, 0x104944, 0x104104, 0x1FFF04, 0x004004, 0x004FC4,
+        0x004004, 0x004004, 0x004004, 0x007FFC, 0x000000, 0x000000,
     ],
 ];
 
@@ -351,7 +351,6 @@ impl Painter<'_> {
         }
     }
 
-
     /// Vanilla menu button border from the same WGPU HUD atlas, preserving
     /// the 3px nine-slice corners instead of stretching a 200x20 UI image.
     fn vanilla_button_frame(&mut self, x: f32, y: f32, radius: f32, pressed: bool) -> bool {
@@ -374,8 +373,18 @@ impl Painter<'_> {
         let dst_border = (radius * 0.10).round().max(2.0);
         let sx = [0.0, border, sw - border, sw];
         let sy = [0.0, border, sh - border, sh];
-        let dx = [x - radius, x - radius + dst_border, x + radius - dst_border, x + radius];
-        let dy = [y - radius, y - radius + dst_border, y + radius - dst_border, y + radius];
+        let dx = [
+            x - radius,
+            x - radius + dst_border,
+            x + radius - dst_border,
+            x + radius,
+        ];
+        let dy = [
+            y - radius,
+            y - radius + dst_border,
+            y + radius - dst_border,
+            y + radius,
+        ];
         let du = sprite.u1 - sprite.u0;
         let dv = sprite.v1 - sprite.v0;
         let tint = self.color(0xFFFFFF, 1.0);
@@ -445,8 +454,14 @@ impl Painter<'_> {
         if !self.vanilla_button_frame(x, y, r, pressed) {
             // Temporary fallback before the first vanilla asset bootstrap.
             self.stroke_box(x, y, r, edge, outline);
-            self.rect(x-r+edge, y-r+edge, 2.0*(r-edge), lip, highlight);
-            self.rect(x-r+edge, y+r-edge-lip, 2.0*(r-edge), lip, bottom);
+            self.rect(x - r + edge, y - r + edge, 2.0 * (r - edge), lip, highlight);
+            self.rect(
+                x - r + edge,
+                y + r - edge - lip,
+                2.0 * (r - edge),
+                lip,
+                bottom,
+            );
         }
         self.glyph(x, y, r, sym);
     }
