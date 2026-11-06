@@ -36,7 +36,7 @@ fn config() -> Option<Config> {
                 .clamp(min, max)
         };
         Some(Config {
-            scheme: number("HORIZON_TOUCH_PREVIEW_SCHEME", 1, 0, 3) as u8,
+            scheme: number("HORIZON_TOUCH_PREVIEW_SCHEME", 2, 0, 3) as u8,
             scale: number("HORIZON_TOUCH_PREVIEW_SCALE", 100, 80, 120) as f32 / 100.0,
             opacity: number("HORIZON_TOUCH_PREVIEW_OPACITY", 35, 35, 100) as f32 / 100.0,
             title: std::env::var("HORIZON_TOUCH_PREVIEW_TITLE").ok().as_deref() == Some("1"),
@@ -175,326 +175,82 @@ enum Symbol {
     Arrow(Direction),
 }
 
-// Generated original icon masks. One source for the Java and ARM64 preview.
-// Glyph source: identical 12x24 masks in Android Canvas and Rust native preview
-const PIXEL_GLYPHS: [[u32; 24]; 12] = [
-    [
-        0x000000, 0x000000, 0x000000, 0x000000, 0x0FFFF0, 0x1FFFF0, 0x180030, 0x180030, 0x180030,
-        0x1999F0, 0x1BFFF0, 0x1BFFF0, 0x1999F0, 0x180030, 0x180030, 0x1C7FF0, 0x1DFFF0, 0x0FC000,
-        0x0F8000, 0x0F0000, 0x0C0000, 0x000000, 0x000000, 0x000000,
-    ],
-    [
-        0x000000, 0x000000, 0x000000, 0x000000, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0,
-        0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0,
-        0x03C3C0, 0x03C3C0, 0x000000, 0x000000, 0x000000, 0x000000,
-    ],
-    [
-        0x000000, 0x000000, 0x000380, 0x000380, 0x0007C0, 0x000380, 0x3F8700, 0x3F8F80, 0x003FC0,
-        0x7F39F0, 0x7F70FC, 0x00707C, 0x00E000, 0x07E000, 0x0FF800, 0x0FFC00, 0x071E00, 0x0F0E00,
-        0x0E0E00, 0x1C0E00, 0x180C00, 0x000C00, 0x000000, 0x000000,
-    ],
-    [
-        0x000000, 0x000000, 0x000000, 0x001800, 0x003C00, 0x007E00, 0x007E00, 0x00FF00, 0x01FF80,
-        0x03FFC0, 0x07FFE0, 0x007E00, 0x007E00, 0x007E00, 0x007E00, 0x007E00, 0x007E00, 0x007E00,
-        0x000000, 0x000000, 0x1FFFF8, 0x1FFFF8, 0x000000, 0x000000,
-    ],
-    [
-        0x000000, 0x000000, 0x000000, 0x003C00, 0x003C00, 0x003C00, 0x003C00, 0x003C00, 0x003C00,
-        0x00FF00, 0x03FFC0, 0x03FFC0, 0x01FF80, 0x00FF00, 0x007E00, 0x003C00, 0x001800, 0x000000,
-        0x000000, 0x000000, 0x07FFE0, 0x07FFE0, 0x000000, 0x000000,
-    ],
-    [
-        0x000000, 0x000000, 0x00000C, 0x00003C, 0x00007C, 0x00007C, 0x0000FC, 0x0001DC, 0x0003F8,
-        0x0007F8, 0x000FE0, 0x001C00, 0x183800, 0x1C7000, 0x0FE000, 0x07C000, 0x07C000, 0x07C000,
-        0x0FE000, 0x1C7000, 0x383000, 0x300000, 0x000000, 0x000000,
-    ],
-    [
-        0x000000, 0x000000, 0x003C00, 0x00FF00, 0x01FF80, 0x07C3E0, 0x1F00F8, 0x1E0078, 0x1F00F8,
-        0x1FC3F8, 0x19FF98, 0x18FF18, 0x183C18, 0x181818, 0x181818, 0x181818, 0x1E1878, 0x1F18F8,
-        0x07DBE0, 0x01FF80, 0x007F00, 0x003C00, 0x000000, 0x000000,
-    ],
-    [
-        0x000000, 0x000000, 0x000000, 0x001800, 0x003C00, 0x007E00, 0x007E00, 0x00FF00, 0x01FF80,
-        0x03FFC0, 0x07FFE0, 0x0FFFF0, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00,
-        0x00FF00, 0x00FF00, 0x00FF00, 0x000000, 0x000000, 0x000000,
-    ],
-    [
-        0x000000, 0x000000, 0x000000, 0x000000, 0x000800, 0x000C00, 0x000E00, 0x000F00, 0x1FFF80,
-        0x1FFFE0, 0x1FFFF0, 0x1FFFF8, 0x1FFFF8, 0x1FFFF0, 0x1FFFE0, 0x1FFF80, 0x000F00, 0x000E00,
-        0x000C00, 0x000800, 0x000000, 0x000000, 0x000000, 0x000000,
-    ],
-    [
-        0x000000, 0x000000, 0x000000, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00,
-        0x00FF00, 0x00FF00, 0x00FF00, 0x0FFFF0, 0x07FFE0, 0x03FFC0, 0x01FF80, 0x00FF00, 0x007E00,
-        0x007E00, 0x003C00, 0x001800, 0x000000, 0x000000, 0x000000,
-    ],
-    [
-        0x000000, 0x000000, 0x000000, 0x000000, 0x001000, 0x003000, 0x007000, 0x00F000, 0x01FFF8,
-        0x07FFF8, 0x0FFFF8, 0x1FFFF8, 0x1FFFF8, 0x0FFFF8, 0x07FFF8, 0x01FFF8, 0x00F000, 0x007000,
-        0x003000, 0x001000, 0x000000, 0x000000, 0x000000, 0x000000,
-    ],
-    [
-        0x000000, 0x000000, 0x000000, 0x1FFF00, 0x100100, 0x100100, 0x100100, 0x100100, 0x100100,
-        0x107FFC, 0x104104, 0x104104, 0x104944, 0x104944, 0x104104, 0x1FFF04, 0x004004, 0x004FC4,
-        0x004004, 0x004004, 0x004004, 0x007FFC, 0x000000, 0x000000,
-    ],
-];
-
+// All control faces are the exact LGPL-licensed TouchController Classic
+// sprites. Android decodes the same PNGs from APK assets; the Rust HudAtlas
+// packs their source bytes at build time. No generated imitation glyphs.
 struct Painter<'a> {
     batch: &'a mut HudBatch,
     atlas: &'a HudAtlas,
     cfg: Config,
 }
 impl Painter<'_> {
-    fn color(&self, rgb: u32, opacity_factor: f32) -> u32 {
-        let a = (255.0 * self.cfg.opacity * opacity_factor)
-            .round()
-            .clamp(0.0, 255.0) as u8;
-        rgba((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8, a)
-    }
-
-    fn quad(&mut self, v: [[f32; 2]; 4], color: u32) {
-        self.batch.fill_quad(self.atlas, v, color);
-    }
-
-    fn rect(&mut self, x: f32, y: f32, w: f32, h: f32, color: u32) {
-        self.batch.fill(self.atlas, x, y, w, h, color);
-    }
-
-    fn segment(&mut self, a: [f32; 2], b: [f32; 2], width: f32, color: u32) {
-        let dx = b[0] - a[0];
-        let dy = b[1] - a[1];
-        let length = (dx * dx + dy * dy).sqrt();
-        if length < 0.001 {
-            return;
-        }
-        let nx = -dy / length * width * 0.5;
-        let ny = dx / length * width * 0.5;
-        self.quad(
-            [
-                [a[0] + nx, a[1] + ny],
-                [b[0] + nx, b[1] + ny],
-                [b[0] - nx, b[1] - ny],
-                [a[0] - nx, a[1] - ny],
-            ],
-            color,
-        );
-    }
-
-    fn stroke_box(&mut self, x: f32, y: f32, r: f32, thick: f32, color: u32) {
-        let l = x - r;
-        let t = y - r;
-        let size = 2.0 * r;
-        self.rect(l, t, size, thick, color);
-        self.rect(l, t + size - thick, size, thick, color);
-        self.rect(l, t + thick, thick, size - thick * 2.0, color);
-        self.rect(
-            l + size - thick,
-            t + thick,
-            thick,
-            size - thick * 2.0,
-            color,
-        );
-    }
-
-    fn disc(&mut self, cx: f32, cy: f32, radius: f32, color: u32) {
-        // Actual GPU HUD triangles, not a post-processed bitmap.
-        const SLICES: usize = 40;
-        for index in 0..SLICES {
-            let a = (index as f32) * std::f32::consts::TAU / SLICES as f32;
-            let b = ((index + 1) as f32) * std::f32::consts::TAU / SLICES as f32;
-            let p0 = [cx, cy];
-            let p1 = [cx + radius * a.cos(), cy + radius * a.sin()];
-            let p2 = [cx + radius * b.cos(), cy + radius * b.sin()];
-            self.quad([p0, p1, p2, p2], color);
-        }
-    }
-
-    fn ring(&mut self, cx: f32, cy: f32, radius: f32, thick: f32, color: u32) {
-        const SLICES: usize = 40;
-        for index in 0..SLICES {
-            let a = index as f32 * std::f32::consts::TAU / SLICES as f32;
-            let b = (index + 1) as f32 * std::f32::consts::TAU / SLICES as f32;
-            let inner = radius - thick * 0.5;
-            let outer = radius + thick * 0.5;
-            self.quad(
-                [
-                    [cx + inner * a.cos(), cy + inner * a.sin()],
-                    [cx + outer * a.cos(), cy + outer * a.sin()],
-                    [cx + outer * b.cos(), cy + outer * b.sin()],
-                    [cx + inner * b.cos(), cy + inner * b.sin()],
-                ],
-                color,
+    fn draw_sprite(&mut self, name: &str, x: f32, y: f32, w: f32, h: f32) {
+        let alpha = (255.0 * self.cfg.opacity).round().clamp(0.0, 255.0) as u8;
+        if self.atlas.sprites.contains_key(name) {
+            self.batch.sprite_scaled(
+                self.atlas,
+                name,
+                x,
+                y,
+                w,
+                h,
+                rgba(255, 255, 255, alpha),
             );
-        }
-    }
-
-    fn round_rect(&mut self, x: f32, y: f32, width: f32, height: f32, radius: f32, color: u32) {
-        let r = radius.min(width * 0.5).min(height * 0.5);
-        self.rect(x + r, y, width - 2.0 * r, height, color);
-        self.rect(x, y + r, r, height - 2.0 * r, color);
-        self.rect(x + width - r, y + r, r, height - 2.0 * r, color);
-        for (cx, cy, begin) in [
-            (x + r, y + r, std::f32::consts::PI),
-            (x + width - r, y + r, -std::f32::consts::FRAC_PI_2),
-            (x + width - r, y + height - r, 0.0),
-            (x + r, y + height - r, std::f32::consts::FRAC_PI_2),
-        ] {
-            for i in 0..8 {
-                let a = begin + i as f32 * std::f32::consts::FRAC_PI_2 / 8.0;
-                let b = begin + (i + 1) as f32 * std::f32::consts::FRAC_PI_2 / 8.0;
-                let p = [cx, cy];
-                let u = [cx + r * a.cos(), cy + r * a.sin()];
-                let v = [cx + r * b.cos(), cy + r * b.sin()];
-                self.quad([p, u, v, v], color);
-            }
-        }
-    }
-
-    /// Draw the entire GUI button surface from the existing Mojang HUD atlas,
-    /// including its centre, without stretching its three-pixel corners.
-    fn vanilla_button_surface(&mut self, x: f32, y: f32, radius: f32, pressed: bool) -> bool {
-        let regular = "gui/sprites/widget/button";
-        let highlighted = "gui/sprites/widget/button_highlighted";
-        let name = if pressed && self.atlas.sprites.contains_key(highlighted) {
-            highlighted
         } else {
-            regular
-        };
-        let Some(sprite) = self.atlas.sprites.get(name).copied() else {
-            return false;
-        };
-        let sw = sprite.w as f32;
-        let sh = sprite.h.min(20) as f32;
-        if sw < 16.0 || sh < 12.0 {
-            return false;
+            // A visible error surface is better than an invisible button,
+            // but source contracts and GPU capture CI require the real sprite.
+            self.batch.fill(
+                self.atlas,
+                x,
+                y,
+                w,
+                h,
+                rgba(100, 100, 100, alpha),
+            );
         }
-        let border = 3.0f32;
-        let dst_border = (radius * 0.10).round().max(2.0);
-        let sx = [0.0, border, sw - border, sw];
-        let sy = [0.0, border, sh - border, sh];
-        let dx = [
-            x - radius,
-            x - radius + dst_border,
-            x + radius - dst_border,
-            x + radius,
-        ];
-        let dy = [
-            y - radius,
-            y - radius + dst_border,
-            y + radius - dst_border,
-            y + radius,
-        ];
-        let du = sprite.u1 - sprite.u0;
-        let dv = sprite.v1 - sprite.v0;
-        let tint = self.color(0xFFFFFF, 1.0);
-        for row in 0..3 {
-            for col in 0..3 {
-                let mut crop = sprite;
-                crop.u0 = sprite.u0 + du * sx[col] / sw;
-                crop.u1 = sprite.u0 + du * sx[col + 1] / sw;
-                crop.v0 = sprite.v0 + dv * sy[row] / sprite.h as f32;
-                crop.v1 = sprite.v0 + dv * sy[row + 1] / sprite.h as f32;
-                self.batch.rect_uv(
-                    dx[col],
-                    dy[row],
-                    dx[col + 1] - dx[col],
-                    dy[row + 1] - dy[row],
-                    crop,
-                    tint,
-                );
-            }
-        }
-        true
     }
-
-    fn control(&mut self, x: f32, y: f32, r: f32, sym: Symbol) {
-        // UI artwork owns the entire control surface. World blocks are never
-        // reused as interface materials; pressed state uses the GUI highlight.
+    fn control(&mut self, x: f32, y: f32, radius: f32, sym: Symbol) {
+        let (normal, highlighted) = match sym {
+            Symbol::Chat => ("horizon_touch:gui/classic/chat/chat", "horizon_touch:gui/classic/chat/chat_active"),
+            Symbol::Pause => ("horizon_touch:gui/classic/pause/pause", "horizon_touch:gui/classic/pause/pause_active"),
+            Symbol::Perspective => ("horizon_touch:gui/classic/perspective/perspective", "horizon_touch:gui/classic/perspective/perspective_active"),
+            Symbol::Sprint => ("horizon_touch:gui/classic/sprint/sprint", "horizon_touch:gui/classic/sprint/sprint_active"),
+            Symbol::Jump => ("horizon_touch:gui/classic/jump/jump", "horizon_touch:gui/classic/jump/jump_active"),
+            Symbol::Sneak => ("horizon_touch:gui/classic/sneak/sneak", "horizon_touch:gui/classic/sneak/sneak_active"),
+            Symbol::Hit => ("horizon_touch:gui/classic/attack/attack", "horizon_touch:gui/classic/attack/attack_active"),
+            Symbol::Use => ("horizon_touch:gui/classic/use/use", "horizon_touch:gui/classic/use/use_active"),
+            Symbol::Arrow(Direction::Up) => ("horizon_touch:gui/classic/dpad/up", "horizon_touch:gui/classic/dpad/up_active"),
+            Symbol::Arrow(Direction::Right) => ("horizon_touch:gui/classic/dpad/right", "horizon_touch:gui/classic/dpad/right_active"),
+            Symbol::Arrow(Direction::Down) => ("horizon_touch:gui/classic/dpad/down", "horizon_touch:gui/classic/dpad/down_active"),
+            Symbol::Arrow(Direction::Left) => ("horizon_touch:gui/classic/dpad/left", "horizon_touch:gui/classic/dpad/left_active"),
+        };
+        // Only the always-sprint debug state can be simulated in the native
+        // desktop preview; Android reports held press bits for each action.
         let pressed = matches!(sym, Symbol::Sprint) && self.cfg.always_sprint;
-        if !self.vanilla_button_surface(x, y, r, pressed) {
-            // Keep a compact, neutral fallback before Mojang bootstrap finishes.
-            let edge = (r * 0.047).round().max(1.25);
-            let face = if pressed {
-                self.color(0x94B29C, 1.0)
-            } else {
-                self.color(0xC5C5C2, 1.0)
-            };
-            let outline = self.color(0x222629, 1.08);
-            let highlight = self.color(0xECF0EA, 0.74);
-            let bottom = self.color(0x4B5050, 0.90);
-            let lip = (r * 0.024).round().max(1.0);
-            self.rect(
-                x - r + edge,
-                y - r + edge,
-                2.0 * (r - edge),
-                2.0 * (r - edge),
-                face,
-            );
-            self.stroke_box(x, y, r, edge, outline);
-            self.rect(x - r + edge, y - r + edge, 2.0 * (r - edge), lip, highlight);
-            self.rect(
-                x - r + edge,
-                y + r - edge - lip,
-                2.0 * (r - edge),
-                lip,
-                bottom,
-            );
-        }
-        self.glyph(x, y, r, sym);
+        let sprite = if pressed { highlighted } else { normal };
+        self.draw_sprite(
+            sprite,
+            x - radius,
+            y - radius,
+            radius * 2.0,
+            radius * 2.0,
+        );
     }
-
-    fn joystick(&mut self, x: f32, y: f32, r: f32) {
-        let disc = self.color(0x13171B, 0.22);
-        let ring = self.color(0xF4F7F8, 2.45);
-        let dark = self.color(0x0C0F11, 1.80);
-        let face = self.color(0xE4E9EB, 2.15);
-        self.disc(x, y, r, disc);
-        self.ring(x, y, r * 0.95, r * 0.041, ring);
-        self.disc(x, y + r * 0.032, r * 0.42, dark);
-        self.disc(x, y, r * 0.36, face);
-    }
-
-    // Original 24px glyphs using the exact Java Canvas bitmap masks.
-    fn glyph(&mut self, x: f32, y: f32, radius: f32, glyph: Symbol) {
-        let icon = match glyph {
-            Symbol::Chat => 0,
-            Symbol::Pause => 1,
-            Symbol::Perspective => 11,
-            Symbol::Sprint => 2,
-            Symbol::Jump => 3,
-            Symbol::Sneak => 4,
-            Symbol::Hit => 5,
-            Symbol::Use => 6,
-            Symbol::Arrow(Direction::Up) => 7,
-            Symbol::Arrow(Direction::Right) => 8,
-            Symbol::Arrow(Direction::Down) => 9,
-            Symbol::Arrow(Direction::Left) => 10,
-        };
-        let pixel = radius * 0.056;
-        let x0 = x - 12.0 * pixel;
-        let y0 = y - 12.0 * pixel;
-        let ink = self.color(0x111516, 1.9);
-        for (row, bits) in PIXEL_GLYPHS[icon].iter().copied().enumerate() {
-            let mut col = 0;
-            while col < 24 {
-                if bits & (1 << (23 - col)) == 0 {
-                    col += 1;
-                    continue;
-                }
-                let first = col;
-                while col < 24 && bits & (1 << (23 - col)) != 0 {
-                    col += 1;
-                }
-                self.rect(
-                    x0 + first as f32 * pixel,
-                    y0 + row as f32 * pixel,
-                    (col - first) as f32 * pixel,
-                    pixel,
-                    ink,
-                );
-            }
-        }
+    fn joystick(&mut self, x: f32, y: f32, radius: f32) {
+        self.draw_sprite(
+            "horizon_touch:gui/classic/joystick/pad",
+            x - radius,
+            y - radius,
+            radius * 2.0,
+            radius * 2.0,
+        );
+        self.draw_sprite(
+            "horizon_touch:gui/classic/joystick/stick",
+            x - radius * 0.5,
+            y - radius * 0.5,
+            radius,
+            radius,
+        );
     }
 }
 
