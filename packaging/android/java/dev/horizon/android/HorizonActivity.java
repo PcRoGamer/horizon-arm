@@ -336,6 +336,7 @@ public final class HorizonActivity extends GameActivity {
     {0x000000, 0x000000, 0x000000, 0x000000, 0x000800, 0x000C00, 0x000E00, 0x000F00, 0x1FFF80, 0x1FFFE0, 0x1FFFF0, 0x1FFFF8, 0x1FFFF8, 0x1FFFF0, 0x1FFFE0, 0x1FFF80, 0x000F00, 0x000E00, 0x000C00, 0x000800, 0x000000, 0x000000, 0x000000, 0x000000},
     {0x000000, 0x000000, 0x000000, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x0FFFF0, 0x07FFE0, 0x03FFC0, 0x01FF80, 0x00FF00, 0x007E00, 0x007E00, 0x003C00, 0x001800, 0x000000, 0x000000, 0x000000},
     {0x000000, 0x000000, 0x000000, 0x000000, 0x001000, 0x003000, 0x007000, 0x00F000, 0x01FFF8, 0x07FFF8, 0x0FFFF8, 0x1FFFF8, 0x1FFFF8, 0x0FFFF8, 0x07FFF8, 0x01FFF8, 0x00F000, 0x007000, 0x003000, 0x001000, 0x000000, 0x000000, 0x000000, 0x000000}
+    ,    {0x000000, 0x000000, 0x000000, 0x1FFF00, 0x100100, 0x100100, 0x100100, 0x100100, 0x100100, 0x107FFC, 0x104104, 0x104104, 0x104944, 0x104944, 0x104104, 0x1FFF04, 0x004004, 0x004FC4, 0x004004, 0x004004, 0x004004, 0x007FFC, 0x000000, 0x000000}
         };
         private final Path[] pixelPaths = buildPixelPaths();
 
@@ -361,6 +362,7 @@ public final class HorizonActivity extends GameActivity {
         private int pixelIcon(String name) {
             switch (name) {
                 case "chat": return 0;
+                case "perspective": return 11;
                 case "pause": return 1;
                 case "sprint": return 2;
                 case "jump": return 3;
@@ -515,8 +517,9 @@ public final class HorizonActivity extends GameActivity {
                 control(canvas, 1f - .145f / aspect, .52f, .042f, "use");
             }
             // Inventory is the genuine Rust hotbar end-cap, not a floating key.
-            control(canvas, .5f - .045f / aspect, .045f, .028f, "chat");
-            control(canvas, .5f + .045f / aspect, .045f, .028f, "pause");
+            control(canvas, .5f - .017f / aspect, .045f, .028f, "perspective");
+            control(canvas, .5f + .050f / aspect, .045f, .028f, "chat");
+            control(canvas, .5f + .117f / aspect, .045f, .028f, "pause");
         }
     }
 }
