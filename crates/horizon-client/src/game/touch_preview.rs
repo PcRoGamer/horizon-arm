@@ -36,9 +36,9 @@ fn config() -> Option<Config> {
                 .clamp(min, max)
         };
         Some(Config {
-            scheme: number("HORIZON_TOUCH_PREVIEW_SCHEME", 1, 0, 3) as u8,
+            scheme: number("HORIZON_TOUCH_PREVIEW_SCHEME", 2, 0, 3) as u8,
             scale: number("HORIZON_TOUCH_PREVIEW_SCALE", 100, 80, 120) as f32 / 100.0,
-            opacity: number("HORIZON_TOUCH_PREVIEW_OPACITY", 35, 35, 100) as f32 / 100.0,
+            opacity: number("HORIZON_TOUCH_PREVIEW_OPACITY", 72, 35, 100) as f32 / 100.0,
             title: std::env::var("HORIZON_TOUCH_PREVIEW_TITLE").ok().as_deref() == Some("1"),
             always_sprint: std::env::var("HORIZON_TOUCH_PREVIEW_ALWAYS_SPRINT")
                 .ok()
@@ -60,8 +60,8 @@ fn dpad_geometry(w: f32, h: f32, scale: f32) -> (f32, f32, f32, f32) {
     let hotbar_scale = super::touch_hotbar::magnification(w);
     let bar_left = w * 0.5 - 91.0 * hotbar_scale;
     let bar_top = h - 15.0 - 22.0 * hotbar_scale;
-    let r = 0.068 * h * scale;
-    let off = 0.147 * h * scale;
+    let r = 0.052 * h * scale;
+    let off = 0.112 * h * scale;
     let cx = (0.11 * w).max(0.23 * h * scale);
     let mut cy = 0.72 * h;
     if cx + off + r > bar_left - 9.0 {
@@ -108,6 +108,7 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
         );
     } else {
         let (cx, cy, offset, r) = dpad_geometry(w, h, cfg.scale);
+        draw.dpad_hub(cx, cy, r);
         for (direction, dx, dy) in [
             (Direction::Up, 0.0, -1.0),
             (Direction::Right, 1.0, 0.0),
@@ -121,12 +122,18 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
                 Symbol::Arrow(direction),
             );
         }
-        draw.control(cx, cy, r, Symbol::Sneak);
+        // Four-way D-pad stays uncluttered; actions are on the right.
         draw.control(
-            cx + 1.55 * offset,
-            cy - 1.45 * offset,
+            w - (if cfg.scheme & 1 == 1 { 0.40 } else { 0.29 }) * h,
+            (if cfg.scheme & 1 == 1 { 0.45 } else { 0.55 }) * h,
             0.035 * h * cfg.scale,
             Symbol::Sprint,
+        );
+        draw.control(
+            w - 0.290 * h,
+            0.73 * h,
+            0.040 * h * cfg.scale,
+            Symbol::Sneak,
         );
     }
     draw.control(w - 0.133 * h, 0.72 * h, 0.066 * h * cfg.scale, Symbol::Jump);
@@ -137,20 +144,20 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
     // Native hotbar end-cap is painted by touch_hotbar, not this overlay.
     draw.control(
         0.50 * w + 0.050 * h,
-        0.045 * h,
-        0.028 * h * cfg.scale,
+        0.058 * h,
+        0.036 * h * cfg.scale,
         Symbol::Chat,
     );
     draw.control(
-        0.50 * w + (0.050 + 0.067 * cfg.scale) * h,
-        0.045 * h,
-        0.028 * h * cfg.scale,
+        0.50 * w + (0.050 + 0.084 * cfg.scale) * h,
+        0.058 * h,
+        0.036 * h * cfg.scale,
         Symbol::Pause,
     );
     draw.control(
-        0.50 * w + (0.050 - 0.067 * cfg.scale) * h,
-        0.045 * h,
-        0.028 * h * cfg.scale,
+        0.50 * w + (0.050 - 0.084 * cfg.scale) * h,
+        0.058 * h,
+        0.036 * h * cfg.scale,
         Symbol::Perspective,
     );
 }
@@ -175,68 +182,67 @@ enum Symbol {
     Arrow(Direction),
 }
 
-// Generated original icon masks. One source for the Java and ARM64 preview.
-// Glyph source: identical 12x24 masks in Android Canvas and Rust native preview
+// Twelve original 24px controller glyphs, shared with Android Canvas.
 const PIXEL_GLYPHS: [[u32; 24]; 12] = [
     [
-        0x000000, 0x000000, 0x000000, 0x000000, 0x0FFFF0, 0x1FFFF0, 0x180030, 0x180030, 0x180030,
-        0x1999F0, 0x1BFFF0, 0x1BFFF0, 0x1999F0, 0x180030, 0x180030, 0x1C7FF0, 0x1DFFF0, 0x0FC000,
-        0x0F8000, 0x0F0000, 0x0C0000, 0x000000, 0x000000, 0x000000,
+        0x000000, 0x000000, 0x000000, 0x0FFFF8, 0x1FFFF8, 0x180018, 0x180018, 0x180018, 0x180018,
+        0x188898, 0x180018, 0x180018, 0x180018, 0x180018, 0x180018, 0x1E7FF8, 0x1EFFF8, 0x07C000,
+        0x0F8000, 0x0F0000, 0x0E0000, 0x0C0000, 0x000000, 0x000000,
     ],
     [
-        0x000000, 0x000000, 0x000000, 0x000000, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0,
-        0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0,
-        0x03C3C0, 0x03C3C0, 0x000000, 0x000000, 0x000000, 0x000000,
+        0x000000, 0x000000, 0x000000, 0x0781E0, 0x0781E0, 0x0781E0, 0x0781E0, 0x0781E0, 0x0781E0,
+        0x0781E0, 0x0781E0, 0x0781E0, 0x0781E0, 0x0781E0, 0x0781E0, 0x0781E0, 0x0781E0, 0x0781E0,
+        0x0781E0, 0x0781E0, 0x0781E0, 0x000000, 0x000000, 0x000000,
     ],
     [
-        0x000000, 0x000000, 0x000380, 0x000380, 0x0007C0, 0x000380, 0x3F8700, 0x3F8F80, 0x003FC0,
-        0x7F39F0, 0x7F70FC, 0x00707C, 0x00E000, 0x07E000, 0x0FF800, 0x0FFC00, 0x071E00, 0x0F0E00,
-        0x0E0E00, 0x1C0E00, 0x180C00, 0x000C00, 0x000000, 0x000000,
+        0x000000, 0x000000, 0x0003C0, 0x0003C0, 0x0003C0, 0x0003C0, 0x000000, 0x000400, 0x3C0E00,
+        0x3C7E00, 0x00FFC0, 0x00FFE0, 0x787FE0, 0x787E00, 0x00FF80, 0x00EFC0, 0x19E3E0, 0x1BC0F0,
+        0x038070, 0x018078, 0x000038, 0x000030, 0x000000, 0x000000,
     ],
     [
-        0x000000, 0x000000, 0x000000, 0x001800, 0x003C00, 0x007E00, 0x007E00, 0x00FF00, 0x01FF80,
-        0x03FFC0, 0x07FFE0, 0x007E00, 0x007E00, 0x007E00, 0x007E00, 0x007E00, 0x007E00, 0x007E00,
-        0x000000, 0x000000, 0x1FFFF8, 0x1FFFF8, 0x000000, 0x000000,
+        0x000000, 0x000000, 0x000000, 0x001800, 0x003C00, 0x007E00, 0x00FF00, 0x01FF80, 0x03FFC0,
+        0x07FFE0, 0x0FFFF0, 0x1FFFF8, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00,
+        0x000000, 0x000000, 0x000000, 0x1FFFF8, 0x000000, 0x000000,
     ],
     [
-        0x000000, 0x000000, 0x000000, 0x003C00, 0x003C00, 0x003C00, 0x003C00, 0x003C00, 0x003C00,
-        0x00FF00, 0x03FFC0, 0x03FFC0, 0x01FF80, 0x00FF00, 0x007E00, 0x003C00, 0x001800, 0x000000,
-        0x000000, 0x000000, 0x07FFE0, 0x07FFE0, 0x000000, 0x000000,
+        0x000000, 0x000000, 0x000000, 0x0003C0, 0x0003C0, 0x0003C0, 0x0003C0, 0x000000, 0x000600,
+        0x001F00, 0x003F80, 0x00FFE0, 0x01FBE0, 0x01F000, 0x03FE00, 0x07FFF0, 0x0FBFF0, 0x0FC7F0,
+        0x0FE000, 0x07E000, 0x006000, 0x3FFFFC, 0x000000, 0x000000,
     ],
     [
-        0x000000, 0x000000, 0x00000C, 0x00003C, 0x00007C, 0x00007C, 0x0000FC, 0x0001DC, 0x0003F8,
-        0x0007F8, 0x000FE0, 0x001C00, 0x183800, 0x1C7000, 0x0FE000, 0x07C000, 0x07C000, 0x07C000,
-        0x0FE000, 0x1C7000, 0x383000, 0x300000, 0x000000, 0x000000,
+        0x000000, 0x000000, 0x000030, 0x000078, 0x0000F8, 0x0001F8, 0x0003F0, 0x0007E0, 0x000FC0,
+        0x001F80, 0x003F00, 0x01FE00, 0x01FC00, 0x00F800, 0x01F000, 0x03F800, 0x07DC00, 0x0F8800,
+        0x1F0000, 0x3E0000, 0x3C0000, 0x180000, 0x000000, 0x000000,
     ],
     [
-        0x000000, 0x000000, 0x003C00, 0x00FF00, 0x01FF80, 0x07C3E0, 0x1F00F8, 0x1E0078, 0x1F00F8,
-        0x1FC3F8, 0x19FF98, 0x18FF18, 0x183C18, 0x181818, 0x181818, 0x181818, 0x1E1878, 0x1F18F8,
-        0x07DBE0, 0x01FF80, 0x007F00, 0x003C00, 0x000000, 0x000000,
+        0x000000, 0x001800, 0x007E00, 0x00F780, 0x03C3C0, 0x0F00F0, 0x3C003C, 0x3C003C, 0x3F007C,
+        0x3781EC, 0x31E78C, 0x307E0C, 0x301C0C, 0x30180C, 0x30180C, 0x30180C, 0x30180C, 0x3C183C,
+        0x0F18F8, 0x07D9E0, 0x01FF80, 0x007E00, 0x001800, 0x000000,
     ],
     [
-        0x000000, 0x000000, 0x000000, 0x001800, 0x003C00, 0x007E00, 0x007E00, 0x00FF00, 0x01FF80,
-        0x03FFC0, 0x07FFE0, 0x0FFFF0, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00,
-        0x00FF00, 0x00FF00, 0x00FF00, 0x000000, 0x000000, 0x000000,
+        0x000000, 0x000000, 0x000000, 0x000800, 0x001800, 0x003C00, 0x003E00, 0x007E00, 0x00FF00,
+        0x00FF80, 0x01FF80, 0x03FFC0, 0x03FFE0, 0x07FFE0, 0x0FFFF0, 0x0FFFF8, 0x1FFFF8, 0x3FFFFC,
+        0x000000, 0x000000, 0x000000, 0x000000, 0x000000, 0x000000,
     ],
     [
-        0x000000, 0x000000, 0x000000, 0x000000, 0x000800, 0x000C00, 0x000E00, 0x000F00, 0x1FFF80,
-        0x1FFFE0, 0x1FFFF0, 0x1FFFF8, 0x1FFFF8, 0x1FFFF0, 0x1FFFE0, 0x1FFF80, 0x000F00, 0x000E00,
-        0x000C00, 0x000800, 0x000000, 0x000000, 0x000000, 0x000000,
+        0x000000, 0x000000, 0x040000, 0x070000, 0x078000, 0x07E000, 0x07F000, 0x07FC00, 0x07FF00,
+        0x07FF80, 0x07FFE0, 0x07FFF8, 0x07FFF8, 0x07FFE0, 0x07FFC0, 0x07FF00, 0x07FC00, 0x07F800,
+        0x07E000, 0x07C000, 0x070000, 0x040000, 0x000000, 0x000000,
     ],
     [
-        0x000000, 0x000000, 0x000000, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00,
-        0x00FF00, 0x00FF00, 0x00FF00, 0x0FFFF0, 0x07FFE0, 0x03FFC0, 0x01FF80, 0x00FF00, 0x007E00,
-        0x007E00, 0x003C00, 0x001800, 0x000000, 0x000000, 0x000000,
+        0x000000, 0x000000, 0x000000, 0x000000, 0x000000, 0x000000, 0x3FFFFC, 0x1FFFF8, 0x1FFFF8,
+        0x0FFFF0, 0x07FFE0, 0x07FFE0, 0x03FFC0, 0x01FF80, 0x01FF80, 0x00FF00, 0x007E00, 0x007E00,
+        0x003C00, 0x001800, 0x001800, 0x000000, 0x000000, 0x000000,
     ],
     [
-        0x000000, 0x000000, 0x000000, 0x000000, 0x001000, 0x003000, 0x007000, 0x00F000, 0x01FFF8,
-        0x07FFF8, 0x0FFFF8, 0x1FFFF8, 0x1FFFF8, 0x0FFFF8, 0x07FFF8, 0x01FFF8, 0x00F000, 0x007000,
-        0x003000, 0x001000, 0x000000, 0x000000, 0x000000, 0x000000,
+        0x000000, 0x000000, 0x000020, 0x000060, 0x0001E0, 0x0007E0, 0x000FE0, 0x003FE0, 0x007FE0,
+        0x01FFE0, 0x07FFE0, 0x0FFFE0, 0x1FFFE0, 0x07FFE0, 0x01FFE0, 0x00FFE0, 0x003FE0, 0x001FE0,
+        0x0007E0, 0x0001E0, 0x0000E0, 0x000020, 0x000000, 0x000000,
     ],
     [
-        0x000000, 0x000000, 0x000000, 0x1FFF00, 0x100100, 0x100100, 0x100100, 0x100100, 0x100100,
-        0x107FFC, 0x104104, 0x104104, 0x104944, 0x104944, 0x104104, 0x1FFF04, 0x004004, 0x004FC4,
-        0x004004, 0x004004, 0x004004, 0x007FFC, 0x000000, 0x000000,
+        0x001800, 0x007E00, 0x01E780, 0x0781E0, 0x1E0078, 0x38001E, 0x78001E, 0x7E007E, 0x6781E6,
+        0x61E786, 0x607E06, 0x601806, 0x601806, 0x601806, 0x601806, 0x601806, 0x601806, 0x601806,
+        0x78181E, 0x1E1878, 0x0799E0, 0x01FF80, 0x007E00, 0x001800,
     ],
 ];
 
@@ -351,108 +357,190 @@ impl Painter<'_> {
         }
     }
 
-    /// Draw the entire GUI button surface from the existing Mojang HUD atlas,
-    /// including its centre, without stretching its three-pixel corners.
-    fn vanilla_button_surface(&mut self, x: f32, y: f32, radius: f32, pressed: bool) -> bool {
-        let regular = "gui/sprites/widget/button";
-        let highlighted = "gui/sprites/widget/button_highlighted";
-        let name = if pressed && self.atlas.sprites.contains_key(highlighted) {
-            highlighted
-        } else {
-            regular
-        };
-        let Some(sprite) = self.atlas.sprites.get(name).copied() else {
-            return false;
-        };
-        let sw = sprite.w as f32;
-        let sh = sprite.h.min(20) as f32;
-        if sw < 16.0 || sh < 12.0 {
-            return false;
+    // Deterministic rounded-rect gradient, emitted as ordinary HUD triangles.
+    // This retains GUI-pixel geometry in the actual game renderer.
+    fn chrome_gradient(
+        &mut self,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        radius: f32,
+        top: u32,
+        bottom: u32,
+        opacity: f32,
+    ) {
+        let steps = 32;
+        for i in 0..steps {
+            let v = (i as f32 + 0.5) / steps as f32;
+            let dy = v * h;
+            let corner_y = if dy < radius {
+                radius - dy
+            } else if dy > h - radius {
+                dy - (h - radius)
+            } else {
+                0.0
+            };
+            let cut = if corner_y > 0.0 {
+                radius - (radius * radius - corner_y * corner_y).max(0.0).sqrt()
+            } else {
+                0.0
+            };
+            let channel = |shift: u32| {
+                let a = ((top >> shift) & 0xff) as f32;
+                let b = ((bottom >> shift) & 0xff) as f32;
+                (a + (b - a) * v).round() as u32
+            };
+            let rgb = (channel(16) << 16) | (channel(8) << 8) | channel(0);
+            let ink = self.color(rgb, opacity);
+            self.rect(
+                x + cut,
+                y + i as f32 * h / steps as f32,
+                (w - 2.0 * cut).max(0.0),
+                h / steps as f32 + 0.015,
+                ink,
+            );
         }
-        let border = 3.0f32;
-        let dst_border = (radius * 0.10).round().max(2.0);
-        let sx = [0.0, border, sw - border, sw];
-        let sy = [0.0, border, sh - border, sh];
-        let dx = [
-            x - radius,
-            x - radius + dst_border,
-            x + radius - dst_border,
-            x + radius,
-        ];
-        let dy = [
-            y - radius,
-            y - radius + dst_border,
-            y + radius - dst_border,
-            y + radius,
-        ];
-        let du = sprite.u1 - sprite.u0;
-        let dv = sprite.v1 - sprite.v0;
-        let tint = self.color(0xFFFFFF, 1.0);
-        for row in 0..3 {
-            for col in 0..3 {
-                let mut crop = sprite;
-                crop.u0 = sprite.u0 + du * sx[col] / sw;
-                crop.u1 = sprite.u0 + du * sx[col + 1] / sw;
-                crop.v0 = sprite.v0 + dv * sy[row] / sprite.h as f32;
-                crop.v1 = sprite.v0 + dv * sy[row + 1] / sprite.h as f32;
-                self.batch.rect_uv(
-                    dx[col],
-                    dy[row],
-                    dx[col + 1] - dx[col],
-                    dy[row + 1] - dy[row],
-                    crop,
-                    tint,
-                );
-            }
-        }
-        true
+    }
+
+    fn chrome_button(&mut self, x: f32, y: f32, r: f32, pressed: bool) {
+        let bezel = (r * 0.054).max(1.2);
+        let corner = (r * 0.255).max(3.0);
+        let shift = if pressed { (r * 0.025).max(1.0) } else { 0.0 };
+        let cy = y + shift;
+        let shadow = self.color(0x111A24, 1.15);
+        let outline = self.color(0x293746, 1.25);
+        let rim = self.color(0xDCE7F1, 1.12);
+        self.round_rect(
+            x - r,
+            cy - r + bezel * 0.66,
+            2.0 * r,
+            2.0 * r,
+            corner,
+            shadow,
+        );
+        self.round_rect(x - r, cy - r, 2.0 * r, 2.0 * r, corner, outline);
+        let inner = (corner - bezel).max(2.0);
+        self.round_rect(
+            x - r + bezel,
+            cy - r + bezel * 0.82,
+            2.0 * (r - bezel),
+            2.0 * r - bezel * 1.84,
+            inner,
+            rim,
+        );
+        let face = bezel * 1.75;
+        let face_corner = (corner - face).max(2.0);
+        self.chrome_gradient(
+            x - r + face,
+            cy - r + face,
+            2.0 * (r - face),
+            2.0 * (r - face),
+            face_corner,
+            if pressed { 0xA2B1BE } else { 0xDDE9F4 },
+            if pressed { 0x778999 } else { 0x9EADC2 },
+            0.99,
+        );
+        // Fine light specular rim and lower inner seat. Unlike a block
+        // texture, every pixel here describes a control surface.
+        let glow = self.color(0xF6FCFF, if pressed { 0.28 } else { 0.95 });
+        let seat = self.color(0x405062, 0.68);
+        let e = face + bezel * 0.37;
+        self.round_rect(
+            x - r + e,
+            cy - r + e,
+            2.0 * (r - e),
+            2.0 * (r - e),
+            (face_corner - bezel * 0.3).max(1.0),
+            glow,
+        );
+        // Clear the middle of the rim with a smaller gradient so the highlight
+        // is a hairline rather than an opaque white slab.
+        let clear = e + (bezel * 0.42).max(0.8);
+        self.chrome_gradient(
+            x - r + clear,
+            cy - r + clear,
+            2.0 * (r - clear),
+            2.0 * (r - clear),
+            (face_corner - bezel * 0.8).max(1.0),
+            if pressed { 0xA2B1BE } else { 0xDDE9F4 },
+            if pressed { 0x778999 } else { 0x9EADC2 },
+            0.99,
+        );
+        // The dark perimeter seam is intentionally subtle.
+        let seam = bezel * 0.65;
+        let seam_w = (bezel * 0.38).max(0.5);
+        self.round_rect(
+            x - r + seam,
+            cy - r + seam,
+            2.0 * (r - seam),
+            2.0 * (r - seam),
+            (corner - seam).max(1.0),
+            seat,
+        );
+        self.chrome_gradient(
+            x - r + seam + seam_w,
+            cy - r + seam + seam_w,
+            2.0 * (r - seam - seam_w),
+            2.0 * (r - seam - seam_w),
+            (corner - seam - seam_w).max(1.0),
+            if pressed { 0xA2B1BE } else { 0xDDE9F4 },
+            if pressed { 0x778999 } else { 0x9EADC2 },
+            0.99,
+        );
     }
 
     fn control(&mut self, x: f32, y: f32, r: f32, sym: Symbol) {
-        // UI artwork owns the entire control surface. World blocks are never
-        // reused as interface materials; pressed state uses the GUI highlight.
         let pressed = matches!(sym, Symbol::Sprint) && self.cfg.always_sprint;
-        if !self.vanilla_button_surface(x, y, r, pressed) {
-            // Keep a compact, neutral fallback before Mojang bootstrap finishes.
-            let edge = (r * 0.047).round().max(1.25);
-            let face = if pressed {
-                self.color(0x94B29C, 1.0)
-            } else {
-                self.color(0xC5C5C2, 1.0)
-            };
-            let outline = self.color(0x222629, 1.08);
-            let highlight = self.color(0xECF0EA, 0.74);
-            let bottom = self.color(0x4B5050, 0.90);
-            let lip = (r * 0.024).round().max(1.0);
-            self.rect(
-                x - r + edge,
-                y - r + edge,
-                2.0 * (r - edge),
-                2.0 * (r - edge),
-                face,
-            );
-            self.stroke_box(x, y, r, edge, outline);
-            self.rect(x - r + edge, y - r + edge, 2.0 * (r - edge), lip, highlight);
-            self.rect(
-                x - r + edge,
-                y + r - edge - lip,
-                2.0 * (r - edge),
-                lip,
-                bottom,
-            );
-        }
-        self.glyph(x, y, r, sym);
+        self.chrome_button(x, y, r, pressed);
+        self.glyph(
+            x,
+            y + if pressed { (r * 0.025).max(1.0) } else { 0.0 },
+            r,
+            sym,
+        );
+    }
+
+    // Decorative recessed D-pad centre: a single cluster, not five loose
+    // buttons. Touch tracking deliberately remains owned by movement.
+    fn dpad_hub(&mut self, x: f32, y: f32, r: f32) {
+        let corner = (r * 0.22).max(3.0);
+        let edge = (r * 0.048).max(1.2);
+        let outline = self.color(0x283748, 0.65);
+        let rim = self.color(0xA8BBD0, 0.70);
+        let face = self.color(0x8DA0B6, 0.56);
+        self.round_rect(x - r, y - r, 2.0 * r, 2.0 * r, corner, outline);
+        self.round_rect(
+            x - r + edge,
+            y - r + edge,
+            2.0 * (r - edge),
+            2.0 * (r - edge),
+            (corner - edge).max(1.0),
+            rim,
+        );
+        self.round_rect(
+            x - r + edge * 1.8,
+            y - r + edge * 1.8,
+            2.0 * (r - edge * 1.8),
+            2.0 * (r - edge * 1.8),
+            (corner - edge * 1.5).max(1.0),
+            face,
+        );
     }
 
     fn joystick(&mut self, x: f32, y: f32, r: f32) {
-        let disc = self.color(0x13171B, 0.22);
-        let ring = self.color(0xF4F7F8, 2.45);
-        let dark = self.color(0x0C0F11, 1.80);
-        let face = self.color(0xE4E9EB, 2.15);
+        let disc = self.color(0x1B2B39, 0.54);
+        let ring = self.color(0xB8C9D8, 1.15);
+        let groove = self.color(0x6D8398, 0.65);
+        let dark = self.color(0x1C2B3B, 1.20);
+        let face = self.color(0xDAE5EF, 1.22);
+        let trim = self.color(0x8193A8, 0.80);
         self.disc(x, y, r, disc);
-        self.ring(x, y, r * 0.95, r * 0.041, ring);
-        self.disc(x, y + r * 0.032, r * 0.42, dark);
-        self.disc(x, y, r * 0.36, face);
+        self.ring(x, y, r * 0.91, r * 0.055, ring);
+        self.ring(x, y, r * 0.78, r * 0.016, groove);
+        self.disc(x, y + r * 0.04, r * 0.40, dark);
+        self.disc(x, y, r * 0.34, face);
+        self.ring(x, y, r * 0.33, r * 0.035, trim);
     }
 
     // Original 24px glyphs using the exact Java Canvas bitmap masks.

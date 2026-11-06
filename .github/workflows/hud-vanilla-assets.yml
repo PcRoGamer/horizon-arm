@@ -1,7 +1,7 @@
-name: Native GUI button surface, no world-block textures
+name: Polished mobile chrome HUD parity
 on:
   push:
-    branches: [tools/vanilla-asset-touch-material]
+    branches: [tools/vanilla-asset-touch-material, feat/bedrock-chrome-hud]
   workflow_dispatch:
 
 jobs:
@@ -17,7 +17,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.14.3'
-      - name: Verify whole native GUI sprite renders in Android and Rust
+      - name: Validate rounded chrome controls and icon parity
         run: python3 tools/test_touch_layout_geometry.py
       - name: Build and capture genuine Android Canvas HUD
         run: |
@@ -32,7 +32,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: hud-native-gui-widget-fixture-png
+          name: hud-polished-mobile-chrome-fixture-png
           path: artifacts/hud-native-skia/*.png
           if-no-files-found: warn
 

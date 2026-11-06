@@ -191,8 +191,8 @@ fn android_dpad_geometry(width: f64, height: f64, scale: f64) -> (f64, f64, f64,
     let hotbar_scale = 1.36_f64.min((gw * 0.5 - 10.0) / (91.0 + 20.0));
     let bar_left = (gw * 0.5 - 91.0 * hotbar_scale) * f64::from(gui);
     let bar_top = (gh - 15.0 - 22.0 * hotbar_scale) * f64::from(gui);
-    let r = 0.068 * height * scale;
-    let offset = 0.147 * height * scale;
+    let r = 0.052 * height * scale;
+    let offset = 0.112 * height * scale;
     let cx = (0.11 * width).max(0.23 * height * scale);
     let mut cy = 0.72 * height;
     if cx + offset + r > bar_left - 9.0 {
@@ -464,7 +464,7 @@ fn handle_game_touch(t: winit_real::event::Touch) {
         // fractions of screen height so phones and tablets keep square controls.
         let scale = android_touch_scale();
         let dpad = android_touch_dpad();
-        let (dpad_x, dpad_y, dpad_offset, dpad_r) = android_dpad_geometry(width, height, scale);
+        let (dpad_x, dpad_y, _dpad_offset, _dpad_r) = android_dpad_geometry(width, height, scale);
         let move_x = if dpad { dpad_x / width } else { 0.11 };
         let move_y = if dpad {
             dpad_y / height
@@ -473,8 +473,16 @@ fn handle_game_touch(t: winit_real::event::Touch) {
         };
         let sprint_at = if dpad {
             [
-                (dpad_x + 1.55 * dpad_offset) / width,
-                (dpad_y - 1.45 * dpad_offset) / height,
+                1.0 - (if android_touch_crosshair() {
+                    0.40
+                } else {
+                    0.29
+                }) / aspect,
+                if android_touch_crosshair() {
+                    0.45
+                } else {
+                    0.55
+                },
             ]
         } else {
             [0.11 + 0.190 / aspect, 0.57]
@@ -492,17 +500,17 @@ fn handle_game_touch(t: winit_real::event::Touch) {
             TouchRole::Button(3) // Native hotbar inventory end-cap.
         } else if near_square(
             p,
-            [0.5 + (0.050 - 0.067 * scale) / aspect, 0.045],
-            0.028 * scale,
+            [0.5 + (0.050 - 0.084 * scale) / aspect, 0.058],
+            0.036 * scale,
             aspect,
         ) {
             TouchRole::Perspective
-        } else if near_square(p, [0.5 + 0.050 / aspect, 0.045], 0.028 * scale, aspect) {
+        } else if near_square(p, [0.5 + 0.050 / aspect, 0.058], 0.036 * scale, aspect) {
             TouchRole::Chat
         } else if near_square(
             p,
-            [0.5 + (0.050 + 0.067 * scale) / aspect, 0.045],
-            0.028 * scale,
+            [0.5 + (0.050 + 0.084 * scale) / aspect, 0.058],
+            0.036 * scale,
             aspect,
         ) {
             TouchRole::Button(9) // Top-bound pause button.
@@ -516,12 +524,10 @@ fn handle_game_touch(t: winit_real::event::Touch) {
                 sync_sprint(&mut touch);
             }
             TouchRole::SprintToggle
-        } else if dpad && near_square(p, [move_x, move_y], dpad_r / height, aspect) {
-            TouchRole::Button(11) // Bedrock D-pad's centre sneak key
         } else if near(
             p,
             [move_x, move_y],
-            (if dpad { 0.206 } else { 0.112 }) * scale,
+            (if dpad { 0.180 } else { 0.112 }) * scale,
             aspect,
         ) {
             if movement_owned {
@@ -531,7 +537,7 @@ fn handle_game_touch(t: winit_real::event::Touch) {
             }
         } else if near_square(p, [1.0 - 0.133 / aspect, 0.72], 0.066 * scale, aspect) {
             TouchRole::Button(0) // South: jump
-        } else if !dpad && near_square(p, [1.0 - 0.290 / aspect, 0.73], 0.040 * scale, aspect) {
+        } else if near_square(p, [1.0 - 0.290 / aspect, 0.73], 0.040 * scale, aspect) {
             TouchRole::Button(11) // Right stick: sneak
         } else if android_touch_crosshair()
             && near_square(p, [1.0 - 0.270 / aspect, 0.56], 0.042 * scale, aspect)

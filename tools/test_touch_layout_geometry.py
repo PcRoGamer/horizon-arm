@@ -40,6 +40,7 @@ for code,expected in (
     (HOTBAR,("pub(super) const MAGNIFICATION: f32 = 1.36;",
              "pub(super) const BOTTOM_GAP: f32 = 15.0;",
              "pub(super) const INVENTORY_CAP: f32 = 20.0;",
+             "chrome_hotbar_background", "rotate_right(count)",
              "transform_hotbar", "inventory_cap")),
     (GESTURE,("pub const HOTBAR_SCALE: f32 = 1.36;",
               "pub const HOTBAR_BOTTOM: f32 = 15.0;",
@@ -47,9 +48,9 @@ for code,expected in (
               "pub fn hotbar_inventory", "pub fn hotbar_slot")),
     (GAME,("touch_hotbar::transform_hotbar","touch_hotbar::inventory_cap",
            "touch_hotbar::lift_stats")),
-    (JAVA,('control(canvas, .5f + (.050f - topStep) / aspect, .045f, .028f, "perspective")',
-           'control(canvas, .5f + .050f / aspect, .045f, .028f, "chat")',
-           'control(canvas, .5f + (.050f + topStep) / aspect, .045f, .028f, "pause")',
+    (JAVA,('control(canvas, .5f + (.050f - topStep) / aspect, .058f, .036f, "perspective")',
+           'control(canvas, .5f + .050f / aspect, .058f, .036f, "chat")',
+           'control(canvas, .5f + (.050f + topStep) / aspect, .058f, .036f, "pause")',
            'nativeSetControls(scheme, controlScale, alwaysSprint)',
            'sprint.setText("Always sprint when moving forward")')),
     (PREVIEW,("Symbol::Chat", "Symbol::Sprint", "HORIZON_TOUCH_PREVIEW_ALWAYS_SPRINT")),
@@ -66,23 +67,26 @@ for code,expected in (
 assert 'control(canvas, inventoryX' not in JAVA, "Floating inventory button resurfaced"
 assert "TouchRole::Button(3) // Native hotbar inventory" in INPUT
 assert "android_dpad_geometry" in INPUT and "dpadGeometry()" in JAVA
-assert "centre sneak key" in INPUT
-# The entire button must come from Mojang's purpose-made GUI sprite,
-# including the centre. Never use a world-block texture as a UI control.
-assert 'getContext().getFilesDir()' in JAVA
-assert '"assets/minecraft/textures/" + path + ".png"' in JAVA
-assert 'refreshButtonSprites()' in JAVA
-assert 'gui/sprites/widget/button' in JAVA and 'gui/sprites/widget/button' in PREVIEW
-assert 'drawVanillaButton(' in JAVA and 'vanilla_button_surface(' in PREVIEW
-assert 'frameSource.set(sx[col], sy[row]' in JAVA
-assert 'self.batch.rect_uv(' in PREVIEW
-assert 'if (row == 1 && col == 1) continue;' not in JAVA, "Android omits GUI button centre"
-assert 'if row == 1 && col == 1' not in PREVIEW, "Rust omits GUI button centre"
+assert "Four-way movement is kept separate" in JAVA
+assert "TouchRole::SprintToggle" in INPUT
+# The gameplay HUD now uses a purpose-built rounded chrome material. No
+# Minecraft world-block textures, scraped preview images or fake inventory.
+assert "chromeButton(" in JAVA and "chrome_button(" in PREVIEW
+assert "dpadHub(canvas, cx, cy, r);" in JAVA
+assert "draw.dpad_hub(cx, cy, r);" in PREVIEW
+assert "LinearGradient" in JAVA and "chrome_gradient(" in PREVIEW
+assert "drawRoundRect" in JAVA and "round_rect(" in PREVIEW
 assert '"block/stone"' not in JAVA and '"block/stone"' not in PREVIEW
-assert 'buttonStone' not in JAVA, "Obsolete block-face cache remains"
-# The same existing runtime asset cache and atlas serves both renderers.
-# No Mojang-owned pixels or a secondary downloader are added to the APK.
-
+assert "refreshButtonSprites" not in JAVA
+assert "gui/sprites/widget/button" not in PREVIEW
+assert "inventory_cap" in HOTBAR and "backpack silhouette" in HOTBAR.lower()
+assert 'touch_hotbar::transform_hotbar(batch, &g.gui.atlas, first);' in GAME
+assert 'chrome_hotbar_background(batch, atlas);' in HOTBAR
+assert 'vertex.color = rgba(255, 255, 255, 0);' in HOTBAR
+assert 'chrome_hotbar_background' in read("crates/horizon-client/src/game/touch_hotbar.rs")
+assert 'transform_hotbar(&mut batch, &atlas, first)' in read("crates/horizon-client/src/bin/hud-offscreen.rs")
+assert 'prefs.getInt("scheme", 2)' in JAVA
+assert 'scheme: number("HORIZON_TOUCH_PREVIEW_SCHEME", 2, 0, 3)' in PREVIEW
 assert "((x-left)/(20.0*s))" in GESTURE.replace(" ",""), "Adaptive hotbar hit geometry changed"
 
 def box(x,y,r):
@@ -110,9 +114,10 @@ def layout(w,h,scheme,scale):
     )
     controls={
         "jump":box(w-.133*h,.72*h,.066*h*scale),
-        "pause":box(.5*w+(.05+.067*scale)*h,.045*h,.028*h*scale),
-        "chat":box(.5*w+.050*h,.045*h,.028*h*scale),
-        "perspective":box(.5*w+(.05-.067*scale)*h,.045*h,.028*h*scale),
+        "sneak":box(w-.290*h,.73*h,.040*h*scale),
+        "pause":box(.5*w+(.05+.084*scale)*h,.058*h,.036*h*scale),
+        "chat":box(.5*w+.050*h,.058*h,.036*h*scale),
+        "perspective":box(.5*w+(.05-.084*scale)*h,.058*h,.036*h*scale),
     }
     if scheme & 1:
         controls.update({
@@ -125,21 +130,20 @@ def layout(w,h,scheme,scale):
         if .11*w+joystick_r > rect_bar[0]-9:
             joystick_y=min(joystick_y,rect_bar[1]-9-joystick_r)
         controls.update({
-            "sneak":box(w-.290*h,.73*h,.040*h*scale),
             "sprint":box(.11*w+.190*h,.57*h,.035*h*scale),
             "joystick":box(.11*w,joystick_y,joystick_r),
         })
     else:
-        off=.147*h*scale
-        r=.068*h*scale
+        off=.112*h*scale
+        r=.052*h*scale
         cx=max(.11*w,.23*h*scale)
         cy=.72*h
         if cx+off+r > rect_bar[0]-9:
             cy=min(cy,rect_bar[1]-9-r)
         if cx+r > rect_bar[0]-9:
             cy=min(cy,rect_bar[1]-9-off-r)
-        controls["sprint"]=box(cx+1.55*off,cy-1.45*off,.035*h*scale)
-        controls["sneak"]=box(cx,cy,r)
+        controls["sprint"]=box(w-(.40 if scheme & 1 else .29)*h,
+                               (.45 if scheme & 1 else .55)*h,.035*h*scale)
         for name,dx,dy in [("up",0,-1),("right",1,0),("down",0,1),("left",-1,0)]:
             controls["dpad_"+name]=box(cx+dx*off,cy+dy*off,r)
     return controls,rect_bar,cap
@@ -160,4 +164,4 @@ for (w,h),scale,scheme in itertools.product(screens,(.8,1.0,1.2),range(4)):
     count+=1
 print(f"PASS: {count} device/mode/scale combinations, true hotbar end-cap and touch geometry")
 print("PASS: no action overlaps the raised hotbar or another button")
-print("PASS: sprint/always-sprint/chat JNI, Android input, Windows preview, native HUD routing")
+print("PASS: sprint/always-sprint/chat JNI, D-pad action relocation and chrome geometry")

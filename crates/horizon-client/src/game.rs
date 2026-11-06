@@ -8521,7 +8521,7 @@ impl Game<'_> {
                             }
                         }
                     }
-                    touch_hotbar::transform_hotbar(batch, first);
+                    touch_hotbar::transform_hotbar(batch, &g.gui.atlas, first);
                     touch_hotbar::inventory_cap(batch, &g.gui.atlas);
                 }
             });

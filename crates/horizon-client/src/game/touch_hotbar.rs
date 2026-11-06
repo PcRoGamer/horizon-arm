@@ -22,9 +22,83 @@ pub(super) fn enabled() -> bool {
                 .is_some_and(|s| matches!(s.as_str(), "1" | "true" | "yes")))
 }
 
-/// Apply the same affine transform to *sprites, selection and item vertices*.
-/// Coordinates are GUI pixels (the engine handles physical DPI separately).
-pub(super) fn transform_hotbar(batch: &mut HudBatch, first: usize) {
+/// Paint an original silver-slate nine-slot chrome tray into the actual HUD
+/// batch. Only the hotbar background is replaced: vanilla's selected-slot
+/// sprite, item sprites, offhand indicator and pop animation are left intact.
+fn chrome_hotbar_background(batch: &mut HudBatch, atlas: &HudAtlas) {
+    let s = magnification(batch.width);
+    let w = 182.0 * s;
+    let h = 22.0 * s;
+    let x = batch.width * 0.5 - 91.0 * s;
+    let y = batch.height - BOTTOM_GAP - h;
+    // One solid rounded-looking rail in GUI pixels; the beveled, individual
+    // slot panels supply depth. Does not sample a Minecraft block texture.
+    batch.fill(atlas, x, y + 0.8 * s, w, h, rgba(18, 27, 37, 242));
+    batch.fill(atlas, x, y, w, h - 0.8 * s, rgba(40, 53, 68, 252));
+    batch.fill(
+        atlas,
+        x + 0.75 * s,
+        y + 0.72 * s,
+        w - 1.5 * s,
+        h - 2.3 * s,
+        rgba(209, 221, 234, 248),
+    );
+    batch.fill(
+        atlas,
+        x + 1.6 * s,
+        y + 1.6 * s,
+        w - 3.2 * s,
+        h - 4.0 * s,
+        rgba(84, 99, 116, 250),
+    );
+    // The 20px cadence and 22px rail height are unchanged. Nine actual
+    // gameplay slots remain where vanilla selection and item vertices expect.
+    for slot in 0..9 {
+        let sx = x + (1.8 + slot as f32 * 20.0) * s;
+        let sy = y + 2.1 * s;
+        let sw = 18.3 * s;
+        let sh = 17.5 * s;
+        batch.fill(atlas, sx, sy, sw, sh, rgba(47, 62, 77, 244));
+        batch.fill(
+            atlas,
+            sx + 0.9 * s,
+            sy + 0.9 * s,
+            sw - 1.8 * s,
+            sh - 1.9 * s,
+            rgba(91, 107, 121, 240),
+        );
+        batch.fill(
+            atlas,
+            sx + 1.8 * s,
+            sy + 1.8 * s,
+            sw - 3.6 * s,
+            sh - 3.9 * s,
+            rgba(57, 68, 77, 228),
+        );
+        batch.fill(
+            atlas,
+            sx + 1.8 * s,
+            sy + 1.8 * s,
+            sw - 3.6 * s,
+            0.62 * s,
+            rgba(116, 131, 148, 195),
+        );
+        batch.fill(
+            atlas,
+            sx + 1.8 * s,
+            sy + sh - 2.5 * s,
+            sw - 3.6 * s,
+            0.62 * s,
+            rgba(29, 40, 52, 220),
+        );
+    }
+}
+
+/// Affine-transform the genuine hotbar draw call, then replace exactly the
+/// first six vertices (vanilla's 182x22 background quad) with a chrome tray.
+/// Rotate the new vertices *before* vanilla selection and items so z-order,
+/// icons, item counts and pop animations remain intact.
+pub(super) fn transform_hotbar(batch: &mut HudBatch, atlas: &HudAtlas, first: usize) {
     if !enabled() {
         return;
     }
@@ -34,6 +108,18 @@ pub(super) fn transform_hotbar(batch: &mut HudBatch, first: usize) {
         vertex.pos[0] = cx + (vertex.pos[0] - cx) * s;
         vertex.pos[1] = bottom + (vertex.pos[1] - batch.height) * s;
     }
+    // Hud.extractItemHotbar always emits the first Sprite as "hud/hotbar".
+    // Its two triangles are the only six vertices we hide. Everything after,
+    // including the selected slot and actual item stacks, remains unchanged.
+    if atlas.sprites.contains_key("gui/sprites/hud/hotbar") && batch.vertices.len() >= first + 6 {
+        for vertex in &mut batch.vertices[first..first + 6] {
+            vertex.color = rgba(255, 255, 255, 0);
+        }
+    }
+    let start = batch.vertices.len();
+    chrome_hotbar_background(batch, atlas);
+    let count = batch.vertices.len() - start;
+    batch.vertices[first..].rotate_right(count);
 }
 
 pub(super) fn lift_stats(batch: &mut HudBatch, first: usize) {
@@ -116,59 +202,92 @@ pub(super) fn inventory_cap(batch: &mut HudBatch, atlas: &HudAtlas) {
     let cap = INVENTORY_CAP * s;
     let x = batch.width * 0.5 + 91.0 * s - 1.0;
     let y = batch.height - BOTTOM_GAP - side;
-    // Bedrock-style ellipsis is a muted extension of the hotbar, not an
-    // independently raised 3x3 app-grid button.
-    // Bedrock's inventory tab uses a mid-grey *face*, not the dark,
-    // nearly black inset previously used here. The slot-compatible bevel
-    // and bottom shadow provide depth without swallowing the icon.
-    batch.fill(atlas, x, y, cap, side, rgba(19, 22, 23, 246));
+    // Integrated chrome: native nine-slot sprites remain untouched beneath
+    // this end cap, while its icon and material match the mobile controls.
+    batch.fill(atlas, x, y + 0.8 * s, cap, side, rgba(17, 26, 36, 245));
+    batch.fill(atlas, x, y, cap, side - 0.8 * s, rgba(42, 55, 70, 248));
     batch.fill(
         atlas,
         x + 1.0 * s,
-        y + 1.0 * s,
+        y + 0.8 * s,
         cap - 2.0 * s,
-        side - 2.0 * s,
-        rgba(118, 126, 124, 248),
+        side - 2.4 * s,
+        rgba(204, 218, 232, 245),
     );
-    batch.fill(
-        atlas,
-        x + 2.5 * s,
-        y + 2.5 * s,
-        cap - 5.0 * s,
-        side - 5.0 * s,
-        rgba(149, 157, 153, 246),
-    );
-    batch.fill(
-        atlas,
-        x + 2.5 * s,
-        y + 2.5 * s,
-        cap - 5.0 * s,
-        1.0 * s,
-        rgba(198, 205, 200, 242),
-    );
-    batch.fill(
-        atlas,
-        x + 2.5 * s,
-        y + side - 3.5 * s,
-        cap - 5.0 * s,
-        1.0 * s,
-        rgba(75, 82, 80, 235),
-    );
-    let dot = 3.5 * s;
-    let gap = 2.5 * s;
-    let total = 3.0 * dot + 2.0 * gap;
-    let dx = x + (cap - total) * 0.5;
-    let dy = y + (side - dot) * 0.5;
-    for i in 0..3 {
+    let inner_x = x + 2.3 * s;
+    let inner_y = y + 2.1 * s;
+    let inner_w = cap - 4.6 * s;
+    let inner_h = side - 4.7 * s;
+    for row in 0..10 {
+        let t = row as f32 / 9.0;
+        let r = (212.0 - 52.0 * t) as u8;
+        let g = (224.0 - 52.0 * t) as u8;
+        let b = (237.0 - 40.0 * t) as u8;
         batch.fill(
             atlas,
-            dx + i as f32 * (dot + gap),
-            dy,
-            dot,
-            dot,
-            rgba(236, 243, 239, 252),
+            inner_x,
+            inner_y + inner_h * t,
+            inner_w,
+            inner_h / 9.0 + 0.02,
+            rgba(r, g, b, 244),
         );
     }
+    // Compact backpack silhouette: outline, lid, clasp and carry handle.
+    let bx = x + cap * 0.28;
+    let by = y + side * 0.36;
+    let bw = cap * 0.44;
+    let bh = side * 0.38;
+    let ink = rgba(42, 52, 65, 254);
+    let white = rgba(235, 242, 247, 252);
+    let dark = rgba(105, 121, 138, 252);
+    batch.fill(atlas, bx, by, bw, bh, ink);
+    batch.fill(
+        atlas,
+        bx + 0.9 * s,
+        by + 0.9 * s,
+        bw - 1.8 * s,
+        bh - 1.8 * s,
+        white,
+    );
+    batch.fill(
+        atlas,
+        bx + 1.0 * s,
+        by + bh * 0.45,
+        bw - 2.0 * s,
+        1.0 * s,
+        dark,
+    );
+    batch.fill(
+        atlas,
+        bx + bw * 0.40,
+        by + bh * 0.36,
+        bw * 0.20,
+        bh * 0.29,
+        ink,
+    );
+    // Squared carry strap, drawn with the same 1px inventory icon grid.
+    batch.fill(atlas, bx + bw * 0.25, by - 2.2 * s, bw * 0.50, 0.9 * s, ink);
+    batch.fill(atlas, bx + bw * 0.25, by - 2.2 * s, 0.9 * s, 2.8 * s, ink);
+    batch.fill(
+        atlas,
+        bx + bw * 0.75 - 0.9 * s,
+        by - 2.2 * s,
+        0.9 * s,
+        2.8 * s,
+        ink,
+    );
+    // One coherent hotbar rail: soft top reflection and lower shadow.
+    let bar_x = batch.width * 0.5 - 91.0 * s;
+    let bar_w = 182.0 * s;
+    batch.fill(atlas, bar_x, y, bar_w, 0.52 * s, rgba(214, 226, 238, 174));
+    batch.fill(
+        atlas,
+        bar_x,
+        y + side - 0.76 * s,
+        bar_w,
+        0.76 * s,
+        rgba(25, 33, 42, 160),
+    );
 }
 
 #[cfg(test)]

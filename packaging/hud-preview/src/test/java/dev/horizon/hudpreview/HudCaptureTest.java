@@ -26,80 +26,50 @@ import static org.junit.Assert.*;
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = 34)
 public class HudCaptureTest {
-    @Test public void sourceDerivedCanvasUsesWholeGuiButtonAndPressedState() throws Exception {
-        // These are synthetic interface fixtures, not Mojang-owned assets.
-        // Verify the actual versioned cache lookup and that the *centre*
-        // of a button is supplied by the GUI sprite rather than a block.
-        File dir = new File(RuntimeEnvironment.getApplication().getFilesDir(),
-                ".local/horizon-client/texture-fixture/assets/minecraft/textures/gui/sprites/widget");
-        assertTrue(dir.isDirectory() || dir.mkdirs());
-        File normalFile = new File(dir, "button.png");
-        File pressedFile = new File(dir, "button_highlighted.png");
-        for (int variant = 0; variant < 2; variant++) {
-            Bitmap sprite = Bitmap.createBitmap(200, 20, Bitmap.Config.ARGB_8888);
-            int centre = variant == 0 ? Color.rgb(184, 187, 188)
-                    : Color.rgb(121, 198, 151);
-            int border = variant == 0 ? Color.rgb(53, 58, 62)
-                    : Color.rgb(36, 75, 48);
-            for (int y = 0; y < 20; y++) {
-                for (int x = 0; x < 200; x++) {
-                    boolean edge = x < 3 || y < 3 || x >= 197 || y >= 17;
-                    sprite.setPixel(x, y, edge ? border : centre);
-                }
-            }
-            File target = variant == 0 ? normalFile : pressedFile;
-            try (FileOutputStream output = new FileOutputStream(target)) {
-                assertTrue(sprite.compress(Bitmap.CompressFormat.PNG, 100, output));
-            }
-            sprite.recycle();
-        }
-
+    @Test public void chromeButtonsHaveRoundedCornersAndPressedFeedback() throws Exception {
         HudPreviewOverlay overlay = new HudPreviewOverlay(RuntimeEnvironment.getApplication());
         overlay.menu = false;
-        overlay.scheme = 2;
+        overlay.scheme = 2; // Four-key D-pad, the new default.
         overlay.scale = 1.0f;
         overlay.opacity = 100;
-        assertTrue("Horizon must find its prepared GUI button resources",
-                overlay.refreshButtonSprites());
-        assertFalse("Button bitmaps must remain cached", overlay.refreshButtonSprites());
-        java.lang.reflect.Field frameField = HudPreviewOverlay.class.getDeclaredField("buttonFrame");
-        frameField.setAccessible(true);
-        assertNotNull("Normal GUI button surface must load", frameField.get(overlay));
-        java.lang.reflect.Field highlightField = HudPreviewOverlay.class.getDeclaredField("highlightedFrame");
-        highlightField.setAccessible(true);
-        assertNotNull("Highlighted GUI button surface must load", highlightField.get(overlay));
-
         int width = 1200, height = 630;
         overlay.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
         overlay.layout(0, 0, width, height);
-        Bitmap rendered = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-        rendered.eraseColor(Color.TRANSPARENT);
-        overlay.draw(new Canvas(rendered));
-        // The D-pad UP key's inner top-left area has no glyph or border.
-        final int x = 118, y = 345;
-        int resting = rendered.getPixel(x, y);
-        assertEquals("Whole normal sprite must paint the button centre",
-                Color.rgb(184, 187, 188), resting);
-        File output = new File("../../artifacts/hud-native-skia/dpad-gui-widget-FIXTURE-1200x630.png");
-        assertTrue(output.getParentFile().isDirectory() || output.getParentFile().mkdirs());
-        try (FileOutputStream png = new FileOutputStream(output)) {
-            assertTrue(rendered.compress(Bitmap.CompressFormat.PNG, 100, png));
+        Bitmap resting = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        resting.eraseColor(Color.TRANSPARENT);
+        overlay.draw(new Canvas(resting));
+        assertEquals("The D-pad UP key must have rounded, transparent corners",
+                0, Color.alpha(resting.getPixel(113, 351)));
+        assertTrue("Its chrome face must be visible",
+                Color.alpha(resting.getPixel(125, 375)) > 50);
+        assertTrue("D-pad neutral hub should visually join the arrow cluster",
+                Color.alpha(resting.getPixel(145, 454)) > 40);
+        java.util.HashSet<Integer> shades = new java.util.HashSet<>();
+        for (int y = 368; y < 385; y += 2) {
+            for (int x = 121; x < 136; x += 2) {
+                if (Color.alpha(resting.getPixel(x, y)) > 30) {
+                    shades.add(resting.getPixel(x, y));
+                }
+            }
         }
-        rendered.recycle();
+        assertTrue("Button surface must have shading and depth",
+                shades.size() >= 3);
+        File dir = new File("../../artifacts/hud-native-skia");
+        assertTrue(dir.isDirectory() || dir.mkdirs());
+        File output = new File(dir, "dpad-chrome-FIXTURE-1200x630.png");
+        try (FileOutputStream png = new FileOutputStream(output)) {
+            assertTrue(resting.compress(Bitmap.CompressFormat.PNG, 100, png));
+        }
         assertTrue(output.length() > 1000);
-
-        // D-pad UP is now held. The actual game state chooses the pressed
-        // GUI sprite, changing the same untouched centre pixel.
         overlay.joyY = 0.8f;
         Bitmap pressed = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         pressed.eraseColor(Color.TRANSPARENT);
         overlay.draw(new Canvas(pressed));
-        assertEquals("Pressed state must use native highlighted button centre",
-                Color.rgb(121, 198, 151), pressed.getPixel(x, y));
+        assertNotEquals("Pressed touch control must have responsive shading",
+                resting.getPixel(125, 375), pressed.getPixel(125, 375));
+        resting.recycle();
         pressed.recycle();
-        assertTrue(normalFile.delete());
-        assertTrue(pressedFile.delete());
     }
 
     @Test public void renderAllFourModesInNativeSkia() throws Exception {

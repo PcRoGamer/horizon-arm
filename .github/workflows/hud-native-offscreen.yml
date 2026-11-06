@@ -2,7 +2,7 @@ name: Native HUD-only render
 on:
   workflow_dispatch:
   push:
-    branches: [tools/native-hud-offscreen-preview, tools/vanilla-asset-touch-material]
+    branches: [tools/native-hud-offscreen-preview, tools/vanilla-asset-touch-material, feat/bedrock-chrome-hud]
   pull_request:
     branches: [feat/bedrock-touch-polish]
 
@@ -110,7 +110,7 @@ jobs:
   # Full game APK, not the minimal HUD-only preview. Package the real Rust
   # Android native engine, verified resource bundle, and production Java shell.
   android-arm64:
-    if: github.ref == 'refs/heads/tools/native-hud-offscreen-preview' || github.ref == 'refs/heads/tools/vanilla-asset-touch-material'
+    if: github.ref == 'refs/heads/tools/native-hud-offscreen-preview' || github.ref == 'refs/heads/tools/vanilla-asset-touch-material' || github.ref == 'refs/heads/feat/bedrock-chrome-hud'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
