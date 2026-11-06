@@ -15,7 +15,7 @@ android {
         manifest.srcFile 'AndroidManifest.xml'
         java.srcDirs = ['java']
         jniLibs.srcDirs = ['../../.local/android/gradle-jni']
-        assets.srcDirs = ['../../.local/android/gradle-assets']
+        assets.srcDirs = ['../../.local/android/gradle-assets', '../../third_party/touchcontroller/assets']
         res.srcDirs = ['res']
     }
     packaging { jniLibs { useLegacyPackaging = true } }

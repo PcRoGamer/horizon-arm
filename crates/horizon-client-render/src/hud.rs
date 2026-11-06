@@ -340,6 +340,209 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
 }
 /// A packed atlas image: sprite name, size and RGBA pixels.
 type PackedImage = (String, u32, u32, Vec<u8>);
+// TouchController's original LGPL-3.0-or-later pixel-art control textures.
+// Each complete PNG remains an independently licensed source file under
+// third_party/touchcontroller/assets/; see NOTICE.txt and COPYING.LGPL-3.0.
+// No TouchController Kotlin/Java implementation code is copied into Horizon.
+const HORIZON_TOUCH_CLASSIC: &[(&str, &[u8])] = &[
+    (
+        "horizon_touch:gui/classic/dpad/up",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/dpad/up.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/dpad/up_active",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/dpad/up_active.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/dpad/right",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/dpad/right.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/dpad/right_active",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/dpad/right_active.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/dpad/down",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/dpad/down.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/dpad/down_active",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/dpad/down_active.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/dpad/left",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/dpad/left.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/dpad/left_active",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/dpad/left_active.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/jump/jump",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/jump/jump.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/jump/jump_active",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/jump/jump_active.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/sneak/sneak",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/sneak/sneak.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/sneak/sneak_active",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/sneak/sneak_active.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/sprint/sprint",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/sprint/sprint.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/sprint/sprint_active",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/sprint/sprint_active.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/attack/attack",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/attack/attack.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/attack/attack_active",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/attack/attack_active.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/use/use",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/use/use.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/use/use_active",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/use/use_active.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/chat/chat",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/chat/chat.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/chat/chat_active",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/chat/chat_active.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/pause/pause",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/pause/pause.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/pause/pause_active",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/pause/pause_active.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/perspective/perspective",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/perspective/perspective.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/perspective/perspective_active",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/perspective/perspective_active.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/inventory/inventory",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/inventory/inventory.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/inventory/inventory_active",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/inventory/inventory_active.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/joystick/pad",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/joystick/pad.png"
+        )),
+    ),
+    (
+        "horizon_touch:gui/classic/joystick/stick",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../third_party/touchcontroller/assets/horizon_touch/classic/joystick/stick.png"
+        )),
+    ),
+];
+
 /// A frame of an animated strip at `x, y`, nearest-resampled to the longer
 /// side of the frame: array layers are square, as `Sprites::load` keeps them
 /// for the world's sprite arrays.
@@ -1236,6 +1439,19 @@ impl HudAtlas {
                 animated.push(image.0.clone());
             }
             images.push(image);
+        }
+        // The Android port's touch skins are part of the app, not the downloaded
+        // Mojang resource cache or a substitute for world-block textures.
+        // Encode into the existing HUD atlas so release Android and the Windows
+        // ARM64 native debug preview share the *identical* original sprites.
+        let touch_preview = std::env::var("HORIZON_TOUCH_PREVIEW")
+            .ok()
+            .is_some_and(|s| matches!(s.as_str(), "1" | "true" | "yes"));
+        if full && (cfg!(target_os = "android") || touch_preview) {
+            for &(name, data) in HORIZON_TOUCH_CLASSIC {
+                let (width, height, rgba) = decode_bytes(data)?;
+                images.push((name.to_owned(), width, height, rgba));
+            }
         }
         let mut cit_names = HashSet::new();
         if full {
