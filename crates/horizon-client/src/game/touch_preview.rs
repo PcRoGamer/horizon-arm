@@ -351,9 +351,9 @@ impl Painter<'_> {
         }
     }
 
-    /// Vanilla menu button border from the same WGPU HUD atlas, preserving
-    /// the 3px nine-slice corners instead of stretching a 200x20 UI image.
-    fn vanilla_button_frame(&mut self, x: f32, y: f32, radius: f32, pressed: bool) -> bool {
+    /// Draw the entire GUI button surface from the existing Mojang HUD atlas,
+    /// including its centre, without stretching its three-pixel corners.
+    fn vanilla_button_surface(&mut self, x: f32, y: f32, radius: f32, pressed: bool) -> bool {
         let regular = "gui/sprites/widget/button";
         let highlighted = "gui/sprites/widget/button_highlighted";
         let name = if pressed && self.atlas.sprites.contains_key(highlighted) {
@@ -390,9 +390,6 @@ impl Painter<'_> {
         let tint = self.color(0xFFFFFF, 1.0);
         for row in 0..3 {
             for col in 0..3 {
-                if row == 1 && col == 1 {
-                    continue;
-                }
                 let mut crop = sprite;
                 crop.u0 = sprite.u0 + du * sx[col] / sw;
                 crop.u1 = sprite.u0 + du * sx[col + 1] / sw;
@@ -412,47 +409,22 @@ impl Painter<'_> {
     }
 
     fn control(&mut self, x: f32, y: f32, r: f32, sym: Symbol) {
-        // Texture-backed stone material from Horizon's existing packed Mojang
-        // atlas, matching the production Android Canvas resource lookup.
-        let edge = (r * 0.047).round().max(1.25);
-        let face = if matches!(sym, Symbol::Sprint) && self.cfg.always_sprint {
-            self.color(0x94B29C, 1.0)
-        } else {
-            self.color(0xC5C5C2, 1.0)
-        };
-        let outline = self.color(0x222629, 1.08);
-        let highlight = self.color(0xECF0EA, 0.74);
-        let bottom = self.color(0x4B5050, 0.90);
-        let lip = (r * 0.024).round().max(1.0);
-        // Same prepared Mojang "block/stone" texture already in HudAtlas.
-        // Texture-pack overrides naturally apply because the atlas is shared.
-        let left = x - r + edge;
-        let top = y - r + edge;
-        let width = 2.0 * (r - edge);
-        if self.atlas.sprites.contains_key("block/stone") {
-            let texture_tint = self.color(0xFFFFFF, 1.0);
-            self.batch.sprite_scaled(
-                self.atlas,
-                "block/stone",
-                left,
-                top,
-                width,
-                width,
-                texture_tint,
-            );
-            let light = if matches!(sym, Symbol::Sprint) && self.cfg.always_sprint {
-                self.color(0x303838, 0.28)
-            } else {
-                self.color(0xDDDDDA, 0.40)
-            };
-            self.rect(left, top, width, width, light);
-        } else {
-            // Before Mojang's first-run bootstrap finishes.
-            self.rect(left, top, width, width, face);
-        }
+        // UI artwork owns the entire control surface. World blocks are never
+        // reused as interface materials; pressed state uses the GUI highlight.
         let pressed = matches!(sym, Symbol::Sprint) && self.cfg.always_sprint;
-        if !self.vanilla_button_frame(x, y, r, pressed) {
-            // Temporary fallback before the first vanilla asset bootstrap.
+        if !self.vanilla_button_surface(x, y, r, pressed) {
+            // Keep a compact, neutral fallback before Mojang bootstrap finishes.
+            let edge = (r * 0.047).round().max(1.25);
+            let face = if pressed {
+                self.color(0x94B29C, 1.0)
+            } else {
+                self.color(0xC5C5C2, 1.0)
+            };
+            let outline = self.color(0x222629, 1.08);
+            let highlight = self.color(0xECF0EA, 0.74);
+            let bottom = self.color(0x4B5050, 0.90);
+            let lip = (r * 0.024).round().max(1.0);
+            self.rect(x - r + edge, y - r + edge, 2.0 * (r - edge), 2.0 * (r - edge), face);
             self.stroke_box(x, y, r, edge, outline);
             self.rect(x - r + edge, y - r + edge, 2.0 * (r - edge), lip, highlight);
             self.rect(

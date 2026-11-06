@@ -1,4 +1,4 @@
-name: Vanilla asset-backed touch material
+name: Native GUI button surface, no world-block textures
 on:
   push:
     branches: [tools/vanilla-asset-touch-material]
@@ -17,7 +17,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.14.3'
-      - name: Verify same cached game texture is used in both renderers
+      - name: Verify whole native GUI sprite renders in Android and Rust
         run: python3 tools/test_touch_layout_geometry.py
       - name: Build and capture genuine Android Canvas HUD
         run: |
@@ -32,7 +32,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: hud-actual-cache-lookup-and-fixture-png
+          name: hud-native-gui-widget-fixture-png
           path: artifacts/hud-native-skia/*.png
           if-no-files-found: warn
 

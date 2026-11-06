@@ -67,20 +67,21 @@ assert 'control(canvas, inventoryX' not in JAVA, "Floating inventory button resu
 assert "TouchRole::Button(3) // Native hotbar inventory" in INPUT
 assert "android_dpad_geometry" in INPUT and "dpadGeometry()" in JAVA
 assert "centre sneak key" in INPUT
-# The actual textured face must read the game assets Horizon already prepares.
-# Android uses the private game-home path, Rust uses its existing HudAtlas.
+# The entire button must come from Mojang's purpose-made GUI sprite,
+# including the centre. Never use a world-block texture as a UI control.
 assert 'getContext().getFilesDir()' in JAVA
 assert '"assets/minecraft/textures/" + path + ".png"' in JAVA
-assert 'decodeCachedTexture(version, "block/stone")' in JAVA
-assert 'refreshStoneTexture()' in JAVA
-assert 'self.atlas.sprites.contains_key("block/stone")' in PREVIEW
-assert 'self.batch.sprite_scaled(' in PREVIEW
+assert 'refreshButtonSprites()' in JAVA
 assert 'gui/sprites/widget/button' in JAVA and 'gui/sprites/widget/button' in PREVIEW
-assert 'drawVanillaFrame(' in JAVA and 'vanilla_button_frame(' in PREVIEW
+assert 'drawVanillaButton(' in JAVA and 'vanilla_button_surface(' in PREVIEW
 assert 'frameSource.set(sx[col], sy[row]' in JAVA
 assert 'self.batch.rect_uv(' in PREVIEW
-# No Mojang-owned texture is committed to Horizon; both renderers consume
-# the existing runtime cache/atlas, preserving the APK's resource separation.
+assert 'if (row == 1 && col == 1) continue;' not in JAVA, "Android omits GUI button centre"
+assert 'if row == 1 && col == 1' not in PREVIEW, "Rust omits GUI button centre"
+assert '"block/stone"' not in JAVA and '"block/stone"' not in PREVIEW
+assert 'buttonStone' not in JAVA, "Obsolete block-face cache remains"
+# The same existing runtime asset cache and atlas serves both renderers.
+# No Mojang-owned pixels or a secondary downloader are added to the APK.
 
 assert "((x-left)/(20.0*s))" in GESTURE.replace(" ",""), "Adaptive hotbar hit geometry changed"
 
