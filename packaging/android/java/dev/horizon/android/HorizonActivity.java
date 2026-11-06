@@ -517,9 +517,10 @@ public final class HorizonActivity extends GameActivity {
                 control(canvas, 1f - .145f / aspect, .52f, .042f, "use");
             }
             // Inventory is the genuine Rust hotbar end-cap, not a floating key.
-            control(canvas, .5f - .028f / aspect, .045f, .028f, "perspective");
+            float topStep = .067f * scale;
+            control(canvas, .5f + (.050f - topStep) / aspect, .045f, .028f, "perspective");
             control(canvas, .5f + .050f / aspect, .045f, .028f, "chat");
-            control(canvas, .5f + .128f / aspect, .045f, .028f, "pause");
+            control(canvas, .5f + (.050f + topStep) / aspect, .045f, .028f, "pause");
         }
     }
 }
