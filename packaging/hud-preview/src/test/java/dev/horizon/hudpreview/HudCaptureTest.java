@@ -45,6 +45,27 @@ public class HudCaptureTest {
         }
         fixture.recycle();
 
+        // Synthetic nine-slice UI sprite checks the actual vanilla widget
+        // lookup as well as stone. No Mojang-owned PNG enters this repository.
+        File widgetDir = new File(RuntimeEnvironment.getApplication().getFilesDir(),
+                ".local/horizon-client/texture-fixture/assets/minecraft/textures/gui/sprites/widget");
+        assertTrue(widgetDir.isDirectory() || widgetDir.mkdirs());
+        Bitmap frame = Bitmap.createBitmap(200, 20, Bitmap.Config.ARGB_8888);
+        for (int y = 0; y < 20; y++) {
+            for (int x = 0; x < 200; x++) {
+                boolean edge = x < 3 || y < 3 || x >= 197 || y >= 17;
+                frame.setPixel(x, y, edge ? Color.rgb(42, 42, 42) : Color.TRANSPARENT);
+            }
+        }
+        File normalFrame = new File(widgetDir, "button.png");
+        File highlightedFrame = new File(widgetDir, "button_highlighted.png");
+        for (File target : new File[]{normalFrame, highlightedFrame}) {
+            try (FileOutputStream output = new FileOutputStream(target)) {
+                assertTrue(frame.compress(Bitmap.CompressFormat.PNG, 100, output));
+            }
+        }
+        frame.recycle();
+
         HudPreviewOverlay overlay = new HudPreviewOverlay(RuntimeEnvironment.getApplication());
         overlay.menu = false;
         overlay.scheme = 2;
@@ -52,6 +73,10 @@ public class HudCaptureTest {
         overlay.opacity = 100;
         assertTrue("Horizon must locate real prepared-resource paths", overlay.refreshStoneTexture());
         assertFalse("Texture must remain cached", overlay.refreshStoneTexture());
+        java.lang.reflect.Field frameField = HudPreviewOverlay.class.getDeclaredField("buttonFrame");
+        frameField.setAccessible(true);
+        assertNotNull("Vanilla menu-button border must load", frameField.get(overlay));
+
 
         int width = 1200, height = 630;
         overlay.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
@@ -76,8 +101,10 @@ public class HudCaptureTest {
         }
         rendered.recycle();
         assertTrue(output.length() > 1000);
-        // Avoid a synthetic fixture being accidentally picked up by gameplay.
+        // Avoid test material being mistaken for Mojang assets in later cases.
         assertTrue(file.delete());
+        assertTrue(normalFrame.delete());
+        assertTrue(highlightedFrame.delete());
     }
 
     @Test public void renderAllFourModesInNativeSkia() throws Exception {
