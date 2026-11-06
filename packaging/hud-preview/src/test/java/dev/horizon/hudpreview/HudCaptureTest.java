@@ -26,85 +26,80 @@ import static org.junit.Assert.*;
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = 34)
 public class HudCaptureTest {
-    @Test public void sourceDerivedCanvasLoadsPreparedStoneWithoutAnotherDownloader() throws Exception {
-        // Synthetic fixture checks the real texture-loading path without
-        // placing copyrighted Mojang PNGs into the repository or APK.
+    @Test public void sourceDerivedCanvasUsesWholeGuiButtonAndPressedState() throws Exception {
+        // These are synthetic interface fixtures, not Mojang-owned assets.
+        // Verify the actual versioned cache lookup and that the *centre*
+        // of a button is supplied by the GUI sprite rather than a block.
         File dir = new File(RuntimeEnvironment.getApplication().getFilesDir(),
-                ".local/horizon-client/texture-fixture/assets/minecraft/textures/block");
-        assertTrue(dir.isDirectory() || dir.mkdirs());
-        File file = new File(dir, "stone.png");
-        Bitmap fixture = Bitmap.createBitmap(16, 16, Bitmap.Config.ARGB_8888);
-        for (int y = 0; y < 16; y++) {
-            for (int x = 0; x < 16; x++) {
-                fixture.setPixel(x, y, ((x / 2 + y / 2) & 1) == 0
-                        ? Color.rgb(52, 52, 52) : Color.rgb(206, 206, 206));
-            }
-        }
-        try (FileOutputStream output = new FileOutputStream(file)) {
-            assertTrue(fixture.compress(Bitmap.CompressFormat.PNG, 100, output));
-        }
-        fixture.recycle();
-
-        // Synthetic nine-slice UI sprite checks the actual vanilla widget
-        // lookup as well as stone. No Mojang-owned PNG enters this repository.
-        File widgetDir = new File(RuntimeEnvironment.getApplication().getFilesDir(),
                 ".local/horizon-client/texture-fixture/assets/minecraft/textures/gui/sprites/widget");
-        assertTrue(widgetDir.isDirectory() || widgetDir.mkdirs());
-        Bitmap frame = Bitmap.createBitmap(200, 20, Bitmap.Config.ARGB_8888);
-        for (int y = 0; y < 20; y++) {
-            for (int x = 0; x < 200; x++) {
-                boolean edge = x < 3 || y < 3 || x >= 197 || y >= 17;
-                frame.setPixel(x, y, edge ? Color.rgb(42, 42, 42) : Color.TRANSPARENT);
+        assertTrue(dir.isDirectory() || dir.mkdirs());
+        File normalFile = new File(dir, "button.png");
+        File pressedFile = new File(dir, "button_highlighted.png");
+        for (int variant = 0; variant < 2; variant++) {
+            Bitmap sprite = Bitmap.createBitmap(200, 20, Bitmap.Config.ARGB_8888);
+            int centre = variant == 0 ? Color.rgb(184, 187, 188)
+                    : Color.rgb(121, 198, 151);
+            int border = variant == 0 ? Color.rgb(53, 58, 62)
+                    : Color.rgb(36, 75, 48);
+            for (int y = 0; y < 20; y++) {
+                for (int x = 0; x < 200; x++) {
+                    boolean edge = x < 3 || y < 3 || x >= 197 || y >= 17;
+                    sprite.setPixel(x, y, edge ? border : centre);
+                }
             }
-        }
-        File normalFrame = new File(widgetDir, "button.png");
-        File highlightedFrame = new File(widgetDir, "button_highlighted.png");
-        for (File target : new File[]{normalFrame, highlightedFrame}) {
+            File target = variant == 0 ? normalFile : pressedFile;
             try (FileOutputStream output = new FileOutputStream(target)) {
-                assertTrue(frame.compress(Bitmap.CompressFormat.PNG, 100, output));
+                assertTrue(sprite.compress(Bitmap.CompressFormat.PNG, 100, output));
             }
+            sprite.recycle();
         }
-        frame.recycle();
 
         HudPreviewOverlay overlay = new HudPreviewOverlay(RuntimeEnvironment.getApplication());
         overlay.menu = false;
         overlay.scheme = 2;
         overlay.scale = 1.0f;
         overlay.opacity = 100;
-        assertTrue("Horizon must locate real prepared-resource paths", overlay.refreshStoneTexture());
-        assertFalse("Texture must remain cached", overlay.refreshStoneTexture());
+        assertTrue("Horizon must find its prepared GUI button resources",
+                overlay.refreshButtonSprites());
+        assertFalse("Button bitmaps must remain cached", overlay.refreshButtonSprites());
         java.lang.reflect.Field frameField = HudPreviewOverlay.class.getDeclaredField("buttonFrame");
         frameField.setAccessible(true);
-        assertNotNull("Vanilla menu-button border must load", frameField.get(overlay));
-
+        assertNotNull("Normal GUI button surface must load", frameField.get(overlay));
+        java.lang.reflect.Field highlightField = HudPreviewOverlay.class.getDeclaredField("highlightedFrame");
+        highlightField.setAccessible(true);
+        assertNotNull("Highlighted GUI button surface must load", highlightField.get(overlay));
 
         int width = 1200, height = 630;
         overlay.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
         overlay.layout(0, 0, width, height);
         Bitmap rendered = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        rendered.eraseColor(Color.TRANSPARENT);
         overlay.draw(new Canvas(rendered));
-        java.util.HashSet<Integer> visibleColors = new java.util.HashSet<>();
-        // The upper-left interior of the D-pad's UP button contains no glyph.
-        for (int y = 342; y <= 355; y += 2) {
-            for (int x = 118; x <= 135; x += 2) {
-                int color = rendered.getPixel(x, y);
-                if (Color.alpha(color) > 0) visibleColors.add(color);
-            }
-        }
-        assertTrue("Stone must be textured, not a flat coloured rectangle",
-                visibleColors.size() >= 2);
-        File output = new File("../../artifacts/hud-native-skia/dpad-stone-FIXTURE-1200x630.png");
+        // The D-pad UP key's inner top-left area has no glyph or border.
+        final int x = 118, y = 345;
+        int resting = rendered.getPixel(x, y);
+        assertEquals("Whole normal sprite must paint the button centre",
+                Color.rgb(184, 187, 188), resting);
+        File output = new File("../../artifacts/hud-native-skia/dpad-gui-widget-FIXTURE-1200x630.png");
         assertTrue(output.getParentFile().isDirectory() || output.getParentFile().mkdirs());
         try (FileOutputStream png = new FileOutputStream(output)) {
             assertTrue(rendered.compress(Bitmap.CompressFormat.PNG, 100, png));
         }
         rendered.recycle();
         assertTrue(output.length() > 1000);
-        // Avoid test material being mistaken for Mojang assets in later cases.
-        assertTrue(file.delete());
-        assertTrue(normalFrame.delete());
-        assertTrue(highlightedFrame.delete());
+
+        // D-pad UP is now held. The actual game state chooses the pressed
+        // GUI sprite, changing the same untouched centre pixel.
+        overlay.joyY = 0.8f;
+        Bitmap pressed = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        pressed.eraseColor(Color.TRANSPARENT);
+        overlay.draw(new Canvas(pressed));
+        assertEquals("Pressed state must use native highlighted button centre",
+                Color.rgb(121, 198, 151), pressed.getPixel(x, y));
+        pressed.recycle();
+        assertTrue(normalFile.delete());
+        assertTrue(pressedFile.delete());
     }
 
     @Test public void renderAllFourModesInNativeSkia() throws Exception {
