@@ -3,10 +3,16 @@
 //! renderer unless the opt-in Windows ARM64 visual debugger is enabled.
 use horizon_client::hud::{HudAtlas, HudBatch, rgba};
 
-pub(super) const MAGNIFICATION: f32 = 1.22;
+pub(super) const MAGNIFICATION: f32 = 1.36;
 pub(super) const BOTTOM_GAP: f32 = 15.0;
 pub(super) const STAT_LIFT: f32 = 20.0;
-pub(super) const INVENTORY_CAP: f32 = 27.0;
+pub(super) const INVENTORY_CAP: f32 = 20.0;
+
+/// Cap the Bedrock-matched 1.30 magnification at the minimum GUI width.
+/// The 10 GUI-pixel edge clearance remains a hard invariant.
+pub(super) fn magnification(width: f32) -> f32 {
+    MAGNIFICATION.min((width * 0.5 - 10.0) / (91.0 + INVENTORY_CAP))
+}
 
 pub(super) fn enabled() -> bool {
     cfg!(target_os = "android")
@@ -23,9 +29,10 @@ pub(super) fn transform_hotbar(batch: &mut HudBatch, first: usize) {
         return;
     }
     let (cx, bottom) = (batch.width * 0.5, batch.height - BOTTOM_GAP);
+    let s = magnification(batch.width);
     for vertex in &mut batch.vertices[first..] {
-        vertex.pos[0] = cx + (vertex.pos[0] - cx) * MAGNIFICATION;
-        vertex.pos[1] = bottom + (vertex.pos[1] - batch.height) * MAGNIFICATION;
+        vertex.pos[0] = cx + (vertex.pos[0] - cx) * s;
+        vertex.pos[1] = bottom + (vertex.pos[1] - batch.height) * s;
     }
 }
 
@@ -38,44 +45,129 @@ pub(super) fn lift_stats(batch: &mut HudBatch, first: usize) {
     }
 }
 
+/// Scale/raise the real contextual experience bar with the mobile hotbar,
+/// keeping the vanilla GUI draw calls and progression sprites unchanged.
+pub(super) fn transform_experience(batch: &mut HudBatch, first: usize) {
+    if !enabled() {
+        return;
+    }
+    let s = magnification(batch.width);
+    let cx = batch.width * 0.5;
+    // ExperienceBar.extractBackground emits its sprite at GUI h - 29.
+    let original_top = batch.height - 29.0;
+    let target_top = batch.height - BOTTOM_GAP - 22.0 * s - 9.0;
+    for vertex in &mut batch.vertices[first..] {
+        vertex.pos[0] = cx + (vertex.pos[0] - cx) * s;
+        vertex.pos[1] = target_top + (vertex.pos[1] - original_top) * s;
+    }
+}
+
+/// Bedrock's survival HUD uses opposite TOP corners for health/armour and
+/// hunger/air rather than Java's rows above the item hotbar.
+///
+/// The source UI has already emitted the real atlas sprites into HudBatch.
+/// Relocate those vertices only, preserving their art, animation and order.
+/// A left/right split at the GUI centre is safe for vanilla's health rows,
+/// which are entirely in separate halves of the original GUI.
+pub(super) fn anchor_health_to_top(batch: &mut HudBatch, first: usize) {
+    if !enabled() || first >= batch.vertices.len() {
+        return;
+    }
+    let center = batch.width * 0.5;
+    let mut bounds = [
+        [f32::INFINITY, f32::INFINITY, f32::NEG_INFINITY],
+        [f32::INFINITY, f32::INFINITY, f32::NEG_INFINITY],
+    ];
+    for vertex in &batch.vertices[first..] {
+        let side = usize::from(vertex.pos[0] >= center);
+        let b = &mut bounds[side];
+        b[0] = b[0].min(vertex.pos[0]);
+        b[1] = b[1].min(vertex.pos[1]);
+        b[2] = b[2].max(vertex.pos[0]);
+    }
+    // Bedrock's status icons are larger than Java Edition's default 9px
+    // sprites. Scale actual atlas vertices, not replacement bitmap graphics.
+    const STATUS_SCALE: f32 = 1.25;
+    const INSET: f32 = 4.0;
+    const TOP: f32 = 3.0;
+    for vertex in &mut batch.vertices[first..] {
+        let side = usize::from(vertex.pos[0] >= center);
+        let [min_x, min_y, max_x] = bounds[side];
+        if !min_x.is_finite() {
+            continue;
+        }
+        vertex.pos[0] = if side == 0 {
+            INSET + (vertex.pos[0] - min_x) * STATUS_SCALE
+        } else {
+            batch.width - INSET - (max_x - vertex.pos[0]) * STATUS_SCALE
+        };
+        vertex.pos[1] = TOP + (vertex.pos[1] - min_y) * STATUS_SCALE;
+    }
+}
+
 /// Inventory is attached to the hotbar's right border, sized as a tenth
 /// (end-cap) cell. The press/click region lives in horizon-winit::touch_gestures.
 pub(super) fn inventory_cap(batch: &mut HudBatch, atlas: &HudAtlas) {
     if !enabled() {
         return;
     }
-    let s = MAGNIFICATION;
+    let s = magnification(batch.width);
     let side = 22.0 * s;
+    let cap = INVENTORY_CAP * s;
     let x = batch.width * 0.5 + 91.0 * s - 1.0;
     let y = batch.height - BOTTOM_GAP - side;
-    // Solid shared edge and three-step Minecraft pixel bevel.
-    batch.fill(atlas, x, y, INVENTORY_CAP * s, side, rgba(17, 20, 22, 235));
+    // Bedrock-style ellipsis is a muted extension of the hotbar, not an
+    // independently raised 3x3 app-grid button.
+    // Bedrock's inventory tab uses a mid-grey *face*, not the dark,
+    // nearly black inset previously used here. The slot-compatible bevel
+    // and bottom shadow provide depth without swallowing the icon.
+    batch.fill(atlas, x, y, cap, side, rgba(19, 22, 23, 246));
     batch.fill(
         atlas,
-        x + 2.0,
-        y + 2.0,
-        INVENTORY_CAP * s - 4.0,
-        side - 4.0,
-        rgba(92, 98, 100, 230),
+        x + 1.0 * s,
+        y + 1.0 * s,
+        cap - 2.0 * s,
+        side - 2.0 * s,
+        rgba(118, 126, 124, 248),
     );
     batch.fill(
         atlas,
-        x + 4.0,
-        y + 4.0,
-        INVENTORY_CAP * s - 8.0,
-        side - 8.0,
-        rgba(174, 183, 182, 242),
+        x + 2.5 * s,
+        y + 2.5 * s,
+        cap - 5.0 * s,
+        side - 5.0 * s,
+        rgba(149, 157, 153, 246),
     );
-    let unit = (side * 0.095).max(1.0);
-    let ix = x + (INVENTORY_CAP * s - 5.0 * unit) * 0.5;
-    let iy = y + (side - 5.0 * unit) * 0.5;
-    // Nine inventory slots as a sharp, reproducible, resolution-independent icon.
-    for row in 0..3 {
-        for col in 0..3 {
-            let px = ix + col as f32 * (unit * 1.6);
-            let py = iy + row as f32 * (unit * 1.6);
-            batch.fill(atlas, px, py, unit * 1.2, unit * 1.2, rgba(31, 39, 42, 255));
-        }
+    batch.fill(
+        atlas,
+        x + 2.5 * s,
+        y + 2.5 * s,
+        cap - 5.0 * s,
+        1.0 * s,
+        rgba(198, 205, 200, 242),
+    );
+    batch.fill(
+        atlas,
+        x + 2.5 * s,
+        y + side - 3.5 * s,
+        cap - 5.0 * s,
+        1.0 * s,
+        rgba(75, 82, 80, 235),
+    );
+    let dot = 3.5 * s;
+    let gap = 2.5 * s;
+    let total = 3.0 * dot + 2.0 * gap;
+    let dx = x + (cap - total) * 0.5;
+    let dy = y + (side - dot) * 0.5;
+    for i in 0..3 {
+        batch.fill(
+            atlas,
+            dx + i as f32 * (dot + gap),
+            dy,
+            dot,
+            dot,
+            rgba(236, 243, 239, 252),
+        );
     }
 }
 
@@ -86,9 +178,10 @@ mod tests {
     fn mobile_geometry_fits_minimum_gui_width() {
         // 320x240 is the minimum GUI size used by Horizon's auto GUI scale.
         for width in [320.0, 360.0, 426.0, 480.0, 640.0] {
-            let right = width * 0.5 + (91.0 + INVENTORY_CAP) * MAGNIFICATION;
+            let s = magnification(width);
+            let right = width * 0.5 + (91.0 + INVENTORY_CAP) * s;
             assert!(right <= width - 10.0, "inventory cap clips at {width}");
-            let left = width * 0.5 - 91.0 * MAGNIFICATION;
+            let left = width * 0.5 - 91.0 * s;
             assert!(left > 10.0);
         }
     }

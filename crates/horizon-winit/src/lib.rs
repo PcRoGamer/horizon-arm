@@ -69,6 +69,7 @@ enum TouchRole {
     Look,
     Hotbar,
     Chat,
+    Perspective,
     SprintToggle,
     Ignored,
     Button(u8),
@@ -172,6 +173,57 @@ pub fn android_touch_crosshair() -> bool {
 #[cfg(target_os = "android")]
 fn android_touch_dpad() -> bool {
     TOUCH_SCHEME.load(Ordering::Relaxed) >= 2
+}
+
+#[cfg(target_os = "android")]
+fn android_dpad_geometry(width: f64, height: f64, scale: f64) -> (f64, f64, f64, f64) {
+    // Identical to HorizonActivity.TouchOverlay.dpadGeometry. Geometry is
+    // expressed in physical pixels and collision-tested against native HUD.
+    let mut gui: u32 = 1;
+    let (w, h) = (width as u32, height as u32);
+    while w / (gui + 1) >= 320 && h / (gui + 1) >= 240 {
+        gui += 1;
+    }
+    let (gw, gh) = (
+        (width / f64::from(gui)).ceil(),
+        (height / f64::from(gui)).ceil(),
+    );
+    let hotbar_scale = 1.36_f64.min((gw * 0.5 - 10.0) / (91.0 + 20.0));
+    let bar_left = (gw * 0.5 - 91.0 * hotbar_scale) * f64::from(gui);
+    let bar_top = (gh - 15.0 - 22.0 * hotbar_scale) * f64::from(gui);
+    let r = 0.068 * height * scale;
+    let offset = 0.147 * height * scale;
+    let cx = (0.11 * width).max(0.23 * height * scale);
+    let mut cy = 0.72 * height;
+    if cx + offset + r > bar_left - 9.0 {
+        cy = cy.min(bar_top - 9.0 - r);
+    }
+    if cx + r > bar_left - 9.0 {
+        cy = cy.min(bar_top - 9.0 - offset - r);
+    }
+    (cx, cy, offset, r)
+}
+
+#[cfg(target_os = "android")]
+fn android_joystick_y(width: f64, height: f64, scale: f64) -> f64 {
+    let (w, h) = (width as u32, height as u32);
+    let mut gui = 1u32;
+    while w / (gui + 1) >= 320 && h / (gui + 1) >= 240 {
+        gui += 1;
+    }
+    let (gw, gh) = (
+        (width / f64::from(gui)).ceil(),
+        (height / f64::from(gui)).ceil(),
+    );
+    let mag = 1.36_f64.min((gw * 0.5 - 10.0) / (91.0 + 20.0));
+    let bar_left = (gw * 0.5 - 91.0 * mag) * f64::from(gui);
+    let bar_top = (gh - 15.0 - 22.0 * mag) * f64::from(gui);
+    let radius = 0.092 * height * scale;
+    let mut y = 0.705 * height;
+    if 0.11 * width + radius > bar_left - 9.0 {
+        y = y.min(bar_top - 9.0 - radius);
+    }
+    y
 }
 
 #[cfg(target_os = "android")]
@@ -367,6 +419,11 @@ fn handle_game_touch(t: winit_real::event::Touch) {
                         touch.pending.push_back(AndroidGesture::Chat);
                     }
                 }
+                TouchRole::Perspective => {
+                    if t.phase != TouchPhase::Cancelled {
+                        touch.pending.push_back(AndroidGesture::Perspective);
+                    }
+                }
                 TouchRole::SprintToggle | TouchRole::Ignored => {}
                 TouchRole::Button(bit) => {
                     // Two fingers may press the same control at once. Only the
@@ -407,10 +464,20 @@ fn handle_game_touch(t: winit_real::event::Touch) {
         // fractions of screen height so phones and tablets keep square controls.
         let scale = android_touch_scale();
         let dpad = android_touch_dpad();
-        let move_x = if dpad {
-            0.11_f64.max(0.205 / aspect)
+        let (dpad_x, dpad_y, dpad_offset, dpad_r) = android_dpad_geometry(width, height, scale);
+        let move_x = if dpad { dpad_x / width } else { 0.11 };
+        let move_y = if dpad {
+            dpad_y / height
         } else {
-            0.11
+            android_joystick_y(width, height, scale) / height
+        };
+        let sprint_at = if dpad {
+            [
+                (dpad_x + 1.55 * dpad_offset) / width,
+                (dpad_y - 1.45 * dpad_offset) / height,
+            ]
+        } else {
+            [0.11 + 0.190 / aspect, 0.57]
         };
         let movement_owned = touch.fingers.values().any(|r| matches!(r, TouchRole::Move));
         let role = if hotbar_slot(p).is_some() {
@@ -423,16 +490,13 @@ fn handle_game_touch(t: winit_real::event::Touch) {
             ],
         ) {
             TouchRole::Button(3) // Native hotbar inventory end-cap.
-        } else if near_square(p, [0.5 - 0.045 / aspect, 0.045], 0.028 * scale, aspect) {
+        } else if near_square(p, [0.5 + (0.050 - 0.067 * scale) / aspect, 0.045], 0.028 * scale, aspect) {
+            TouchRole::Perspective
+        } else if near_square(p, [0.5 + 0.050 / aspect, 0.045], 0.028 * scale, aspect) {
             TouchRole::Chat
-        } else if near_square(p, [0.5 + 0.045 / aspect, 0.045], 0.028 * scale, aspect) {
+        } else if near_square(p, [0.5 + (0.050 + 0.067 * scale) / aspect, 0.045], 0.028 * scale, aspect) {
             TouchRole::Button(9) // Top-bound pause button.
-        } else if near_square(
-            p,
-            [0.11 + 0.190 / aspect, if dpad { 0.46 } else { 0.57 }],
-            0.035 * scale,
-            aspect,
-        ) {
+        } else if near_square(p, sprint_at, 0.035 * scale, aspect) {
             if !touch
                 .fingers
                 .values()
@@ -442,10 +506,12 @@ fn handle_game_touch(t: winit_real::event::Touch) {
                 sync_sprint(&mut touch);
             }
             TouchRole::SprintToggle
+        } else if dpad && near_square(p, [move_x, move_y], dpad_r / height, aspect) {
+            TouchRole::Button(11) // Bedrock D-pad's centre sneak key
         } else if near(
             p,
-            [move_x, if dpad { 0.63 } else { 0.705 }],
-            (if dpad { 0.160 } else { 0.112 }) * scale,
+            [move_x, move_y],
+            (if dpad { 0.206 } else { 0.112 }) * scale,
             aspect,
         ) {
             if movement_owned {
@@ -453,9 +519,9 @@ fn handle_game_touch(t: winit_real::event::Touch) {
             } else {
                 TouchRole::Move
             }
-        } else if near_square(p, [1.0 - 0.160 / aspect, 0.72], 0.051 * scale, aspect) {
+        } else if near_square(p, [1.0 - 0.133 / aspect, 0.72], 0.066 * scale, aspect) {
             TouchRole::Button(0) // South: jump
-        } else if near_square(p, [1.0 - 0.290 / aspect, 0.73], 0.040 * scale, aspect) {
+        } else if !dpad && near_square(p, [1.0 - 0.290 / aspect, 0.73], 0.040 * scale, aspect) {
             TouchRole::Button(11) // Right stick: sneak
         } else if android_touch_crosshair()
             && near_square(p, [1.0 - 0.270 / aspect, 0.56], 0.042 * scale, aspect)
@@ -490,16 +556,21 @@ fn handle_game_touch(t: winit_real::event::Touch) {
     match role {
         TouchRole::Move => {
             // The drawn thumb and movement physics share a center and scale.
-            let radius =
-                height * (if android_touch_dpad() { 0.110 } else { 0.092 }) * android_touch_scale();
+            let scale = android_touch_scale();
+            let (dpad_x, dpad_y, _, _) = android_dpad_geometry(width, height, scale);
+            let radius = height * (if android_touch_dpad() { 0.136 } else { 0.092 }) * scale;
             let center_x = if android_touch_dpad() {
-                (width * 0.11).max(height * 0.205)
+                dpad_x
             } else {
                 width * 0.11
             };
+            let center_y = if android_touch_dpad() {
+                dpad_y
+            } else {
+                android_joystick_y(width, height, scale)
+            };
             let dx = (t.location.x - center_x) / radius;
-            let dy = (t.location.y - height * (if android_touch_dpad() { 0.63 } else { 0.705 }))
-                / radius;
+            let dy = (t.location.y - center_y) / radius;
             if android_touch_dpad() {
                 // An 8-way D-pad with a neutral center and intentional diagonal input.
                 let digital = |axis: f64| {
@@ -532,7 +603,7 @@ fn handle_game_touch(t: winit_real::event::Touch) {
                 touch.target = None;
             }
         }
-        TouchRole::Hotbar | TouchRole::Chat | TouchRole::SprintToggle | TouchRole::Ignored => {}
+        TouchRole::Hotbar | TouchRole::Chat | TouchRole::Perspective | TouchRole::SprintToggle | TouchRole::Ignored => {}
         _ => {}
     }
 }

@@ -38,7 +38,7 @@ fn config() -> Option<Config> {
         Some(Config {
             scheme: number("HORIZON_TOUCH_PREVIEW_SCHEME", 1, 0, 3) as u8,
             scale: number("HORIZON_TOUCH_PREVIEW_SCALE", 100, 80, 120) as f32 / 100.0,
-            opacity: number("HORIZON_TOUCH_PREVIEW_OPACITY", 72, 35, 100) as f32 / 100.0,
+            opacity: number("HORIZON_TOUCH_PREVIEW_OPACITY", 35, 35, 100) as f32 / 100.0,
             title: std::env::var("HORIZON_TOUCH_PREVIEW_TITLE").ok().as_deref() == Some("1"),
             always_sprint: std::env::var("HORIZON_TOUCH_PREVIEW_ALWAYS_SPRINT")
                 .ok()
@@ -54,6 +54,37 @@ pub(super) fn title_enabled() -> bool {
     config().is_some_and(|c| c.title)
 }
 
+fn dpad_geometry(w: f32, h: f32, scale: f32) -> (f32, f32, f32, f32) {
+    // HudBatch works in GUI pixels; Java computes the same bounds in
+    // physical pixels using the corresponding auto GUI scale.
+    let hotbar_scale = super::touch_hotbar::magnification(w);
+    let bar_left = w * 0.5 - 91.0 * hotbar_scale;
+    let bar_top = h - 15.0 - 22.0 * hotbar_scale;
+    let r = 0.068 * h * scale;
+    let off = 0.147 * h * scale;
+    let cx = (0.11 * w).max(0.23 * h * scale);
+    let mut cy = 0.72 * h;
+    if cx + off + r > bar_left - 9.0 {
+        cy = cy.min(bar_top - 9.0 - r);
+    }
+    if cx + r > bar_left - 9.0 {
+        cy = cy.min(bar_top - 9.0 - off - r);
+    }
+    (cx, cy, off, r)
+}
+
+fn joystick_y(w: f32, h: f32, scale: f32) -> f32 {
+    let r = 0.092 * h * scale;
+    let mag = super::touch_hotbar::magnification(w);
+    let bar_left = w * 0.5 - 91.0 * mag;
+    let bar_top = h - 15.0 - 22.0 * mag;
+    let mut y = 0.705 * h;
+    if 0.11 * w + r > bar_left - 9.0 {
+        y = y.min(bar_top - 9.0 - r);
+    }
+    y
+}
+
 pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
     let Some(cfg) = config() else { return };
     let (w, h) = (batch.width, batch.height);
@@ -62,10 +93,21 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
     }
     let mut draw = Painter { batch, atlas, cfg };
     if cfg.scheme < 2 {
-        draw.joystick(0.11 * w, 0.705 * h, 0.092 * h * cfg.scale);
+        draw.joystick(0.11 * w, joystick_y(w, h, cfg.scale), 0.092 * h * cfg.scale);
+        draw.control(
+            w - 0.290 * h,
+            0.73 * h,
+            0.040 * h * cfg.scale,
+            Symbol::Sneak,
+        );
+        draw.control(
+            0.11 * w + 0.190 * h,
+            0.57 * h,
+            0.035 * h * cfg.scale,
+            Symbol::Sprint,
+        );
     } else {
-        let offset = 0.068 * h * cfg.scale * 1.48;
-        let dpad_x = (0.11 * w).max(0.205 * h);
+        let (cx, cy, offset, r) = dpad_geometry(w, h, cfg.scale);
         for (direction, dx, dy) in [
             (Direction::Up, 0.0, -1.0),
             (Direction::Right, 1.0, 0.0),
@@ -73,46 +115,43 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
             (Direction::Left, -1.0, 0.0),
         ] {
             draw.control(
-                dpad_x + dx * offset,
-                0.63 * h + dy * offset,
-                0.043 * h * cfg.scale,
+                cx + dx * offset,
+                cy + dy * offset,
+                r,
                 Symbol::Arrow(direction),
             );
         }
+        draw.control(cx, cy, r, Symbol::Sneak);
+        draw.control(
+            cx + 1.55 * offset,
+            cy - 1.45 * offset,
+            0.035 * h * cfg.scale,
+            Symbol::Sprint,
+        );
     }
-    // Same normalized centers, radii, and draw order as
-    // HorizonActivity.TouchOverlay.onDraw.
-    // Same physical-height offsets and dimensions as the Android Canvas.
-    draw.control(w - 0.160 * h, 0.72 * h, 0.051 * h * cfg.scale, Symbol::Jump);
-    draw.control(
-        w - 0.290 * h,
-        0.73 * h,
-        0.040 * h * cfg.scale,
-        Symbol::Sneak,
-    );
+    draw.control(w - 0.133 * h, 0.72 * h, 0.066 * h * cfg.scale, Symbol::Jump);
     if cfg.scheme & 1 == 1 {
         draw.control(w - 0.270 * h, 0.56 * h, 0.042 * h * cfg.scale, Symbol::Hit);
         draw.control(w - 0.145 * h, 0.52 * h, 0.042 * h * cfg.scale, Symbol::Use);
     }
+    // Native hotbar end-cap is painted by touch_hotbar, not this overlay.
     draw.control(
-        0.11 * w + 0.190 * h,
-        (if cfg.scheme >= 2 { 0.46 } else { 0.57 }) * h,
-        0.035 * h * cfg.scale,
-        Symbol::Sprint,
-    );
-    // The inventory cap is now part of the *real* scaled native hotbar.
-    // A centered top toolbar matches Android's non-intercepting Java overlay.
-    draw.control(
-        0.50 * w - 0.045 * h,
+        0.50 * w + 0.050 * h,
         0.045 * h,
         0.028 * h * cfg.scale,
         Symbol::Chat,
     );
     draw.control(
-        0.50 * w + 0.045 * h,
+        0.50 * w + (0.050 + 0.067 * cfg.scale) * h,
         0.045 * h,
         0.028 * h * cfg.scale,
         Symbol::Pause,
+    );
+    draw.control(
+        0.50 * w + (0.050 - 0.067 * cfg.scale) * h,
+        0.045 * h,
+        0.028 * h * cfg.scale,
+        Symbol::Perspective,
     );
 }
 
@@ -132,12 +171,13 @@ enum Symbol {
     Use,
     Chat,
     Pause,
+    Perspective,
     Arrow(Direction),
 }
 
 // Generated original icon masks. One source for the Java and ARM64 preview.
-// Glyph fingerprint: 19ca2893782bfd8bf20d24aa1ff8f0d21ca1cc09333f621848758b26e8c63af3
-const PIXEL_GLYPHS: [[u32; 24]; 11] = [
+// Glyph source: identical 12x24 masks in Android Canvas and Rust native preview
+const PIXEL_GLYPHS: [[u32; 24]; 12] = [
     [
         0x000000, 0x000000, 0x000000, 0x000000, 0x0FFFF0, 0x1FFFF0, 0x180030, 0x180030, 0x180030,
         0x1999F0, 0x1BFFF0, 0x1BFFF0, 0x1999F0, 0x180030, 0x180030, 0x1C7FF0, 0x1DFFF0, 0x0FC000,
@@ -159,9 +199,9 @@ const PIXEL_GLYPHS: [[u32; 24]; 11] = [
         0x000000, 0x000000, 0x1FFFF8, 0x1FFFF8, 0x000000, 0x000000,
     ],
     [
-        0x000000, 0x000000, 0x000000, 0x0001C0, 0x0001C0, 0x0003E0, 0x0001C0, 0x000000, 0x000300,
-        0x000700, 0x000E00, 0x03FC00, 0x07FC00, 0x0FFE00, 0x0E77F8, 0x1C6FF8, 0x18EE00, 0x19EC00,
-        0x03DC00, 0x079C00, 0x1FFFFC, 0x1FFFFC, 0x000000, 0x000000,
+        0x000000, 0x000000, 0x000000, 0x003C00, 0x003C00, 0x003C00, 0x003C00, 0x003C00, 0x003C00,
+        0x00FF00, 0x03FFC0, 0x03FFC0, 0x01FF80, 0x00FF00, 0x007E00, 0x003C00, 0x001800, 0x000000,
+        0x000000, 0x000000, 0x07FFE0, 0x07FFE0, 0x000000, 0x000000,
     ],
     [
         0x000000, 0x000000, 0x00000C, 0x00003C, 0x00007C, 0x00007C, 0x0000FC, 0x0001DC, 0x0003F8,
@@ -192,6 +232,11 @@ const PIXEL_GLYPHS: [[u32; 24]; 11] = [
         0x000000, 0x000000, 0x000000, 0x000000, 0x001000, 0x003000, 0x007000, 0x00F000, 0x01FFF8,
         0x07FFF8, 0x0FFFF8, 0x1FFFF8, 0x1FFFF8, 0x0FFFF8, 0x07FFF8, 0x01FFF8, 0x00F000, 0x007000,
         0x003000, 0x001000, 0x000000, 0x000000, 0x000000, 0x000000,
+    ],
+    [
+        0x000000, 0x000000, 0x000000, 0x1FFF00, 0x100100, 0x100100, 0x100100, 0x100100, 0x100100,
+        0x107FFC, 0x104104, 0x104104, 0x104944, 0x104944, 0x104104, 0x1FFF04, 0x004004,
+        0x004FC4, 0x004004, 0x004004, 0x004004, 0x007FFC, 0x000000, 0x000000
     ],
 ];
 
@@ -306,44 +351,37 @@ impl Painter<'_> {
         }
     }
 
+
     fn control(&mut self, x: f32, y: f32, r: f32, sym: Symbol) {
-        // HorizonActivity.control: dark offset shadow, inner face and rim.
-        let edge = r * 0.075;
-        let corner = r * 0.035;
-        let shadow = self.color(0x101618, 0.82);
+        // Neutral stone-grey material matching production Android Canvas. Strong
+        // monochrome contrast at the actual default opacity, no green tint.
+        let edge = (r * 0.047).round().max(1.25);
         let face = if matches!(sym, Symbol::Sprint) && self.cfg.always_sprint {
-            self.color(0x93C79B, 0.89)
+            self.color(0x94B29C, 1.0)
         } else {
-            self.color(0xD0D5D3, 0.89)
+            self.color(0xC5C5C2, 1.0)
         };
-        let rim = self.color(0x454A4D, 1.0);
-        self.round_rect(x - r, y - r + edge, 2.0 * r, 2.0 * r, corner, shadow);
-        self.round_rect(
-            x - r + edge,
-            y - r + edge,
-            2.0 * (r - edge),
-            2.0 * (r - edge),
-            corner * 0.55,
-            face,
-        );
-        self.stroke_box(x, y, r - edge * 1.3, r * 0.047, rim);
+        let outline = self.color(0x222629, 1.08);
+        let highlight = self.color(0xECF0EA, 0.74);
+        let bottom = self.color(0x4B5050, 0.90);
+        let lip = (r * 0.024).round().max(1.0);
+        // Four thin outside bands, not a dark filled backdrop.
+        self.stroke_box(x, y, r, edge, outline);
+        self.rect(x-r+edge, y-r+edge, 2.0*(r-edge), 2.0*(r-edge), face);
+        self.rect(x-r+edge, y-r+edge, 2.0*(r-edge), lip, highlight);
+        self.rect(x-r+edge, y+r-edge-lip, 2.0*(r-edge), lip, bottom);
         self.glyph(x, y, r, sym);
     }
 
     fn joystick(&mut self, x: f32, y: f32, r: f32) {
-        // HorizonActivity.joystick, neutral native touch state.
-        let disc = self.color(0x33383C, 0.38);
-        let ring = self.color(0xDCE1E5, 0.78);
-        let inner = self.color(0xFFFFFF, 0.22);
+        let disc = self.color(0x13171B, 0.22);
+        let ring = self.color(0xF4F7F8, 2.45);
+        let dark = self.color(0x0C0F11, 1.80);
+        let face = self.color(0xE4E9EB, 2.15);
         self.disc(x, y, r, disc);
-        self.ring(x, y, r * 0.93, r * 0.055, ring);
-        self.ring(x, y, r * 0.67, r * 0.025, inner);
-        let dark = self.color(0x080808, 0.86);
-        let face = self.color(0xC6C9CC, 0.95);
-        let border = self.color(0xF1F1F1, 0.81);
+        self.ring(x, y, r * 0.95, r * 0.041, ring);
         self.disc(x, y + r * 0.032, r * 0.42, dark);
         self.disc(x, y, r * 0.36, face);
-        self.ring(x, y, r * 0.34, r * 0.035, border);
     }
 
     // Original 24px glyphs using the exact Java Canvas bitmap masks.
@@ -351,6 +389,7 @@ impl Painter<'_> {
         let icon = match glyph {
             Symbol::Chat => 0,
             Symbol::Pause => 1,
+            Symbol::Perspective => 11,
             Symbol::Sprint => 2,
             Symbol::Jump => 3,
             Symbol::Sneak => 4,
@@ -361,10 +400,10 @@ impl Painter<'_> {
             Symbol::Arrow(Direction::Down) => 9,
             Symbol::Arrow(Direction::Left) => 10,
         };
-        let pixel = radius * 0.062;
+        let pixel = radius * 0.056;
         let x0 = x - 12.0 * pixel;
         let y0 = y - 12.0 * pixel;
-        let ink = self.color(0x232D30, 1.0);
+        let ink = self.color(0x111516, 1.9);
         for (row, bits) in PIXEL_GLYPHS[icon].iter().copied().enumerate() {
             let mut col = 0;
             while col < 24 {
@@ -396,7 +435,7 @@ mod tests {
         let cfg = Config {
             scheme: 3,
             scale: 1.2,
-            opacity: 0.72,
+            opacity: 0.35,
             title: false,
             always_sprint: false,
         };

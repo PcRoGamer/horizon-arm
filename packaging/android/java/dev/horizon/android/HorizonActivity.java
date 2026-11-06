@@ -231,7 +231,7 @@ public final class HorizonActivity extends GameActivity {
                 .setNegativeButton("Cancel", null)
                 .setNeutralButton("Reset", (d, w) -> {
                     controlScale = 100;
-                    opacity = 72;
+                    opacity = 35;
                     alwaysSprint = false;
                     saveControls();
                 })
@@ -317,25 +317,26 @@ public final class HorizonActivity extends GameActivity {
         }
 
         private int alpha(int rgb, float factor) {
-            return ((Math.round(255 * opacity / 100f * factor) & 0xFF) << 24)
+            return (Math.min(255, Math.max(0, Math.round(255 * opacity / 100f * factor))) << 24)
                     | (rgb & 0xFFFFFF);
         }
 
         // Original 24px-grid icons rasterized once into reusable Canvas paths.
         // Pixel masks are identical to the ARM64 Rust GPU preview.
-        // Glyph fingerprint: 19ca2893782bfd8bf20d24aa1ff8f0d21ca1cc09333f621848758b26e8c63af3
+        // Glyph source: identical 12x24 masks in Android Canvas and Rust native preview
         private final int[][] PIXEL_GLYPHS = {
     {0x000000, 0x000000, 0x000000, 0x000000, 0x0FFFF0, 0x1FFFF0, 0x180030, 0x180030, 0x180030, 0x1999F0, 0x1BFFF0, 0x1BFFF0, 0x1999F0, 0x180030, 0x180030, 0x1C7FF0, 0x1DFFF0, 0x0FC000, 0x0F8000, 0x0F0000, 0x0C0000, 0x000000, 0x000000, 0x000000},
     {0x000000, 0x000000, 0x000000, 0x000000, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x000000, 0x000000, 0x000000, 0x000000},
     {0x000000, 0x000000, 0x000380, 0x000380, 0x0007C0, 0x000380, 0x3F8700, 0x3F8F80, 0x003FC0, 0x7F39F0, 0x7F70FC, 0x00707C, 0x00E000, 0x07E000, 0x0FF800, 0x0FFC00, 0x071E00, 0x0F0E00, 0x0E0E00, 0x1C0E00, 0x180C00, 0x000C00, 0x000000, 0x000000},
     {0x000000, 0x000000, 0x000000, 0x001800, 0x003C00, 0x007E00, 0x007E00, 0x00FF00, 0x01FF80, 0x03FFC0, 0x07FFE0, 0x007E00, 0x007E00, 0x007E00, 0x007E00, 0x007E00, 0x007E00, 0x007E00, 0x000000, 0x000000, 0x1FFFF8, 0x1FFFF8, 0x000000, 0x000000},
-    {0x000000, 0x000000, 0x000000, 0x0001C0, 0x0001C0, 0x0003E0, 0x0001C0, 0x000000, 0x000300, 0x000700, 0x000E00, 0x03FC00, 0x07FC00, 0x0FFE00, 0x0E77F8, 0x1C6FF8, 0x18EE00, 0x19EC00, 0x03DC00, 0x079C00, 0x1FFFFC, 0x1FFFFC, 0x000000, 0x000000},
+    {0x000000, 0x000000, 0x000000, 0x003C00, 0x003C00, 0x003C00, 0x003C00, 0x003C00, 0x003C00, 0x00FF00, 0x03FFC0, 0x03FFC0, 0x01FF80, 0x00FF00, 0x007E00, 0x003C00, 0x001800, 0x000000, 0x000000, 0x000000, 0x07FFE0, 0x07FFE0, 0x000000, 0x000000},
     {0x000000, 0x000000, 0x00000C, 0x00003C, 0x00007C, 0x00007C, 0x0000FC, 0x0001DC, 0x0003F8, 0x0007F8, 0x000FE0, 0x001C00, 0x183800, 0x1C7000, 0x0FE000, 0x07C000, 0x07C000, 0x07C000, 0x0FE000, 0x1C7000, 0x383000, 0x300000, 0x000000, 0x000000},
     {0x000000, 0x000000, 0x003C00, 0x00FF00, 0x01FF80, 0x07C3E0, 0x1F00F8, 0x1E0078, 0x1F00F8, 0x1FC3F8, 0x19FF98, 0x18FF18, 0x183C18, 0x181818, 0x181818, 0x181818, 0x1E1878, 0x1F18F8, 0x07DBE0, 0x01FF80, 0x007F00, 0x003C00, 0x000000, 0x000000},
     {0x000000, 0x000000, 0x000000, 0x001800, 0x003C00, 0x007E00, 0x007E00, 0x00FF00, 0x01FF80, 0x03FFC0, 0x07FFE0, 0x0FFFF0, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x000000, 0x000000, 0x000000},
     {0x000000, 0x000000, 0x000000, 0x000000, 0x000800, 0x000C00, 0x000E00, 0x000F00, 0x1FFF80, 0x1FFFE0, 0x1FFFF0, 0x1FFFF8, 0x1FFFF8, 0x1FFFF0, 0x1FFFE0, 0x1FFF80, 0x000F00, 0x000E00, 0x000C00, 0x000800, 0x000000, 0x000000, 0x000000, 0x000000},
     {0x000000, 0x000000, 0x000000, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x0FFFF0, 0x07FFE0, 0x03FFC0, 0x01FF80, 0x00FF00, 0x007E00, 0x007E00, 0x003C00, 0x001800, 0x000000, 0x000000, 0x000000},
-    {0x000000, 0x000000, 0x000000, 0x000000, 0x001000, 0x003000, 0x007000, 0x00F000, 0x01FFF8, 0x07FFF8, 0x0FFFF8, 0x1FFFF8, 0x1FFFF8, 0x0FFFF8, 0x07FFF8, 0x01FFF8, 0x00F000, 0x007000, 0x003000, 0x001000, 0x000000, 0x000000, 0x000000, 0x000000}
+    {0x000000, 0x000000, 0x000000, 0x000000, 0x001000, 0x003000, 0x007000, 0x00F000, 0x01FFF8, 0x07FFF8, 0x0FFFF8, 0x1FFFF8, 0x1FFFF8, 0x0FFFF8, 0x07FFF8, 0x01FFF8, 0x00F000, 0x007000, 0x003000, 0x001000, 0x000000, 0x000000, 0x000000, 0x000000},
+    {0x000000, 0x000000, 0x000000, 0x1FFF00, 0x100100, 0x100100, 0x100100, 0x100100, 0x100100, 0x107FFC, 0x104104, 0x104104, 0x104944, 0x104944, 0x104104, 0x1FFF04, 0x004004, 0x004FC4, 0x004004, 0x004004, 0x004004, 0x007FFC, 0x000000, 0x000000}
         };
         private final Path[] pixelPaths = buildPixelPaths();
 
@@ -361,6 +362,7 @@ public final class HorizonActivity extends GameActivity {
         private int pixelIcon(String name) {
             switch (name) {
                 case "chat": return 0;
+                case "perspective": return 11;
                 case "pause": return 1;
                 case "sprint": return 2;
                 case "jump": return 3;
@@ -380,13 +382,14 @@ public final class HorizonActivity extends GameActivity {
             if (index < 0) return;
             canvas.save();
             // 24x24 pixel glyph fits inside the beveled key's face.
-            canvas.scale(radius * .062f, radius * .062f);
+            canvas.scale(radius * .056f, radius * .056f);
             canvas.translate(-12f, -12f);
-            color(alpha(0xFF232D30, 1f), Paint.Style.FILL, 0);
+            color(alpha(0xFF111516, 1.9f), Paint.Style.FILL, 0);
             paint.setAntiAlias(false);
             canvas.drawPath(pixelPaths[index], paint);
             canvas.restore();
         }
+
 
         private void control(Canvas c, float nx, float ny, float radius, String name) {
             float x = nx * getWidth();
@@ -396,8 +399,6 @@ public final class HorizonActivity extends GameActivity {
                     && (buttons & ((1 << 26) | (1 << 27))) != 0)
                     || (name.equals("jump") && (buttons & 1) != 0)
                     || (name.equals("sneak") && (buttons & (1 << 11)) != 0)
-                    || (name.equals("sprint") && (buttons & (1 << 10)) != 0)
-                    || (name.equals("inventory") && (buttons & (1 << 3)) != 0)
                     || (name.equals("pause") && (buttons & (1 << 9)) != 0)
                     || (name.equals("hit") && (buttons & (1 << 25)) != 0)
                     || (name.equals("use") && (buttons & (1 << 24)) != 0)
@@ -406,83 +407,120 @@ public final class HorizonActivity extends GameActivity {
                     || (name.equals("down") && joyY < -.28f)
                     || (name.equals("left") && joyX < -.28f);
             c.save();
-            c.translate(x, y + (pressed ? r * .035f : 0));
-            // Flat, compact, high-contrast Minecraft-style touch key.
-            float corner = r * .035f;
-            float edge = r * .075f;
-            color(alpha(0xFF101618, .82f), Paint.Style.FILL, 0);
-            c.drawRoundRect(new RectF(-r, -r + edge, r, r + edge),
-                    corner, corner, paint);
-            color(alpha(pressed && name.equals("sprint")
-                    ? 0xFF93C79B : pressed ? 0xFF88949B : 0xFFD0D5D3, .89f),
-                    Paint.Style.FILL, 0);
-            c.drawRoundRect(new RectF(-r + edge, -r + edge,
-                    r - edge, r - edge), corner * .55f, corner * .55f, paint);
-            color(alpha(pressed ? 0xFF171C20 : 0xFF454A4D, 1f),
-                    Paint.Style.STROKE, r * .047f);
-            c.drawRect(-r + edge * 1.3f, -r + edge * 1.3f,
-                    r - edge * 1.3f, r - edge * 1.3f, paint);
+            // Neutral Bedrock-like stone-grey material. Previous tinted translucent
+            // face lost contrast against grass and forest backdrops. Keep the
+            // outline, face, top reflection and bottom lip as distinct layers.
+            c.translate(Math.round(x), Math.round(y) + (pressed ? Math.max(1f, r * .028f) : 0f));
+            float edge = Math.max(1.25f, Math.round(r * .047f));
+            float inset = edge * .5f;
+            color(alpha(0xFF222629, 1.08f), Paint.Style.STROKE, edge);
+            paint.setAntiAlias(false);
+            c.drawRect(-r + inset, -r + inset, r - inset, r - inset, paint);
+            int face = pressed && name.equals("sprint") ? 0xFF94B29C
+                    : pressed ? 0xFF959A98 : 0xFFC5C5C2;
+            color(alpha(face, 1.0f), Paint.Style.FILL, 0f);
+            paint.setAntiAlias(false);
+            c.drawRect(-r + edge, -r + edge, r - edge, r - edge, paint);
+            float lip = Math.max(1f, Math.round(r * .024f));
+            color(alpha(0xFFECF0EA, .74f), Paint.Style.FILL, 0f);
+            paint.setAntiAlias(false);
+            c.drawRect(-r + edge, -r + edge, r - edge, -r + edge + lip, paint);
+            color(alpha(0xFF4B5050, .90f), Paint.Style.FILL, 0f);
+            paint.setAntiAlias(false);
+            c.drawRect(-r + edge, r - edge - lip, r - edge, r - edge, paint);
             glyph(c, name, r);
             c.restore();
+        }
+
+        private float joystickY() {
+            float w = getWidth(), h = getHeight();
+            float r = .092f * h * scale;
+            float y = .705f * h;
+            int gui = 1;
+            while ((int)w / (gui + 1) >= 320 && (int)h / (gui + 1) >= 240) gui++;
+            float gw = (float) Math.ceil(w / gui);
+            float gh = (float) Math.ceil(h / gui);
+            float barScale = Math.min(1.36f, (gw * .5f - 10f) / (91f + 20f));
+            float barLeft = (gw * .5f - 91f * barScale) * gui;
+            float barTop = (gh - 15f - 22f * barScale) * gui;
+            if (.11f * w + r > barLeft - 9f)
+                y = Math.min(y, barTop - 9f - r);
+            return y;
         }
 
         private void joystick(Canvas c) {
             float h = getHeight();
             float x = .11f * getWidth();
-            float y = .705f * h;
+            float y = joystickY();
             float r = .092f * h * scale;
-            color(alpha(0xFF33383C, .38f), Paint.Style.FILL, 0);
+            // A clear movement ring, without the unnecessary nested circles.
+            color(alpha(0xFF13171B, .22f), Paint.Style.FILL, 0);
             c.drawCircle(x, y, r, paint);
-            color(alpha(0xFFDCE1E5, .78f), Paint.Style.STROKE, r * .055f);
-            c.drawCircle(x, y, r * .93f, paint);
-            color(alpha(0xFFFFFFFF, .22f), Paint.Style.STROKE, r * .025f);
-            c.drawCircle(x, y, r * .67f, paint);
+            color(alpha(0xFFF4F7F8, 2.45f), Paint.Style.STROKE, Math.max(2f, r * .041f));
+            c.drawCircle(x, y, r * .95f, paint);
             float tx = x + joyX * r * .70f;
             float ty = y - joyY * r * .70f;
-            color(alpha(0xFF080808, .86f), Paint.Style.FILL, 0);
+            color(alpha(0xFF0C0F11, 1.80f), Paint.Style.FILL, 0);
             c.drawCircle(tx, ty + r * .032f, r * .42f, paint);
-            color(alpha(0xFFC6C9CC, .95f), Paint.Style.FILL, 0);
+            color(alpha(0xFFE4E9EB, 2.15f), Paint.Style.FILL, 0);
             c.drawCircle(tx, ty, r * .36f, paint);
-            color(alpha(0xFFF1F1F1, .81f), Paint.Style.STROKE, r * .035f);
-            c.drawCircle(tx, ty, r * .34f, paint);
+        }
+
+        // The D-pad adapts to tablet widths without colliding with the genuine
+        // raised Rust hotbar. Shared constants are validated in Python and Rust.
+        private float[] dpadGeometry() {
+            float w = getWidth(), h = getHeight();
+            float r = .068f * h * scale;
+            float off = .147f * h * scale;
+            float cx = Math.max(.11f * w, .23f * h * scale);
+            float cy = .72f * h;
+            int gui = 1;
+            while ((int)w / (gui + 1) >= 320 && (int)h / (gui + 1) >= 240) gui++;
+            float guiW = (float) Math.ceil(w / gui);
+            float guiH = (float) Math.ceil(h / gui);
+            // Exactly the same 10-GUI-pixel hotbar edge clamp as Rust.
+            float hotbarScale = Math.min(1.36f, (guiW * .5f - 10f) / (91f + 20f));
+            float barLeft = (guiW * .5f - 91f * hotbarScale) * gui;
+            float barTop = (guiH - 15f - 22f * hotbarScale) * gui;
+            if (cx + off + r > barLeft - 9f) cy = Math.min(cy, barTop - 9f - r);
+            if (cx + r > barLeft - 9f) cy = Math.min(cy, barTop - 9f - off - r);
+            return new float[] {cx, cy, off, r};
         }
 
         @Override protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
             if (menu || getWidth() < 1 || getHeight() < 1) return;
+            float h = getHeight();
+            float aspect = getWidth() / h;
             if (scheme < 2) {
                 joystick(canvas);
+                control(canvas, 1f - .290f / aspect, .73f, .040f, "sneak");
+                control(canvas, .11f + .190f / aspect, .57f, .035f, "sprint");
             } else {
-                // D-pad's four independent visual keys share one virtual-stick
-                // hit region; Rust quantizes movement into directional axes.
-                float unit = .068f * getHeight() * scale;
-                // A height-based inset prevents clipping on 4:3 tablets
-                // when controls are scaled up to 120%.
-                float centerX = Math.max(.11f * getWidth(), .205f * getHeight());
-                float centerY = .63f * getHeight();
+                float[] dpad = dpadGeometry();
+                float cx = dpad[0], cy = dpad[1], off = dpad[2], r = dpad[3];
                 String[] directions = {"up", "right", "down", "left"};
                 float[][] vectors = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}};
                 for (int i = 0; i < 4; ++i) {
-                    float xx = centerX + vectors[i][0] * unit * 1.48f;
-                    float yy = centerY + vectors[i][1] * unit * 1.48f;
-                    control(canvas, xx / getWidth(), yy / getHeight(),
-                            .043f, directions[i]);
+                    float xx = cx + vectors[i][0] * off;
+                    float yy = cy + vectors[i][1] * off;
+                    control(canvas, xx / getWidth(), yy / h, r / (h * scale), directions[i]);
                 }
+                // Bedrock's fifth D-pad key: crouch occupies the neutral centre.
+                control(canvas, cx / getWidth(), cy / h, r / (h * scale), "sneak");
+                control(canvas, (cx + 1.55f * off) / getWidth(),
+                        (cy - 1.45f * off) / h, .035f, "sprint");
             }
-            // Physical-height offsets keep the right-hand cluster coherent
-            // on tablets, tall phones, and ultra-wide landscape displays.
-            float aspect = getWidth() / (float) getHeight();
-            control(canvas, 1f - .160f / aspect, .72f, .051f, "jump");
-            control(canvas, 1f - .290f / aspect, .73f, .040f, "sneak");
+            control(canvas, 1f - .133f / aspect, .72f, .066f, "jump");
             if ((scheme & 1) == 1) {
                 control(canvas, 1f - .270f / aspect, .56f, .042f, "hit");
                 control(canvas, 1f - .145f / aspect, .52f, .042f, "use");
             }
-            control(canvas, .11f + .190f / aspect, scheme >= 2 ? .46f : .57f, .035f, "sprint");
-            // Inventory is rendered as an attached hotbar end-cap by the
-            // *native game HUD*, not as a floating Java overlay key.
-            control(canvas, .5f - .045f / aspect, .045f, .028f, "chat");
-            control(canvas, .5f + .045f / aspect, .045f, .028f, "pause");
+            // Inventory is the genuine Rust hotbar end-cap, not a floating key.
+            float topStep = .067f * scale;
+            control(canvas, .5f + (.050f - topStep) / aspect, .045f, .028f, "perspective");
+            control(canvas, .5f + .050f / aspect, .045f, .028f, "chat");
+            control(canvas, .5f + (.050f + topStep) / aspect, .045f, .028f, "pause");
         }
     }
 }

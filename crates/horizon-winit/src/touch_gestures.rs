@@ -10,16 +10,28 @@ pub enum Action {
     HoldBegin { x: f32, y: f32 },
     HoldEnd,
     Look { dx: f32, dy: f32 },
+    // Android-only gestures are consumed by the game. Do not expose these to
+    // desktop tests, where dead-code warnings are treated as errors.
+    #[cfg(target_os = "android")]
     Hotbar(usize),
+    #[cfg(target_os = "android")]
     Chat,
+    #[cfg(target_os = "android")]
+    Perspective,
 }
 
 /// Hit test the actual vanilla hotbar, independent of device resolution.
 /// The HUD draws 9 slots, each 20 GUI pixels wide, centred on the window,
 /// with the bottommost 22 GUI pixels occupied by the hotbar background.
-pub const HOTBAR_SCALE: f32 = 1.22;
+pub const HOTBAR_SCALE: f32 = 1.36;
 pub const HOTBAR_BOTTOM: f32 = 15.0;
-pub const INVENTORY_CAP: f32 = 27.0;
+pub const INVENTORY_CAP: f32 = 20.0;
+
+/// Same minimum-width safety clamp as game/touch_hotbar.rs.
+/// Hitboxes must follow rendered vertices, not an independent preset.
+pub fn hotbar_scale(width: f32) -> f32 {
+    HOTBAR_SCALE.min((width * 0.5 - 10.0) / (91.0 + INVENTORY_CAP))
+}
 
 /// Pure sprint state machine: thumb-lock or always-forward sprint, never
 /// driven by unreliable double-tap movement gestures.
@@ -38,12 +50,13 @@ pub fn hotbar_slot(normalized: [f32; 2], gui: [u32; 2]) -> Option<usize> {
     let h = height as f32;
     let x = normalized[0] * w;
     let y = normalized[1] * h;
-    let left = w * 0.5 - 90.0 * HOTBAR_SCALE;
-    let top = h - HOTBAR_BOTTOM - 22.0 * HOTBAR_SCALE;
-    if x < left || x >= left + 180.0 * HOTBAR_SCALE || y < top || y > h - HOTBAR_BOTTOM {
+    let s = hotbar_scale(w);
+    let left = w * 0.5 - 90.0 * s;
+    let top = h - HOTBAR_BOTTOM - 22.0 * s;
+    if x < left || x >= left + 180.0 * s || y < top || y > h - HOTBAR_BOTTOM {
         return None;
     }
-    Some(((x - left) / (20.0 * HOTBAR_SCALE)) as usize)
+    Some(((x - left) / (20.0 * s)) as usize)
 }
 
 /// Right-edge inventory endcap is physically part of the native hotbar.
@@ -56,9 +69,10 @@ pub fn hotbar_inventory(normalized: [f32; 2], gui: [u32; 2]) -> bool {
     let h = height as f32;
     let x = normalized[0] * w;
     let y = normalized[1] * h;
-    let left = w * 0.5 + 91.0 * HOTBAR_SCALE - 1.0;
-    let top = h - HOTBAR_BOTTOM - 22.0 * HOTBAR_SCALE;
-    x >= left && x < left + INVENTORY_CAP * HOTBAR_SCALE && y >= top && y <= h - HOTBAR_BOTTOM
+    let s = hotbar_scale(w);
+    let left = w * 0.5 + 91.0 * s - 1.0;
+    let top = h - HOTBAR_BOTTOM - 22.0 * s;
+    x >= left && x < left + INVENTORY_CAP * s && y >= top && y <= h - HOTBAR_BOTTOM
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -248,19 +262,20 @@ mod tests {
 
     #[test]
     fn scaled_and_raised_hotbar_has_exactly_nine_slots_and_attached_inventory() {
-        use super::{HOTBAR_BOTTOM, HOTBAR_SCALE, INVENTORY_CAP, hotbar_inventory};
+        use super::{HOTBAR_BOTTOM, INVENTORY_CAP, hotbar_inventory, hotbar_scale};
         for gui in [[320, 240], [480, 270], [960, 540], [320, 200], [426, 240]] {
             let [w, h] = gui.map(|v| v as f32);
-            let left = w * 0.5 - 90.0 * HOTBAR_SCALE;
-            let y = (h - HOTBAR_BOTTOM - 11.0 * HOTBAR_SCALE) / h;
+            let s = hotbar_scale(w);
+            let left = w * 0.5 - 90.0 * s;
+            let y = (h - HOTBAR_BOTTOM - 11.0 * s) / h;
             for i in 0..9 {
-                let nx = (left + (10.0 + 20.0 * i as f32) * HOTBAR_SCALE) / w;
+                let nx = (left + (10.0 + 20.0 * i as f32) * s) / w;
                 assert_eq!(super::hotbar_slot([nx, y], gui), Some(i));
                 assert!(!hotbar_inventory([nx, y], gui));
             }
             assert_eq!(super::hotbar_slot([(left - 1.0) / w, y], gui), None);
             assert_eq!(super::hotbar_slot([0.5, 0.5], gui), None);
-            let inventory_x = (w * 0.5 + (91.0 + INVENTORY_CAP / 2.0) * HOTBAR_SCALE - 1.0) / w;
+            let inventory_x = (w * 0.5 + (91.0 + INVENTORY_CAP / 2.0) * s - 1.0) / w;
             assert!(hotbar_inventory([inventory_x, y], gui));
             assert_eq!(super::hotbar_slot([inventory_x, y], gui), None);
             assert!(!hotbar_inventory([inventory_x, 0.98], gui));
@@ -284,5 +299,8 @@ mod tests {
     fn thresholds_scale_without_exploding_on_tablets() {
         assert_eq!(Recognizer::new(360.0).slop_px, 10.0);
         assert_eq!(Recognizer::new(2160.0).slop_px, 26.0);
+        let mut recognizer = Recognizer::new(360.0);
+        recognizer.set_screen_height(2160.0);
+        assert_eq!(recognizer.slop_px, 26.0);
     }
 }

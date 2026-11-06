@@ -181,9 +181,10 @@ def package_engine_data() -> Path:
 
 def main():
     minecraft, server = prepare_launcher_tree()
-    env = dict(os.environ)
-    env["HORIZON_NO_AUDIO"] = "1"
-    env["HORIZON_LAUNCHER_NO_SELF_UPDATE"] = "1"
+    # Use the repository's isolated game-spawn environment even for the
+    # Horizon preparation binary. This keeps game homes and launcher state
+    # out of a developer's real profile.
+    env = lab.game_env(os.environ)
     subprocess.run(
         [
             "cargo",

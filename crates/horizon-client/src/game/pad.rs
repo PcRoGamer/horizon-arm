@@ -196,6 +196,11 @@ impl Game<'_> {
                     {
                         self.open_chat_method("");
                     }
+                    winit::AndroidGesture::Perspective
+                        if self.title.is_none() && self.screen == Screen::Playing =>
+                    {
+                        self.cycle_camera();
+                    }
                     winit::AndroidGesture::Hotbar(slot)
                         if self.title.is_none() && self.screen == Screen::Playing =>
                     {

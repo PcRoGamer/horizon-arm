@@ -9,6 +9,14 @@ import sys
 PRIVATE_ROOTS = {".local", "decompiled", "minecraft", "assets", "run", "logs"}
 PRIVATE_EXTENSIONS = {".jar", ".class", ".jfr", ".hprof", ".java"}
 ORIGINAL_JDK_TOOLS = {"tools/JfrSummary.java", "tests/java/JfrFixture.java"}
+# Exact first-party Android source files. Do not allowlist entire folders:
+# decompiled Minecraft .java files must still be rejected everywhere else.
+FIRST_PARTY_ANDROID = {
+    "packaging/android/java/dev/horizon/android/HorizonActivity.java",
+    "packaging/android/java/dev/horizon/android/ProfileActivity.java",
+    "packaging/hud-preview/src/main/java/dev/horizon/hudpreview/HudPreviewActivity.java",
+    "packaging/hud-preview/src/test/java/dev/horizon/hudpreview/HudCaptureTest.java",
+}
 # The prepared folder's files in one file (crates/horizon-core/src/prepared_files.rs): Mojang's data.
 PRIVATE_NAMES = {"horizon-data.bin"}
 
@@ -16,7 +24,7 @@ PRIVATE_NAMES = {"horizon-data.bin"}
 def prohibited(path):
     parsed = PurePosixPath(path)
     # Original JDK-only tools are an exact allowlist; recovered game Java stays private.
-    if path in ORIGINAL_JDK_TOOLS:
+    if path in ORIGINAL_JDK_TOOLS or path in FIRST_PARTY_ANDROID:
         return False
     # Original Horizon mod sources may also be tracked.
     if parsed.suffix == ".java" and path.startswith(("mods/horizon/src/", "mods/horizon-lab/src/")):

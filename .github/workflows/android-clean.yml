@@ -2,7 +2,7 @@ name: Android clean port
 
 on:
   push:
-    branches: [android-clean-v1, android-bedrock-v2, feat/bedrock-touch-polish]
+    branches: [android-clean-v1, android-bedrock-v2, feat/bedrock-touch-polish, tools/native-hud-offscreen-preview]
   pull_request:
     branches: [main]
   workflow_dispatch:

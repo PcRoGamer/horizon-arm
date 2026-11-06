@@ -130,6 +130,10 @@ windows-segment-heap = []
 name = "horizon-client"
 path = "src/main.rs"
 
+[[bin]]
+name = "hud-offscreen"
+path = "src/bin/hud-offscreen.rs"
+
 [[test]]
 name = "datapack_biome_sync"
 path = "tests/datapack_biome_sync.rs"
