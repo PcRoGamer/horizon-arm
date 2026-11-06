@@ -16,6 +16,8 @@ pub enum Action {
     Hotbar(usize),
     #[cfg(target_os = "android")]
     Chat,
+    #[cfg(target_os = "android")]
+    Perspective,
 }
 
 /// Hit test the actual vanilla hotbar, independent of device resolution.
