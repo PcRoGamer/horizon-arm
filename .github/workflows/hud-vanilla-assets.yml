@@ -1,0 +1,49 @@
+name: Vanilla asset-backed touch material
+on:
+  push:
+    branches: [tools/vanilla-asset-touch-material]
+  workflow_dispatch:
+
+jobs:
+  android-source-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+      - name: Verify same cached game texture is used in both renderers
+        run: python3 tools/test_touch_layout_geometry.py
+      - name: Build and capture genuine Android Canvas HUD
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if gradle -p packaging/hud-preview testDebugUnitTest --tests dev.horizon.hudpreview.HudCaptureTest --no-daemon --stacktrace; then
+              break
+            fi
+            test "$attempt" -lt 3 || exit 1
+            sleep $((attempt * 10))
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hud-actual-cache-lookup-and-fixture-png
+          path: artifacts/hud-native-skia/*.png
+          if-no-files-found: warn
+
+  rust-asset-atlas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: horizon-hud-vanilla-texture
+      - name: Check existing-HudAtlas texture renderer builds
+        run: cargo check --no-default-features -p horizon-client --bin hud-offscreen
