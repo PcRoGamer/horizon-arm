@@ -130,7 +130,7 @@ jobs:
           if (!(Test-Path "$out/hotbar-native-1280x800.png")) { throw 'Native hotbar PNG absent' }
       - name: Capture real in-world touch HUD (not the title-screen fixture)
         if: steps.assets.outcome == 'success'
-        timeout-minutes: 14
+        timeout-minutes: 20
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
@@ -150,6 +150,15 @@ jobs:
           $capture=Join-Path $root 'screenshots/horizon-arm64-debug-world.png'
           if (!(Test-Path $capture)) { throw 'Game failed to produce a genuine in-world screenshot' }
           Move-Item -LiteralPath $capture -Destination (Join-Path $root 'world-touch-scheme-1.png') -Force
+          # Change only camera direction on the same verified terrain. These are
+          # real game captures, not composited previews. Compare the views and
+          # choose the one that shows the HUD without a spawn-side cliff.
+          foreach ($yaw in @(90, 180, 270)) {
+            & $exe --resources $resources --game-dir $root --world 'HUD Visual QA' --creative --render-distance 2 --look "$yaw,-10" --width 1600 --height 900 --world-frames 24 --screenshot-after 12 --timeout-seconds 600 2>&1 | Tee-Object -FilePath "$root/world-view-$yaw.log"
+            if ($LASTEXITCODE -ne 0) { throw "World camera yaw $yaw failed: exit $LASTEXITCODE" }
+            if (!(Test-Path $capture)) { throw "World camera yaw $yaw created no GPU screenshot" }
+            Move-Item -LiteralPath $capture -Destination (Join-Path $root "world-touch-yaw-$yaw.png") -Force
+          }
 
       - name: Upload GPU screenshots and failure logs
         if: always()
