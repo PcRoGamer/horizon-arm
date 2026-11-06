@@ -32,6 +32,16 @@ assert len(java_masks)==len(rust_masks)==288, "Expected 12 24x24 glyphs"
 assert [m.lower() for m in java_masks]==[m.lower() for m in rust_masks], "Android/Rust pixel glyphs have diverged"
 # Distinctly recognisable Bedrock crouch: downward arrow above a floor bar.
 assert int(java_masks[4*24+20],16)!=0 and int(java_masks[4*24+21],16)!=0
+# Material and interaction contracts from verified Android Canvas screenshots.
+# Keep new work from reverting to the former nearly opaque grey button boxes.
+assert 'int opacity = 72;' in JAVA, "Android first-launch opacity must match test captures"
+assert '0xFFAFB4AE, .76f' in JAVA and '0xAFB4AE, 0.76' in PREVIEW
+assert 'Math.round(r * .047f)' in JAVA and '(r * 0.047).round()' in PREVIEW
+android_face = JAVA.split('private void control(Canvas c,', 1)[1].split('private float joystickY()', 1)[0]
+assert '1.85f' not in android_face and '1.8f' not in android_face, "Opaque legacy button surface returned"
+assert 'case "perspective": return 11;' in JAVA and 'Symbol::Perspective => 11' in PREVIEW
+assert 'TouchRole::Perspective' in INPUT and 'AndroidGesture::Perspective' in INPUT
+assert '0.066f, "jump"' in JAVA and '0.066 * h * cfg.scale' in PREVIEW
 
 NATIVE=read("crates/horizon-client/src/android_main.rs")
 PAD=read("crates/horizon-client/src/game/pad.rs")
