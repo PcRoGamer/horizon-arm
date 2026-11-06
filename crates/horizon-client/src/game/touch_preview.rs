@@ -108,6 +108,7 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
         );
     } else {
         let (cx, cy, offset, r) = dpad_geometry(w, h, cfg.scale);
+        draw.dpad_hub(cx, cy, r);
         for (direction, dx, dy) in [
             (Direction::Up, 0.0, -1.0),
             (Direction::Right, 1.0, 0.0),
@@ -497,6 +498,33 @@ impl Painter<'_> {
             y + if pressed { (r * 0.025).max(1.0) } else { 0.0 },
             r,
             sym,
+        );
+    }
+
+    // Decorative recessed D-pad centre: a single cluster, not five loose
+    // buttons. Touch tracking deliberately remains owned by movement.
+    fn dpad_hub(&mut self, x: f32, y: f32, r: f32) {
+        let corner = (r * 0.22).max(3.0);
+        let edge = (r * 0.048).max(1.2);
+        let outline = self.color(0x283748, 0.65);
+        let rim = self.color(0xA8BBD0, 0.70);
+        let face = self.color(0x8DA0B6, 0.56);
+        self.round_rect(x - r, y - r, 2.0 * r, 2.0 * r, corner, outline);
+        self.round_rect(
+            x - r + edge,
+            y - r + edge,
+            2.0 * (r - edge),
+            2.0 * (r - edge),
+            (corner - edge).max(1.0),
+            rim,
+        );
+        self.round_rect(
+            x - r + edge * 1.8,
+            y - r + edge * 1.8,
+            2.0 * (r - edge * 1.8),
+            2.0 * (r - edge * 1.8),
+            (corner - edge * 1.5).max(1.0),
+            face,
         );
     }
 

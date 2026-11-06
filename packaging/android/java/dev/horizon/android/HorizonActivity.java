@@ -475,6 +475,24 @@ public final class HorizonActivity extends GameActivity {
             c.restore();
         }
 
+        // A quiet recessed neutral centre joins four arrow keys into one
+        // familiar D-pad cluster. It draws no icon and owns no touch action.
+        private void dpadHub(Canvas c, float cx, float cy, float r) {
+            float corner = Math.max(3f, r * .22f);
+            color(alpha(0xFF283748, .65f), Paint.Style.FILL, 0f);
+            c.drawRoundRect(cx - r, cy - r, cx + r, cy + r,
+                    corner, corner, paint);
+            float edge = Math.max(1.2f, r * .048f);
+            color(alpha(0xFFA8BBD0, .70f), Paint.Style.FILL, 0f);
+            c.drawRoundRect(cx - r + edge, cy - r + edge,
+                    cx + r - edge, cy + r - edge,
+                    corner - edge, corner - edge, paint);
+            color(alpha(0xFF8DA0B6, .56f), Paint.Style.FILL, 0f);
+            c.drawRoundRect(cx - r + edge * 1.8f, cy - r + edge * 1.8f,
+                    cx + r - edge * 1.8f, cy + r - edge * 1.8f,
+                    corner - edge * 1.5f, corner - edge * 1.5f, paint);
+        }
+
         private float joystickY() {
             float w = getWidth(), h = getHeight();
             float r = .092f * h * scale;
@@ -546,6 +564,7 @@ public final class HorizonActivity extends GameActivity {
             } else {
                 float[] dpad = dpadGeometry();
                 float cx = dpad[0], cy = dpad[1], off = dpad[2], r = dpad[3];
+                dpadHub(canvas, cx, cy, r);
                 String[] directions = {"up", "right", "down", "left"};
                 float[][] vectors = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}};
                 for (int i = 0; i < 4; ++i) {
