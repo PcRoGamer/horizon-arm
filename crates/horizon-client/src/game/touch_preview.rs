@@ -136,16 +136,22 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
     }
     // Native hotbar end-cap is painted by touch_hotbar, not this overlay.
     draw.control(
-        0.50 * w - 0.045 * h,
+        0.50 * w + 0.050 * h,
         0.045 * h,
         0.028 * h * cfg.scale,
         Symbol::Chat,
     );
     draw.control(
-        0.50 * w + 0.045 * h,
+        0.50 * w + 0.117 * h,
         0.045 * h,
         0.028 * h * cfg.scale,
         Symbol::Pause,
+    );
+    draw.control(
+        0.50 * w - 0.017 * h,
+        0.045 * h,
+        0.028 * h * cfg.scale,
+        Symbol::Perspective,
     );
 }
 
@@ -165,12 +171,13 @@ enum Symbol {
     Use,
     Chat,
     Pause,
+    Perspective,
     Arrow(Direction),
 }
 
 // Generated original icon masks. One source for the Java and ARM64 preview.
 // Glyph source: identical 11x24 masks in Android Canvas and Rust native preview
-const PIXEL_GLYPHS: [[u32; 24]; 11] = [
+const PIXEL_GLYPHS: [[u32; 24]; 12] = [
     [
         0x000000, 0x000000, 0x000000, 0x000000, 0x0FFFF0, 0x1FFFF0, 0x180030, 0x180030, 0x180030,
         0x1999F0, 0x1BFFF0, 0x1BFFF0, 0x1999F0, 0x180030, 0x180030, 0x1C7FF0, 0x1DFFF0, 0x0FC000,
@@ -225,6 +232,8 @@ const PIXEL_GLYPHS: [[u32; 24]; 11] = [
         0x000000, 0x000000, 0x000000, 0x000000, 0x001000, 0x003000, 0x007000, 0x00F000, 0x01FFF8,
         0x07FFF8, 0x0FFFF8, 0x1FFFF8, 0x1FFFF8, 0x0FFFF8, 0x07FFF8, 0x01FFF8, 0x00F000, 0x007000,
         0x003000, 0x001000, 0x000000, 0x000000, 0x000000, 0x000000,
+    ],    [
+        0x000000, 0x000000, 0x000000, 0x1FFF00, 0x100100, 0x100100, 0x100100, 0x100100, 0x100100, 0x107FFC, 0x104104, 0x104104, 0x104944, 0x104944, 0x104104, 0x1FFF04, 0x004004, 0x004FC4, 0x004004, 0x004004, 0x004004, 0x007FFC, 0x000000, 0x000000
     ],
 ];
 
@@ -377,6 +386,7 @@ impl Painter<'_> {
         let icon = match glyph {
             Symbol::Chat => 0,
             Symbol::Pause => 1,
+            Symbol::Perspective => 11,
             Symbol::Sprint => 2,
             Symbol::Jump => 3,
             Symbol::Sneak => 4,
