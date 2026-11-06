@@ -10,6 +10,12 @@ pub enum Action {
     HoldBegin { x: f32, y: f32 },
     HoldEnd,
     Look { dx: f32, dy: f32 },
+    // Android-only gestures are consumed by the game. Do not expose these to
+    // desktop tests, where dead-code warnings are treated as errors.
+    #[cfg(target_os = "android")]
+    Hotbar(usize),
+    #[cfg(target_os = "android")]
+    Chat,
 }
 
 /// Hit test the actual vanilla hotbar, independent of device resolution.
