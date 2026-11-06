@@ -40,14 +40,14 @@ public class HudCaptureTest {
         resting.eraseColor(Color.TRANSPARENT);
         overlay.draw(new Canvas(resting));
         assertEquals("The D-pad UP key must have rounded, transparent corners",
-                0, Color.alpha(resting.getPixel(104, 319)));
+                0, Color.alpha(resting.getPixel(113, 351)));
         assertTrue("Its chrome face must be visible",
-                Color.alpha(resting.getPixel(118, 345)) > 50);
+                Color.alpha(resting.getPixel(125, 375)) > 50);
         assertTrue("D-pad neutral hub should visually join the arrow cluster",
                 Color.alpha(resting.getPixel(145, 454)) > 40);
         java.util.HashSet<Integer> shades = new java.util.HashSet<>();
-        for (int y = 338; y < 354; y += 2) {
-            for (int x = 116; x < 130; x += 2) {
+        for (int y = 368; y < 385; y += 2) {
+            for (int x = 121; x < 136; x += 2) {
                 if (Color.alpha(resting.getPixel(x, y)) > 30) {
                     shades.add(resting.getPixel(x, y));
                 }
@@ -67,7 +67,7 @@ public class HudCaptureTest {
         pressed.eraseColor(Color.TRANSPARENT);
         overlay.draw(new Canvas(pressed));
         assertNotEquals("Pressed touch control must have responsive shading",
-                resting.getPixel(118, 345), pressed.getPixel(118, 345));
+                resting.getPixel(125, 375), pressed.getPixel(125, 375));
         resting.recycle();
         pressed.recycle();
     }
