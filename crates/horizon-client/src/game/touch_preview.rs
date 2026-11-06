@@ -142,13 +142,13 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
         Symbol::Chat,
     );
     draw.control(
-        0.50 * w + 0.128 * h,
+        0.50 * w + (0.050 + 0.067 * cfg.scale) * h,
         0.045 * h,
         0.028 * h * cfg.scale,
         Symbol::Pause,
     );
     draw.control(
-        0.50 * w - 0.028 * h,
+        0.50 * w + (0.050 - 0.067 * cfg.scale) * h,
         0.045 * h,
         0.028 * h * cfg.scale,
         Symbol::Perspective,
