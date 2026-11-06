@@ -43,6 +43,8 @@ public class HudCaptureTest {
                 0, Color.alpha(resting.getPixel(104, 319)));
         assertTrue("Its chrome face must be visible",
                 Color.alpha(resting.getPixel(118, 345)) > 50);
+        assertTrue("D-pad neutral hub should visually join the arrow cluster",
+                Color.alpha(resting.getPixel(145, 454)) > 40);
         java.util.HashSet<Integer> shades = new java.util.HashSet<>();
         for (int y = 338; y < 354; y += 2) {
             for (int x = 116; x < 130; x += 2) {

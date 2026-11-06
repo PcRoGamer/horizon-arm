@@ -71,6 +71,8 @@ assert "TouchRole::SprintToggle" in INPUT
 # The gameplay HUD now uses a purpose-built rounded chrome material. No
 # Minecraft world-block textures, scraped preview images or fake inventory.
 assert "chromeButton(" in JAVA and "chrome_button(" in PREVIEW
+assert "dpadHub(canvas, cx, cy, r);" in JAVA
+assert "draw.dpad_hub(cx, cy, r);" in PREVIEW
 assert "LinearGradient" in JAVA and "chrome_gradient(" in PREVIEW
 assert "drawRoundRect" in JAVA and "round_rect(" in PREVIEW
 assert '"block/stone"' not in JAVA and '"block/stone"' not in PREVIEW
