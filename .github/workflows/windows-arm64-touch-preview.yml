@@ -1,7 +1,7 @@
 name: Windows ARM64 touch preview
 on:
   push:
-    branches: [feat/bedrock-touch-polish, tools/vanilla-asset-touch-material]
+    branches: [feat/bedrock-touch-polish, tools/vanilla-asset-touch-material, tools/horizon-world-hud-qa]
     paths:
       - crates/horizon-client/src/game/touch_preview.rs
       - crates/horizon-client/src/game/touch_hotbar.rs
