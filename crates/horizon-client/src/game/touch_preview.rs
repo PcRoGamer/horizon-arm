@@ -339,50 +339,25 @@ impl Painter<'_> {
         }
     }
 
+
     fn control(&mut self, x: f32, y: f32, r: f32, sym: Symbol) {
-        // Production Android Canvas layers, with square pixel-snapped edges.
-        let edge = (r * 0.095).max(1.0);
-        let lip = (r * 0.07).max(0.5);
-        let shadow = self.color(0x080B0D, 1.85);
-        let border = self.color(0x131718, 1.8);
-        let inner = self.color(0x545B5C, 1.55);
+        // Pixel-aligned translucent Bedrock face, same 4-layer material as
+        // the production Android Canvas overlay. No opaque panel beneath it.
+        let edge = (r * 0.047).round().max(1.25);
         let face = if matches!(sym, Symbol::Sprint) && self.cfg.always_sprint {
-            self.color(0x91B89B, 0.88)
+            self.color(0x97B39F, 0.76)
         } else {
-            self.color(0xA5ABA8, 0.88)
+            self.color(0xAFB4AE, 0.76)
         };
-        let shine = self.color(0xDDE0DD, 0.54);
-        let bottom = self.color(0x2D3334, 1.55);
-        self.rect(x - r, y - r + lip, 2.0 * r, 2.0 * r, shadow);
-        self.rect(x - r, y - r, 2.0 * r, 2.0 * r, border);
-        self.rect(
-            x - r + edge,
-            y - r + edge,
-            2.0 * (r - edge),
-            2.0 * (r - edge),
-            inner,
-        );
-        self.rect(
-            x - r + edge,
-            y - r + edge,
-            2.0 * (r - edge),
-            2.0 * r - 2.65 * edge,
-            face,
-        );
-        self.rect(
-            x - r + edge,
-            y - r + edge,
-            2.0 * (r - edge),
-            lip * 0.75,
-            shine,
-        );
-        self.rect(
-            x - r + edge,
-            y + r - 1.65 * edge,
-            2.0 * (r - edge),
-            0.65 * edge,
-            bottom,
-        );
+        let outline = self.color(0x151B1B, 0.90);
+        let highlight = self.color(0xE0E4DB, 0.24);
+        let bottom = self.color(0x283231, 0.38);
+        let lip = (r * 0.024).round().max(1.0);
+        // Four thin outside bands, not a dark filled backdrop.
+        self.stroke_box(x, y, r, edge, outline);
+        self.rect(x-r+edge, y-r+edge, 2.0*(r-edge), 2.0*(r-edge), face);
+        self.rect(x-r+edge, y-r+edge, 2.0*(r-edge), lip, highlight);
+        self.rect(x-r+edge, y+r-edge-lip, 2.0*(r-edge), lip, bottom);
         self.glyph(x, y, r, sym);
     }
 
@@ -412,7 +387,7 @@ impl Painter<'_> {
             Symbol::Arrow(Direction::Down) => 9,
             Symbol::Arrow(Direction::Left) => 10,
         };
-        let pixel = radius * 0.062;
+        let pixel = radius * 0.056;
         let x0 = x - 12.0 * pixel;
         let y0 = y - 12.0 * pixel;
         let ink = self.color(0x111516, 1.9);

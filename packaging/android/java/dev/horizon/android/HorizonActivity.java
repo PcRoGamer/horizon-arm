@@ -89,7 +89,7 @@ public final class HorizonActivity extends GameActivity {
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         scheme = Math.max(0, Math.min(3, prefs.getInt("scheme", 0)));
         controlScale = Math.max(80, Math.min(120, prefs.getInt("scale", 100)));
-        opacity = Math.max(35, Math.min(100, prefs.getInt("opacity", 35)));
+        opacity = Math.max(35, Math.min(100, prefs.getInt("opacity", 72)));
         alwaysSprint = prefs.getBoolean("always_sprint", false);
 
         overlay = new TouchOverlay();
@@ -296,7 +296,7 @@ public final class HorizonActivity extends GameActivity {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         boolean menu = true;
         int scheme = 0;
-        int opacity = 35;
+        int opacity = 72;
         float scale = 1f;
         int buttons = 0;
         float joyX, joyY;
@@ -380,13 +380,14 @@ public final class HorizonActivity extends GameActivity {
             if (index < 0) return;
             canvas.save();
             // 24x24 pixel glyph fits inside the beveled key's face.
-            canvas.scale(radius * .062f, radius * .062f);
+            canvas.scale(radius * .056f, radius * .056f);
             canvas.translate(-12f, -12f);
             color(alpha(0xFF111516, 1.9f), Paint.Style.FILL, 0);
             paint.setAntiAlias(false);
             canvas.drawPath(pixelPaths[index], paint);
             canvas.restore();
         }
+
 
         private void control(Canvas c, float nx, float ny, float radius, String name) {
             float x = nx * getWidth();
@@ -404,27 +405,27 @@ public final class HorizonActivity extends GameActivity {
                     || (name.equals("down") && joyY < -.28f)
                     || (name.equals("left") && joyX < -.28f);
             c.save();
-            // Square, pixel-snapped Minecraft-style bevel, never rounded mobile UI.
-            c.translate(Math.round(x), Math.round(y) + (pressed ? r * .028f : 0));
-            float edge = Math.max(2f, Math.round(r * .095f));
-            float lip = Math.max(1f, Math.round(r * .07f));
-            color(alpha(0xFF080B0D, 1.85f), Paint.Style.FILL, 0);
-            c.drawRect(-r, -r + lip, r, r + lip, paint);
-            color(alpha(0xFF131718, 1.8f), Paint.Style.FILL, 0);
-            c.drawRect(-r, -r, r, r, paint);
-            color(alpha(0xFF545B5C, 1.55f), Paint.Style.FILL, 0);
+            // Bedrock controls are translucent windowpanes, not solid concrete blocks.
+            // The face is never painted over an opaque backing; only its 1-2px
+            // frame, top reflection and bottom lip are separate layers.
+            c.translate(Math.round(x), Math.round(y) + (pressed ? Math.max(1f, r * .028f) : 0f));
+            float edge = Math.max(1.25f, Math.round(r * .047f));
+            float inset = edge * .5f;
+            color(alpha(0xFF151B1B, .90f), Paint.Style.STROKE, edge);
+            paint.setAntiAlias(false);
+            c.drawRect(-r + inset, -r + inset, r - inset, r - inset, paint);
+            int face = pressed && name.equals("sprint") ? 0xFF97B39F
+                    : pressed ? 0xFF7E8E8A : 0xFFAFB4AE;
+            color(alpha(face, .76f), Paint.Style.FILL, 0f);
+            paint.setAntiAlias(false);
             c.drawRect(-r + edge, -r + edge, r - edge, r - edge, paint);
-            int face = pressed && name.equals("sprint") ? 0xFF91B89B
-                    : pressed ? 0xFF858F8D : 0xFFA5ABA8;
-            color(alpha(face, .88f), Paint.Style.FILL, 0);
-            c.drawRect(-r + edge, -r + edge,
-                    r - edge, r - edge * 1.65f, paint);
-            color(alpha(0xFFDDE0DD, .54f), Paint.Style.FILL, 0);
-            c.drawRect(-r + edge, -r + edge,
-                    r - edge, -r + edge + Math.max(1f, lip * .75f), paint);
-            color(alpha(0xFF2D3334, 1.55f), Paint.Style.FILL, 0);
-            c.drawRect(-r + edge, r - edge * 1.65f, r - edge, r - edge, paint);
-            // Keep the icon crisp at both 80% and 120% UI scale.
+            float lip = Math.max(1f, Math.round(r * .024f));
+            color(alpha(0xFFE0E4DB, .24f), Paint.Style.FILL, 0f);
+            paint.setAntiAlias(false);
+            c.drawRect(-r + edge, -r + edge, r - edge, -r + edge + lip, paint);
+            color(alpha(0xFF283231, .38f), Paint.Style.FILL, 0f);
+            paint.setAntiAlias(false);
+            c.drawRect(-r + edge, r - edge - lip, r - edge, r - edge, paint);
             glyph(c, name, r);
             c.restore();
         }
