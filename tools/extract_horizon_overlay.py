@@ -40,8 +40,8 @@ def extract(source: str) -> str:
     assert end > start and source[end:] == "\n    }\n}\n", "Production overlay no longer last class"
     body = source[start:end+6]
     assert body.count(CONSTRUCTOR) == 1, "Production constructor changed; review extractor"
-    for token in ("PIXEL_GLYPHS", "buildPixelPaths()", "onDraw(Canvas canvas)",
-                  "joystick(Canvas c)", "glyph(Canvas canvas", "control(Canvas c",
+    for token in ("controlSprite(String key)", "spritePath(String name, boolean pressed)",
+                  "onDraw(Canvas canvas)", "joystick(Canvas c)", "control(Canvas c",
                   '"chat"', '"pause"', '"sprint"', "super.onDraw(canvas);"):
         assert token in body, "Missing production renderer primitive: " + token
     body = body.replace(MARKER, "public final class HudPreviewOverlay extends View {", 1)

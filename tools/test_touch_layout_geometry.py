@@ -17,21 +17,39 @@ PREVIEW=read("crates/horizon-client/src/game/touch_preview.rs")
 INPUT=read("crates/horizon-winit/src/lib.rs")
 GESTURE=read("crates/horizon-winit/src/touch_gestures.rs")
 HOTBAR=read("crates/horizon-client/src/game/touch_hotbar.rs")
-# The native Skia Android overlay and Windows Rust preview MUST share exactly
-# the same 12 pixel icons. Geometry tests alone cannot catch icon drift.
-import re
-def icon_masks(code):
-    # Both files define exactly 12 rows of 24 pixel-mask values. Never
-    # depend on Java/Rust bracket syntax when reading this contract.
-    pos=code.index("PIXEL_GLYPHS")
-    masks=re.findall(r"0x[0-9a-fA-F]{6}", code[pos:])
-    return masks[:12*24]
-java_masks=icon_masks(JAVA)
-rust_masks=icon_masks(PREVIEW)
-assert len(java_masks)==len(rust_masks)==288, "Expected 12 24x24 glyphs"
-assert [m.lower() for m in java_masks]==[m.lower() for m in rust_masks], "Android/Rust pixel glyphs have diverged"
-# Distinctly recognisable Bedrock crouch: downward arrow above a floor bar.
-assert int(java_masks[4*24+20],16)!=0 and int(java_masks[4*24+21],16)!=0
+# Both renderers now consume the SAME ORIGINAL LG PL-3.0-or-later
+# TouchController Classic source PNGs instead of separate hand-drawn icons.
+# Their source is preserved with the licence and pinned upstream revision.
+import struct
+ASSET_ROOT = ROOT / "third_party/touchcontroller/assets/horizon_touch/classic"
+ITEMS = (
+    "jump/jump", "sneak/sneak", "sprint/sprint", "attack/attack",
+    "use/use", "chat/chat", "pause/pause", "perspective/perspective",
+    "inventory/inventory",
+)
+DIRECTIONS = ("up", "right", "down", "left")
+paths = [*(f"dpad/{direction}{state}.png"
+           for direction in DIRECTIONS for state in ("", "_active")),
+         *(f"{item}{state}.png" for item in ITEMS for state in ("", "_active")),
+         "joystick/pad.png", "joystick/stick.png"]
+assert len(paths) == 28
+for item in paths:
+    p = ASSET_ROOT / item
+    assert p.is_file(), f"TouchController source sprite missing: {item}"
+    data = p.read_bytes()
+    assert data[:8] == b"\\x89PNG\\r\\n\\x1a\\n".decode("unicode_escape").encode("latin1"), item
+    width, height = struct.unpack(">II", data[16:24])
+    assert 12 <= width <= 128 and 12 <= height <= 128, (item, width, height)
+    name = item.removesuffix(".png")
+    assert f"horizon_touch:gui/classic/{name}" in read("crates/horizon-client-render/src/hud.rs"), name
+    assert f"assets/horizon_touch/classic/{item}" in read("crates/horizon-client-render/src/hud.rs"), item
+assert (ROOT / "third_party/touchcontroller/COPYING.LGPL-3.0").is_file()
+assert (ROOT / "third_party/touchcontroller/NOTICE.txt").is_file()
+assert 'getAssets().open(' in JAVA and 'horizon_touch/classic/' in JAVA
+assert 'spritePath(String name, boolean pressed)' in JAVA
+assert '"horizon_touch:gui/classic/' in PREVIEW
+assert 'draw_sprite(' in PREVIEW
+assert "PIXEL_GLYPHS" not in JAVA and "PIXEL_GLYPHS" not in PREVIEW
 
 NATIVE=read("crates/horizon-client/src/android_main.rs")
 PAD=read("crates/horizon-client/src/game/pad.rs")
@@ -67,21 +85,15 @@ assert 'control(canvas, inventoryX' not in JAVA, "Floating inventory button resu
 assert "TouchRole::Button(3) // Native hotbar inventory" in INPUT
 assert "android_dpad_geometry" in INPUT and "dpadGeometry()" in JAVA
 assert "centre sneak key" in INPUT
-# The entire button must come from Mojang's purpose-made GUI sprite,
-# including the centre. Never use a world-block texture as a UI control.
-assert 'getContext().getFilesDir()' in JAVA
-assert '"assets/minecraft/textures/" + path + ".png"' in JAVA
-assert 'refreshButtonSprites()' in JAVA
-assert 'gui/sprites/widget/button' in JAVA and 'gui/sprites/widget/button' in PREVIEW
-assert 'drawVanillaButton(' in JAVA and 'vanilla_button_surface(' in PREVIEW
-assert 'frameSource.set(sx[col], sy[row]' in JAVA
-assert 'self.batch.rect_uv(' in PREVIEW
-assert 'if (row == 1 && col == 1) continue;' not in JAVA, "Android omits GUI button centre"
-assert 'if row == 1 && col == 1' not in PREVIEW, "Rust omits GUI button centre"
+# All touch buttons use source-specific, separately licensed PNGs; no stone
+# block surface or generic widget border is passed off as the controls.
+assert 'decodeCachedTexture(' not in JAVA
+assert 'refreshButtonSprites()' not in JAVA
+assert 'drawVanillaButton(' not in JAVA
+assert 'vanilla_button_surface(' not in PREVIEW
 assert '"block/stone"' not in JAVA and '"block/stone"' not in PREVIEW
-assert 'buttonStone' not in JAVA, "Obsolete block-face cache remains"
-# The same existing runtime asset cache and atlas serves both renderers.
-# No Mojang-owned pixels or a secondary downloader are added to the APK.
+assert "horizon_touch:gui/classic/inventory/inventory" in HOTBAR
+assert "assets.srcDirs = ['../../.local/android/gradle-assets', '../../third_party/touchcontroller/assets']" in read("packaging/android/build.gradle")
 
 assert "((x-left)/(20.0*s))" in GESTURE.replace(" ",""), "Adaptive hotbar hit geometry changed"
 
