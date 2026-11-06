@@ -1,0 +1,46 @@
+name: Inspect upstream TouchController UI source and sprites
+on:
+  push:
+    branches:
+      - research/touchcontroller-reference
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-study:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clone LGPL upstream source for isolated analysis only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .local/touchcontroller-audit
+          git clone --depth=1 --filter=blob:none --sparse https://github.com/TouchController/TouchController.git .local/touchcontroller-audit/upstream
+          git -C .local/touchcontroller-audit/upstream sparse-checkout set             touchcontroller/common             touchcontroller/api             touchcontroller/resources/texture/control             touchcontroller/resources/texture/control_classic             touchcontroller/LICENSE             touchcontroller/README.md
+          git -C .local/touchcontroller-audit/upstream rev-parse HEAD | tee .local/touchcontroller-audit/upstream-revision.txt
+          cp .local/touchcontroller-audit/upstream/touchcontroller/LICENSE .local/touchcontroller-audit/COPYING-LGPL-3.0
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          root = Path('.local/touchcontroller-audit/upstream')
+          all_files = [f for f in root.rglob('*') if f.is_file() and '.git' not in f.parts]
+          controls = [f for f in all_files if f.suffix.lower() == '.png' and '/texture/control/' in str(f)]
+          print('FILES', len(all_files), 'CONTROL_TEXTURES', len(controls))
+          assert len(controls) >= 30, 'TouchController UI assets were not retrieved'
+          Path('.local/touchcontroller-audit/manifest.json').write_text(
+              json.dumps({'files':len(all_files),'control_textures':len(controls)},indent=2))
+          PY
+          # Never execute upstream scripts or build the third-party mod.
+          rm -rf .local/touchcontroller-audit/upstream/.git
+          cd .local/touchcontroller-audit
+          zip -q -r ../touchcontroller-source-study.zip upstream upstream-revision.txt COPYING-LGPL-3.0 manifest.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: touchcontroller-upstream-source-reference
+          path: .local/touchcontroller-source-study.zip
+          if-no-files-found: error
+          retention-days: 10
