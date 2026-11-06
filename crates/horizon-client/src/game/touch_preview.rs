@@ -235,8 +235,8 @@ const PIXEL_GLYPHS: [[u32; 24]; 12] = [
     ],
     [
         0x000000, 0x000000, 0x000000, 0x1FFF00, 0x100100, 0x100100, 0x100100, 0x100100, 0x100100,
-        0x107FFC, 0x104104, 0x104104, 0x104944, 0x104944, 0x104104, 0x1FFF04, 0x004004,
-        0x004FC4, 0x004004, 0x004004, 0x004004, 0x007FFC, 0x000000, 0x000000
+        0x107FFC, 0x104104, 0x104104, 0x104944, 0x104944, 0x104104, 0x1FFF04, 0x004004, 0x004FC4,
+        0x004004, 0x004004, 0x004004, 0x007FFC, 0x000000, 0x000000,
     ],
 ];
 
@@ -351,25 +351,96 @@ impl Painter<'_> {
         }
     }
 
+    /// Draw the entire GUI button surface from the existing Mojang HUD atlas,
+    /// including its centre, without stretching its three-pixel corners.
+    fn vanilla_button_surface(&mut self, x: f32, y: f32, radius: f32, pressed: bool) -> bool {
+        let regular = "gui/sprites/widget/button";
+        let highlighted = "gui/sprites/widget/button_highlighted";
+        let name = if pressed && self.atlas.sprites.contains_key(highlighted) {
+            highlighted
+        } else {
+            regular
+        };
+        let Some(sprite) = self.atlas.sprites.get(name).copied() else {
+            return false;
+        };
+        let sw = sprite.w as f32;
+        let sh = sprite.h.min(20) as f32;
+        if sw < 16.0 || sh < 12.0 {
+            return false;
+        }
+        let border = 3.0f32;
+        let dst_border = (radius * 0.10).round().max(2.0);
+        let sx = [0.0, border, sw - border, sw];
+        let sy = [0.0, border, sh - border, sh];
+        let dx = [
+            x - radius,
+            x - radius + dst_border,
+            x + radius - dst_border,
+            x + radius,
+        ];
+        let dy = [
+            y - radius,
+            y - radius + dst_border,
+            y + radius - dst_border,
+            y + radius,
+        ];
+        let du = sprite.u1 - sprite.u0;
+        let dv = sprite.v1 - sprite.v0;
+        let tint = self.color(0xFFFFFF, 1.0);
+        for row in 0..3 {
+            for col in 0..3 {
+                let mut crop = sprite;
+                crop.u0 = sprite.u0 + du * sx[col] / sw;
+                crop.u1 = sprite.u0 + du * sx[col + 1] / sw;
+                crop.v0 = sprite.v0 + dv * sy[row] / sprite.h as f32;
+                crop.v1 = sprite.v0 + dv * sy[row + 1] / sprite.h as f32;
+                self.batch.rect_uv(
+                    dx[col],
+                    dy[row],
+                    dx[col + 1] - dx[col],
+                    dy[row + 1] - dy[row],
+                    crop,
+                    tint,
+                );
+            }
+        }
+        true
+    }
 
     fn control(&mut self, x: f32, y: f32, r: f32, sym: Symbol) {
-        // Neutral stone-grey material matching production Android Canvas. Strong
-        // monochrome contrast at the actual default opacity, no green tint.
-        let edge = (r * 0.047).round().max(1.25);
-        let face = if matches!(sym, Symbol::Sprint) && self.cfg.always_sprint {
-            self.color(0x94B29C, 1.0)
-        } else {
-            self.color(0xC5C5C2, 1.0)
-        };
-        let outline = self.color(0x222629, 1.08);
-        let highlight = self.color(0xECF0EA, 0.74);
-        let bottom = self.color(0x4B5050, 0.90);
-        let lip = (r * 0.024).round().max(1.0);
-        // Four thin outside bands, not a dark filled backdrop.
-        self.stroke_box(x, y, r, edge, outline);
-        self.rect(x-r+edge, y-r+edge, 2.0*(r-edge), 2.0*(r-edge), face);
-        self.rect(x-r+edge, y-r+edge, 2.0*(r-edge), lip, highlight);
-        self.rect(x-r+edge, y+r-edge-lip, 2.0*(r-edge), lip, bottom);
+        // UI artwork owns the entire control surface. World blocks are never
+        // reused as interface materials; pressed state uses the GUI highlight.
+        let pressed = matches!(sym, Symbol::Sprint) && self.cfg.always_sprint;
+        if !self.vanilla_button_surface(x, y, r, pressed) {
+            // Keep a compact, neutral fallback before Mojang bootstrap finishes.
+            let edge = (r * 0.047).round().max(1.25);
+            let face = if pressed {
+                self.color(0x94B29C, 1.0)
+            } else {
+                self.color(0xC5C5C2, 1.0)
+            };
+            let outline = self.color(0x222629, 1.08);
+            let highlight = self.color(0xECF0EA, 0.74);
+            let bottom = self.color(0x4B5050, 0.90);
+            let lip = (r * 0.024).round().max(1.0);
+            self.rect(
+                x - r + edge,
+                y - r + edge,
+                2.0 * (r - edge),
+                2.0 * (r - edge),
+                face,
+            );
+            self.stroke_box(x, y, r, edge, outline);
+            self.rect(x - r + edge, y - r + edge, 2.0 * (r - edge), lip, highlight);
+            self.rect(
+                x - r + edge,
+                y + r - edge - lip,
+                2.0 * (r - edge),
+                lip,
+                bottom,
+            );
+        }
         self.glyph(x, y, r, sym);
     }
 

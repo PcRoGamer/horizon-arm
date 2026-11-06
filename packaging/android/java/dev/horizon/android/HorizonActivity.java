@@ -3,9 +3,12 @@ package dev.horizon.android;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -20,6 +23,8 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 
 import com.google.androidgamesdk.GameActivity;
+
+import java.io.File;
 
 /**
  * Bedrock-inspired touch surface. The Canvas overlay never consumes gameplay
@@ -264,6 +269,9 @@ public final class HorizonActivity extends GameActivity {
     private final Runnable poll = new Runnable() {
         @Override public void run() {
             syncNative();
+            // Horizon's native first-run bootstrap populates this cache. Reuse
+            // the same verified Mojang asset tree, never a second downloader.
+            if (overlay.refreshButtonSprites()) overlay.invalidate();
             boolean menu = inMenu();
             int bits = 0;
             float x = 0f, y = 0f;
@@ -294,6 +302,12 @@ public final class HorizonActivity extends GameActivity {
     /** Non-intercepting, hardware-accelerated vector artwork. */
     private final class TouchOverlay extends View {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private Bitmap buttonFrame;
+        private Bitmap highlightedFrame;
+        // Reusable draw rectangles avoid dozens of allocations per touch frame.
+        private final Rect frameSource = new Rect();
+        private final RectF frameTarget = new RectF();
+        private long nextButtonProbeMs;
         boolean menu = true;
         int scheme = 0;
         int opacity = 72;
@@ -304,6 +318,84 @@ public final class HorizonActivity extends GameActivity {
         TouchOverlay() {
             super(HorizonActivity.this);
             setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        }
+
+        /**
+         * Read purpose-built GUI button sprites from Horizon's prepared Mojang
+         * resource tree. The entire button, including its centre and pressed
+         * state, comes from GUI artwork rather than a world-block texture.
+         * The APK contains no redistributed Minecraft-owned PNGs.
+         *
+         * Android Canvas and Rust HudAtlas consume the same prepared resources.
+         * Probe at most every three seconds during first-run bootstrap.
+         */
+        private Bitmap decodeCachedTexture(File base, String path) {
+            File png = new File(base, "assets/minecraft/textures/" + path + ".png");
+            if (!png.isFile() || png.length() > 1024 * 1024) return null;
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            options.inScaled = false;
+            Bitmap result = BitmapFactory.decodeFile(png.getAbsolutePath(), options);
+            if (result == null) return null;
+            if (result.getWidth() < 8 || result.getHeight() < 8
+                    || result.getWidth() > 512 || result.getHeight() > 512) {
+                result.recycle();
+                return null;
+            }
+            return result;
+        }
+
+        boolean refreshButtonSprites() {
+            if (buttonFrame != null && highlightedFrame != null) return false;
+            long now = android.os.SystemClock.uptimeMillis();
+            if (now < nextButtonProbeMs) return false;
+            nextButtonProbeMs = now + 3000;
+            File cache = new File(getContext().getFilesDir(), ".local/horizon-client");
+            File[] versions = cache.listFiles(File::isDirectory);
+            if (versions == null) return false;
+            boolean changed = false;
+            for (File version : versions) {
+                if (buttonFrame == null) {
+                    buttonFrame = decodeCachedTexture(version, "gui/sprites/widget/button");
+                    changed |= buttonFrame != null;
+                }
+                if (highlightedFrame == null) {
+                    highlightedFrame = decodeCachedTexture(
+                            version, "gui/sprites/widget/button_highlighted");
+                    changed |= highlightedFrame != null;
+                }
+                if (buttonFrame != null && highlightedFrame != null) break;
+            }
+            return changed;
+        }
+
+        /**
+         * Nine-slice the complete vanilla GUI button sprite: four corners,
+         * four edges, and its original centre. Never paint a block texture
+         * under a border-only widget.
+         */
+        private boolean drawVanillaButton(Canvas canvas, Bitmap frame, float radius) {
+            if (frame == null || frame.getWidth() < 16 || frame.getHeight() < 12)
+                return false;
+            float target = Math.max(2f, Math.round(radius * .10f));
+            int width = frame.getWidth();
+            // Some versions contain animation frames vertically; use frame 0.
+            int height = Math.min(20, frame.getHeight());
+            int border = 3;
+            int[] sx = {0, border, width - border, width};
+            int[] sy = {0, border, height - border, height};
+            float[] dx = {-radius, -radius + target, radius - target, radius};
+            float[] dy = {-radius, -radius + target, radius - target, radius};
+            color(alpha(0xFFFFFFFF, 1.0f), Paint.Style.FILL, 0f);
+            paint.setAntiAlias(false);
+            paint.setFilterBitmap(false);
+            for (int row = 0; row < 3; row++) {
+                for (int col = 0; col < 3; col++) {
+                    frameSource.set(sx[col], sy[row], sx[col + 1], sy[row + 1]);
+                    frameTarget.set(dx[col], dy[row], dx[col + 1], dy[row + 1]);
+                    canvas.drawBitmap(frame, frameSource, frameTarget, paint);
+                }
+            }
+            return true;
         }
 
         private void color(int argb, Paint.Style style, float stroke) {
@@ -407,27 +499,28 @@ public final class HorizonActivity extends GameActivity {
                     || (name.equals("down") && joyY < -.28f)
                     || (name.equals("left") && joyX < -.28f);
             c.save();
-            // Neutral Bedrock-like stone-grey material. Previous tinted translucent
-            // face lost contrast against grass and forest backdrops. Keep the
-            // outline, face, top reflection and bottom lip as distinct layers.
             c.translate(Math.round(x), Math.round(y) + (pressed ? Math.max(1f, r * .028f) : 0f));
-            float edge = Math.max(1.25f, Math.round(r * .047f));
-            float inset = edge * .5f;
-            color(alpha(0xFF222629, 1.08f), Paint.Style.STROKE, edge);
-            paint.setAntiAlias(false);
-            c.drawRect(-r + inset, -r + inset, r - inset, r - inset, paint);
-            int face = pressed && name.equals("sprint") ? 0xFF94B29C
-                    : pressed ? 0xFF959A98 : 0xFFC5C5C2;
-            color(alpha(face, 1.0f), Paint.Style.FILL, 0f);
-            paint.setAntiAlias(false);
-            c.drawRect(-r + edge, -r + edge, r - edge, r - edge, paint);
-            float lip = Math.max(1f, Math.round(r * .024f));
-            color(alpha(0xFFECF0EA, .74f), Paint.Style.FILL, 0f);
-            paint.setAntiAlias(false);
-            c.drawRect(-r + edge, -r + edge, r - edge, -r + edge + lip, paint);
-            color(alpha(0xFF4B5050, .90f), Paint.Style.FILL, 0f);
-            paint.setAntiAlias(false);
-            c.drawRect(-r + edge, r - edge - lip, r - edge, r - edge, paint);
+            // The same complete GUI sprite in both Android Canvas and Rust HUD.
+            Bitmap surface = pressed && highlightedFrame != null
+                    ? highlightedFrame : buttonFrame;
+            if (!drawVanillaButton(c, surface, r)) {
+                // First-run fallback: a restrained interface bevel. No block
+                // textures are ever repurposed as button artwork.
+                float edge = Math.max(1.25f, Math.round(r * .047f));
+                float inset = edge * .5f;
+                int face = pressed && name.equals("sprint") ? 0xFF94B29C
+                        : pressed ? 0xFF959A98 : 0xFFC5C5C2;
+                color(alpha(face, 1.0f), Paint.Style.FILL, 0f);
+                paint.setAntiAlias(false);
+                c.drawRect(-r + edge, -r + edge, r - edge, r - edge, paint);
+                color(alpha(0xFF222629, 1.08f), Paint.Style.STROKE, edge);
+                c.drawRect(-r + inset, -r + inset, r - inset, r - inset, paint);
+                float lip = Math.max(1f, Math.round(r * .024f));
+                color(alpha(0xFFECF0EA, .74f), Paint.Style.FILL, 0f);
+                c.drawRect(-r + edge, -r + edge, r - edge, -r + edge + lip, paint);
+                color(alpha(0xFF4B5050, .90f), Paint.Style.FILL, 0f);
+                c.drawRect(-r + edge, r - edge - lip, r - edge, r - edge, paint);
+            }
             glyph(c, name, r);
             c.restore();
         }

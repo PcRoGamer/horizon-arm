@@ -1,9 +1,11 @@
 name: Windows ARM64 touch preview
 on:
   push:
-    branches: [feat/bedrock-touch-polish]
+    branches: [feat/bedrock-touch-polish, tools/vanilla-asset-touch-material]
     paths:
       - crates/horizon-client/src/game/touch_preview.rs
+      - crates/horizon-client/src/game/touch_hotbar.rs
+      - packaging/android/java/dev/horizon/android/HorizonActivity.java
       - tools/check_android_control_layout.py
       - crates/horizon-client/src/game.rs
       - tools/windows_arm_debug_assets.py
@@ -33,13 +35,17 @@ jobs:
           Write-Output "CPU=$env:PROCESSOR_ARCHITECTURE"
       - name: Rust formatting
         shell: pwsh
-        run: cargo fmt --all
+        run: cargo fmt --all -- --check
       - name: Unit test touch preview geometry
         shell: pwsh
         run: cargo test -p horizon-client touch_preview::tests --lib --no-default-features --target aarch64-pc-windows-msvc
       - name: Native debug build
         shell: pwsh
         run: cargo build -p horizon-client --no-default-features --target aarch64-pc-windows-msvc --jobs 4
+      - name: Build real Rust HUD-only rasterizer
+        shell: pwsh
+        continue-on-error: true
+        run: cargo build -p horizon-client --bin hud-offscreen --no-default-features --target aarch64-pc-windows-msvc --jobs 4
       - name: Confirm ARM64 PE header
         shell: pwsh
         run: |
@@ -59,8 +65,16 @@ jobs:
         run: |
           $out='.local/downloaded-apk'
           New-Item -ItemType Directory -Force $out | Out-Null
-          gh run download 41697502144 -R "$env:GITHUB_REPOSITORY" -n horizon-clean-arm64-debug-apk -D $out
-          if ($LASTEXITCODE -ne 0) { throw "APK engine-data artifact download failed" }
+          # Use latest non-expired verified APK produced by this repository.
+          $ids=@(gh api "repos/$env:GITHUB_REPOSITORY/actions/artifacts?name=horizon-clean-arm64-debug-apk&per_page=30" --jq '.artifacts[] | select(.expired == false) | .workflow_run.id')
+          if ($LASTEXITCODE -ne 0 -or $ids.Count -eq 0) { throw "No verified APK engine-data artifacts found" }
+          $retrieved=$false
+          foreach ($id in $ids) {
+            if ([string]::IsNullOrWhiteSpace($id)) { continue }
+            gh run download "$id" -R "$env:GITHUB_REPOSITORY" -n horizon-clean-arm64-debug-apk -D $out
+            if ($LASTEXITCODE -eq 0) { $retrieved=$true; Write-Output "Engine data from run $id"; break }
+          }
+          if (-not $retrieved) { throw "APK engine-data artifact download failed" }
           $apk=Get-ChildItem $out -Filter '*.apk' | Select-Object -First 1
           if ($null -eq $apk) { throw "Missing artifact APK" }
           Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -100,6 +114,43 @@ jobs:
             if (!(Test-Path $capture)) { throw "Scheme $scheme produced no GPU screenshot" }
             Move-Item -LiteralPath $capture -Destination (Join-Path $root "touch-scheme-$scheme.png") -Force
           }
+      - name: Render genuine native hotbar and attached inventory cap
+        if: steps.assets.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $exe='target/aarch64-pc-windows-msvc/debug/hud-offscreen.exe'
+          if (!(Test-Path $exe)) { throw 'Native HUD rasterizer was not built' }
+          $env:HORIZON_TOUCH_PREVIEW='1'
+          $root='.local/horizon-client/26.3'
+          $out='.local/horizon-touch-ci'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          & $exe $root "$out/hotbar-native-1280x800.png" 1280 800
+          if ($LASTEXITCODE -ne 0) { throw "Native hotbar render failed: exit $LASTEXITCODE" }
+          if (!(Test-Path "$out/hotbar-native-1280x800.png")) { throw 'Native hotbar PNG absent' }
+      - name: Capture real in-world touch HUD (not the title-screen fixture)
+        if: steps.assets.outcome == 'success'
+        timeout-minutes: 14
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $exe=Resolve-Path 'target/aarch64-pc-windows-msvc/debug/horizon-client.exe'
+          $root=Join-Path (Get-Location) '.local/horizon-touch-ci'
+          $resources=Join-Path (Get-Location) '.local/horizon-client/26.3'
+          $env:HORIZON_HOME=$root
+          $env:HORIZON_TOUCH_PREVIEW='1'
+          $env:HORIZON_TOUCH_PREVIEW_TITLE='0'
+          $env:HORIZON_TOUCH_PREVIEW_SCHEME='1'
+          $env:HORIZON_TOUCH_PREVIEW_SCALE='100'
+          $env:HORIZON_TOUCH_PREVIEW_OPACITY='72'
+          # With --world-frames, --screenshot-after counts gameplay frames,
+          # never splash/title frames. CI must produce a world capture.
+          & $exe --resources $resources --game-dir $root --world 'HUD Visual QA' --seed 42 --creative --render-distance 2 --width 1600 --height 900 --world-frames 28 --screenshot-after 12 --timeout-seconds 600 --smoke-report "$root/world-smoke-report.json" 2>&1 | Tee-Object -FilePath "$root/world-preview.log"
+          if ($LASTEXITCODE -ne 0) { throw "In-world HUD render failed: exit $LASTEXITCODE" }
+          $capture=Join-Path $root 'screenshots/horizon-arm64-debug-world.png'
+          if (!(Test-Path $capture)) { throw 'Game failed to produce a genuine in-world screenshot' }
+          Move-Item -LiteralPath $capture -Destination (Join-Path $root 'world-touch-scheme-1.png') -Force
+
       - name: Upload GPU screenshots and failure logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -108,6 +159,7 @@ jobs:
           path: |
             .local/horizon-touch-ci/*.png
             .local/horizon-touch-ci/*.log
+            .local/horizon-touch-ci/*world*.json
           if-no-files-found: warn
           include-hidden-files: true
       - name: Publish native ARM64 debug executable

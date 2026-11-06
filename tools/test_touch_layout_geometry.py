@@ -67,6 +67,22 @@ assert 'control(canvas, inventoryX' not in JAVA, "Floating inventory button resu
 assert "TouchRole::Button(3) // Native hotbar inventory" in INPUT
 assert "android_dpad_geometry" in INPUT and "dpadGeometry()" in JAVA
 assert "centre sneak key" in INPUT
+# The entire button must come from Mojang's purpose-made GUI sprite,
+# including the centre. Never use a world-block texture as a UI control.
+assert 'getContext().getFilesDir()' in JAVA
+assert '"assets/minecraft/textures/" + path + ".png"' in JAVA
+assert 'refreshButtonSprites()' in JAVA
+assert 'gui/sprites/widget/button' in JAVA and 'gui/sprites/widget/button' in PREVIEW
+assert 'drawVanillaButton(' in JAVA and 'vanilla_button_surface(' in PREVIEW
+assert 'frameSource.set(sx[col], sy[row]' in JAVA
+assert 'self.batch.rect_uv(' in PREVIEW
+assert 'if (row == 1 && col == 1) continue;' not in JAVA, "Android omits GUI button centre"
+assert 'if row == 1 && col == 1' not in PREVIEW, "Rust omits GUI button centre"
+assert '"block/stone"' not in JAVA and '"block/stone"' not in PREVIEW
+assert 'buttonStone' not in JAVA, "Obsolete block-face cache remains"
+# The same existing runtime asset cache and atlas serves both renderers.
+# No Mojang-owned pixels or a secondary downloader are added to the APK.
+
 assert "((x-left)/(20.0*s))" in GESTURE.replace(" ",""), "Adaptive hotbar hit geometry changed"
 
 def box(x,y,r):

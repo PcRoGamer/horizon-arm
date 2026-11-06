@@ -21,11 +21,15 @@ HEADER = """// AUTO-GENERATED. The real HorizonActivity.java contains the drawin
 package dev.horizon.hudpreview;
 
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.view.View;
+import java.io.File;
 
 """
 
