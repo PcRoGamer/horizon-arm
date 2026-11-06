@@ -31,3 +31,18 @@ Re-running the `am start` command updates the activity immediately. Schemes 0/1 
 **Not rendered yet:** native **Rust GPU hotbar**, inventory end-cap, player items/status bars, and 3D world. These belong to the Rust renderer, so they need a separate native HUD-only render path. We deliberately do not use fake rectangles or a simulated world as substitutes.
 
 The result is a true source-derived Android control-layer render. It is not proof of complete Bedrock HUD parity until the native Rust HUD layer is captured and composited as well.
+
+
+## Reusing Horizon's existing Minecraft assets
+
+The touch buttons now use **runtime-loaded vanilla Minecraft textures**. No new network downloader or Minecraft-owned PNG is committed to Horizon or bundled in its APK.
+
+- **Button face:** `assets/minecraft/textures/block/stone.png`
+- **Normal frame:** `assets/minecraft/textures/gui/sprites/widget/button.png`
+- **Highlighted/pressed frame:** `assets/minecraft/textures/gui/sprites/widget/button_highlighted.png`
+
+On Android, the production `TouchOverlay` reads these from `Context.getFilesDir()/.local/horizon-client/<version>/`, which is the same versioned directory used by `bootstrap::resource_root`. First-run preparation may not have finished when the Activity starts, so the UI retains the old functional fallback surfaces and polls for the textures at most once every three seconds. The button press hitboxes do not change.
+
+The Windows/Rust HUD-only preview reads `block/stone` and `gui/sprites/widget/button` through the **existing HudAtlas**. The border is nine-sliced, preserving vanilla menu corner pixels instead of stretching a 200x20 sprite into a square.
+
+The Android Robolectric test writes **synthetic texture fixtures** into the normal cache layout and verifies that the production code loads and renders them. Fixture screenshots prove the code path, **not Bedrock pixel parity**. A final visual comparison with genuine Mojang texture pixels requires a prepared game directory and a running Android build.
