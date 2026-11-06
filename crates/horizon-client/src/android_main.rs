@@ -132,6 +132,8 @@ fn android_main(app: AndroidApp) {
         return;
     }
 
+    log::info!("HorizonNative STAGE 07: Mojang resources prepared");
+
     // Migrate Horizon's old single offline name into the profile store now.
     // The selected profile is mirrored back to horizon-player.txt, so existing
     // multiplayer code remains unchanged while the in-game Profile UI is added.

@@ -128,6 +128,29 @@ jobs:
           & $exe $root "$out/hotbar-native-1280x800.png" 1280 800
           if ($LASTEXITCODE -ne 0) { throw "Native hotbar render failed: exit $LASTEXITCODE" }
           if (!(Test-Path "$out/hotbar-native-1280x800.png")) { throw 'Native hotbar PNG absent' }
+      - name: Capture real in-world touch HUD (not the title-screen fixture)
+        if: steps.assets.outcome == 'success'
+        timeout-minutes: 14
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $exe=Resolve-Path 'target/aarch64-pc-windows-msvc/debug/horizon-client.exe'
+          $root=Join-Path (Get-Location) '.local/horizon-touch-ci'
+          $resources=Join-Path (Get-Location) '.local/horizon-client/26.3'
+          $env:HORIZON_HOME=$root
+          $env:HORIZON_TOUCH_PREVIEW='1'
+          $env:HORIZON_TOUCH_PREVIEW_TITLE='0'
+          $env:HORIZON_TOUCH_PREVIEW_SCHEME='1'
+          $env:HORIZON_TOUCH_PREVIEW_SCALE='100'
+          $env:HORIZON_TOUCH_PREVIEW_OPACITY='72'
+          # With --world-frames, --screenshot-after counts gameplay frames,
+          # never splash/title frames. CI must produce a world capture.
+          & $exe --resources $resources --game-dir $root --world 'HUD Visual QA' --seed 42 --creative --render-distance 2 --width 1600 --height 900 --world-frames 28 --screenshot-after 12 --timeout-seconds 600 --smoke-report "$root/world-smoke-report.json" 2>&1 | Tee-Object -FilePath "$root/world-preview.log"
+          if ($LASTEXITCODE -ne 0) { throw "In-world HUD render failed: exit $LASTEXITCODE" }
+          $capture=Join-Path $root 'screenshots/horizon-arm64-debug-world.png'
+          if (!(Test-Path $capture)) { throw 'Game failed to produce a genuine in-world screenshot' }
+          Move-Item -LiteralPath $capture -Destination (Join-Path $root 'world-touch-scheme-1.png') -Force
+
       - name: Upload GPU screenshots and failure logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -136,6 +159,7 @@ jobs:
           path: |
             .local/horizon-touch-ci/*.png
             .local/horizon-touch-ci/*.log
+            .local/horizon-touch-ci/*world*.json
           if-no-files-found: warn
           include-hidden-files: true
       - name: Publish native ARM64 debug executable

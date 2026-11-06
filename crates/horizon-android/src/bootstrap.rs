@@ -74,17 +74,32 @@ fn agent() -> ureq::Agent {
 
 fn get_bytes(url: &str, limit: u64) -> Result<Vec<u8>> {
     official_url(url)?;
-    let mut bytes = Vec::new();
-    agent()
-        .get(url)
-        .call()?
-        .into_reader()
-        .take(limit + 1)
-        .read_to_end(&mut bytes)?;
-    if bytes.len() as u64 > limit {
-        return Err("Mojang response exceeds safety limit".into());
+    // Android network interfaces and their DNS may become available a moment
+    // after the Activity starts. Retry metadata transport errors (but not
+    // invalid content) instead of aborting the very first game launch.
+    for attempt in 0..3 {
+        match agent().get(url).call() {
+            Ok(response) => {
+                let mut bytes = Vec::new();
+                response
+                    .into_reader()
+                    .take(limit + 1)
+                    .read_to_end(&mut bytes)?;
+                if bytes.len() as u64 > limit {
+                    return Err("Mojang response exceeds safety limit".into());
+                }
+                return Ok(bytes);
+            }
+            Err(error) if attempt < 2 => {
+                log::warn!("Mojang metadata request attempt {} failed: {error}", attempt + 1);
+                std::thread::sleep(std::time::Duration::from_millis(
+                    750 * (attempt + 1),
+                ));
+            }
+            Err(error) => return Err(error.into()),
+        }
     }
-    Ok(bytes)
+    unreachable!()
 }
 
 fn json(url: &str) -> Result<Value> {
