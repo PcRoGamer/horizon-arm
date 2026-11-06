@@ -74,6 +74,12 @@ assert 'assets/minecraft/textures/block/stone.png' in JAVA
 assert 'refreshStoneTexture()' in JAVA
 assert 'self.atlas.sprites.contains_key("block/stone")' in PREVIEW
 assert 'self.batch.sprite_scaled(' in PREVIEW
+assert 'gui/sprites/widget/button' in JAVA and 'gui/sprites/widget/button' in PREVIEW
+assert 'drawVanillaFrame(' in JAVA and 'vanilla_button_frame(' in PREVIEW
+assert 'new Rect(sx[col], sy[row]' in JAVA
+assert 'self.batch.rect_uv(' in PREVIEW
+# No Mojang-owned texture is committed to Horizon; both renderers consume
+# the existing runtime cache/atlas, preserving the APK's resource separation.
 
 assert "((x-left)/(20.0*s))" in GESTURE.replace(" ",""), "Adaptive hotbar hit geometry changed"
 
