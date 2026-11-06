@@ -235,8 +235,8 @@ const PIXEL_GLYPHS: [[u32; 24]; 12] = [
     ],
     [
         0x000000, 0x000000, 0x000000, 0x1FFF00, 0x100100, 0x100100, 0x100100, 0x100100, 0x100100,
-        0x107FFC, 0x104104, 0x104104, 0x104944, 0x104944, 0x104104, 0x1FFF04, 0x004004,
-        0x004FC4, 0x004004, 0x004004, 0x004004, 0x007FFC, 0x000000, 0x000000
+        0x107FFC, 0x104104, 0x104104, 0x104944, 0x104944, 0x104104, 0x1FFF04, 0x004004, 0x004FC4,
+        0x004004, 0x004004, 0x004004, 0x007FFC, 0x000000, 0x000000,
     ],
 ];
 
@@ -351,7 +351,6 @@ impl Painter<'_> {
         }
     }
 
-
     fn control(&mut self, x: f32, y: f32, r: f32, sym: Symbol) {
         // Pixel-aligned translucent Bedrock face, same 4-layer material as
         // the production Android Canvas overlay. No opaque panel beneath it.
@@ -367,9 +366,21 @@ impl Painter<'_> {
         let lip = (r * 0.024).round().max(1.0);
         // Four thin outside bands, not a dark filled backdrop.
         self.stroke_box(x, y, r, edge, outline);
-        self.rect(x-r+edge, y-r+edge, 2.0*(r-edge), 2.0*(r-edge), face);
-        self.rect(x-r+edge, y-r+edge, 2.0*(r-edge), lip, highlight);
-        self.rect(x-r+edge, y+r-edge-lip, 2.0*(r-edge), lip, bottom);
+        self.rect(
+            x - r + edge,
+            y - r + edge,
+            2.0 * (r - edge),
+            2.0 * (r - edge),
+            face,
+        );
+        self.rect(x - r + edge, y - r + edge, 2.0 * (r - edge), lip, highlight);
+        self.rect(
+            x - r + edge,
+            y + r - edge - lip,
+            2.0 * (r - edge),
+            lip,
+            bottom,
+        );
         self.glyph(x, y, r, sym);
     }
 
