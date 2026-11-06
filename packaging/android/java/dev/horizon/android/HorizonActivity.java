@@ -305,6 +305,9 @@ public final class HorizonActivity extends GameActivity {
         private Bitmap buttonStone;
         private Bitmap buttonFrame;
         private Bitmap highlightedFrame;
+        // Reusable draw rectangles avoid dozens of allocations per touch frame.
+        private final Rect frameSource = new Rect();
+        private final RectF frameTarget = new RectF();
         private long nextStoneProbeMs;
         boolean menu = true;
         int scheme = 0;
@@ -395,9 +398,9 @@ public final class HorizonActivity extends GameActivity {
             for (int row = 0; row < 3; row++) {
                 for (int col = 0; col < 3; col++) {
                     if (row == 1 && col == 1) continue;
-                    canvas.drawBitmap(frame, new Rect(sx[col], sy[row],
-                            sx[col + 1], sy[row + 1]), new RectF(
-                            dx[col], dy[row], dx[col + 1], dy[row + 1]), paint);
+                    frameSource.set(sx[col], sy[row], sx[col + 1], sy[row + 1]);
+                    frameTarget.set(dx[col], dy[row], dx[col + 1], dy[row + 1]);
+                    canvas.drawBitmap(frame, frameSource, frameTarget, paint);
                 }
             }
             return true;
