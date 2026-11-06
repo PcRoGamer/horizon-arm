@@ -353,17 +353,17 @@ impl Painter<'_> {
 
 
     fn control(&mut self, x: f32, y: f32, r: f32, sym: Symbol) {
-        // Pixel-aligned translucent Bedrock face, same 4-layer material as
-        // the production Android Canvas overlay. No opaque panel beneath it.
+        // Neutral stone-grey material matching production Android Canvas. Strong
+        // monochrome contrast at the actual default opacity, no green tint.
         let edge = (r * 0.047).round().max(1.25);
         let face = if matches!(sym, Symbol::Sprint) && self.cfg.always_sprint {
-            self.color(0x97B39F, 0.76)
+            self.color(0x94B29C, 1.0)
         } else {
-            self.color(0xAFB4AE, 0.76)
+            self.color(0xC5C5C2, 1.0)
         };
-        let outline = self.color(0x151B1B, 0.90);
-        let highlight = self.color(0xE0E4DB, 0.24);
-        let bottom = self.color(0x283231, 0.38);
+        let outline = self.color(0x222629, 1.08);
+        let highlight = self.color(0xECF0EA, 0.74);
+        let bottom = self.color(0x4B5050, 0.90);
         let lip = (r * 0.024).round().max(1.0);
         // Four thin outside bands, not a dark filled backdrop.
         self.stroke_box(x, y, r, edge, outline);
