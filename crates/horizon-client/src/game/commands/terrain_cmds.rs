@@ -9,6 +9,9 @@ use horizon_client::{
 };
 use horizon_core::{position::ChunkPos, random::RandomSource};
 
+/// How long `/forceload add` waits for its chunks, as the game tests' loads do.
+const FORCED_CHUNK_WAIT: std::time::Duration = std::time::Duration::from_secs(120);
+
 fn num(n: impl std::fmt::Display) -> Text {
     Text::literal(n.to_string())
 }
@@ -41,6 +44,23 @@ impl Game<'_> {
             .ok_or_else(|| err("argument.pos2d.incomplete", &[]))?;
         let p = self.resolve_coords(&c);
         Ok([p[0].floor() as i32, p[2].floor() as i32])
+    }
+    /// `ServerLevel.setChunkForced`'s `getChunk`: a command right after
+    /// `/forceload add` (`/place`, `/setblock`) finds the chunks loaded.
+    fn wait_for_forced_chunks(&mut self, min: [i32; 2], max: [i32; 2]) {
+        let missing = |g: &Self| {
+            (min[0]..=max[0])
+                .any(|x| (min[1]..=max[1]).any(|z| !g.world.chunks.contains_key(&(x, z))))
+        };
+        let deadline = std::time::Instant::now() + FORCED_CHUNK_WAIT;
+        while missing(self) {
+            if std::time::Instant::now() >= deadline {
+                log::warn!("Horizon: /forceload: chunks {min:?}..{max:?} are not loaded yet");
+                return;
+            }
+            let _ = self.streaming.update(&mut self.world);
+            self.streaming.wait(std::time::Duration::from_millis(5));
+        }
     }
     pub(super) fn cmd_forceload(&mut self, id: &str, ctx: &Context) -> R<i32> {
         let dim = Text::literal(self.dim.id());
@@ -128,6 +148,7 @@ impl Game<'_> {
                 }
                 if add {
                     self.streaming.rank_forced(cx0, cz0, cx1, cz1);
+                    self.wait_for_forced_chunks([cx0, cz0], [cx1, cz1]);
                 }
                 let (lo, hi) = (chunk_text(cx0, cz0), chunk_text(cx1, cz1));
                 let verb = if add { "added" } else { "removed" };
@@ -518,12 +539,28 @@ impl Game<'_> {
                     let (tag, _) = horizon_world::nbt::parse_snbt(&table)
                         .map_err(|e| err("argument.nbt.invalid", &[&e]))?;
                     let json = horizon_client::scoreboard::tag_to_json(&tag);
+                    // LootCommand's omitted fishing tool is EMPTY, not mainhand.
+                    let held = if id == "loot.fish"
+                        && (ctx.get("tool").is_some() || ctx.has("mainhand") || ctx.has("offhand"))
+                    {
+                        self.tool_stack(ctx)?
+                    } else {
+                        None
+                    };
                     let drops = match json["random_sequence"].as_str() {
                         Some(sequence) => {
                             let random = self.rand_sequences.get(sequence, self.level.seed);
-                            world_items!(self).inline_loot_table(&json, random)
+                            world_items!(self).inline_loot_table_with_tool(
+                                &json,
+                                held.as_ref(),
+                                random,
+                            )
                         }
-                        None => world_items!(self).inline_loot_table(&json, &mut self.world.random),
+                        None => world_items!(self).inline_loot_table_with_tool(
+                            &json,
+                            held.as_ref(),
+                            &mut self.world.random,
+                        ),
                     };
                     (drops, None)
                 } else {
@@ -556,7 +593,9 @@ impl Game<'_> {
                     return Ok(0);
                 };
                 let ty = self.target_type(t);
-                let table = format!("minecraft:entities/{}", ty.trim_start_matches("minecraft:"));
+                // `EntityType.getDefaultLootTable`, in the type's namespace.
+                let (namespace, path) = ty.split_once(':').unwrap_or(("minecraft", ty.as_str()));
+                let table = format!("{namespace}:entities/{path}");
                 if t == Target::Player || !world_items!(self).has_loot_table(&table) {
                     return Err(err(
                         "commands.drop.no_loot_table.entity",
@@ -658,6 +697,9 @@ impl Game<'_> {
                 let mut left = d.clone();
                 let mut placed = false;
                 for s in &slots {
+                    if !self.slot_accepts(s, Some(&left)) {
+                        continue;
+                    }
                     match self.slot_get(s) {
                         None => {
                             self.slot_set(s, Some(left.clone()));
@@ -735,7 +777,8 @@ impl Game<'_> {
                     };
                     let Some(slot) = slot else { continue };
                     let item = drops.get(i).cloned();
-                    if self.slot_set(&slot, item.clone()) {
+                    if self.slot_accepts(&slot, item.as_ref()) && self.slot_set(&slot, item.clone())
+                    {
                         used.push(item.unwrap_or(ItemStack {
                             item: "minecraft:air".into(),
                             count: 0,

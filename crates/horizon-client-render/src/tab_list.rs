@@ -124,10 +124,18 @@ pub fn face(
     }
 }
 
-/// `Hud.extractTabList`: whether the list shows. A single-player world
-/// shows it only with another listed player or a `list` objective.
-pub fn visible(key_down: bool, local_server: bool, listed: usize, objective: bool) -> bool {
-    key_down && !(local_server && listed <= 1 && !objective)
+/// `Hud.extractTabList`: whether the list shows. `Hud.extractRenderState`
+/// only calls it inside `if (!isHidden)`, so F1 takes the list away whatever
+/// else holds it up. A single-player world shows it only with another listed
+/// player or a `list` objective.
+pub fn visible(
+    hud_shown: bool,
+    key_down: bool,
+    local_server: bool,
+    listed: usize,
+    objective: bool,
+) -> bool {
+    hud_shown && key_down && !(local_server && listed <= 1 && !objective)
 }
 
 /// `Options.getBackgroundColor(553648127)`: the row background.
@@ -328,6 +336,8 @@ pub struct TabInputs<'a> {
     /// The player is in the level with an upside-down name
     /// (`AvatarRenderer.isPlayerUpsideDown`).
     pub upside_down: &'a dyn Fn(u128) -> bool,
+    /// The player plays Horizon: Horizon's mark after their head (`horizon_cosmetics::mark`).
+    pub horizon: &'a dyn Fn(u128) -> bool,
 }
 
 /// `PlayerTabOverlay`: the header, footer, visibility and heart states.
@@ -425,6 +435,10 @@ impl TabList {
         };
         let sw = i.screen_width;
         let head = if show_head { 9 } else { 0 };
+        // Horizon: a column for the mark once anyone listed has it, so the names stay aligned.
+        let marked: Vec<bool> = players.iter().map(|p| (i.horizon)(p.uuid)).collect();
+        let mark = if marked.contains(&true) { 9 } else { 0 };
+        let head = head + mark;
         let slot_width = (cols * (head + max_name + width_for_score + 13)).min(sw - 50) / cols;
         let xxo = sw / 2 - (slot_width * cols + (cols - 1) * 5) / 2;
         let mut yyo = 10;
@@ -491,6 +505,20 @@ impl TabList {
                 );
                 xo += 9;
             }
+            if marked[n as usize] {
+                for (mx, my, w, h, color) in horizon_cosmetics::mark::MARK {
+                    let (x, y) = (xo + i32::from(mx), yo + i32::from(my));
+                    let (x1, y1) = (x + i32::from(w), y + i32::from(h));
+                    out.push(GuiDraw::Fill {
+                        x0: x,
+                        y0: y,
+                        x1,
+                        y1,
+                        color,
+                    });
+                }
+            }
+            xo += mark;
             let spectator = p.game_mode == SPECTATOR;
             out.push(GuiDraw::Text {
                 text: entry.name.clone(),
@@ -682,8 +710,11 @@ mod tests {
         assert_eq!(ping_sprite(1000), "icon/ping_1");
         // UUID.hashCode of 0 is 0: the first default skin.
         assert_eq!(default_skin(0), "entity/player/slim/alex");
-        assert!(!visible(true, true, 1, false));
-        assert!(visible(true, true, 1, true));
-        assert!(visible(true, false, 1, false));
+        assert!(!visible(true, true, true, 1, false));
+        assert!(visible(true, true, true, 1, true));
+        assert!(visible(true, true, false, 1, false));
+        // F1 (`Hud.isHidden`) takes the list away however it was held up.
+        assert!(!visible(false, true, false, 2, false));
+        assert!(!visible(false, true, true, 1, true));
     }
 }

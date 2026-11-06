@@ -235,6 +235,10 @@ pub enum LevelEvent {
         volume: f32,
         pitch: f32,
     },
+    /// A placed template's container whose data has a `LootTable`
+    /// (`RandomizableContainer.tryLoadLootTable`): the caller keeps the table
+    /// and rolls it, as for a container a command gives one.
+    ContainerLootTable { pos: BlockPos, tag: crate::nbt::Tag },
     /// `Block.dropResources(state, level, pos)`: the caller evaluates the
     /// block's loot table (no tool, no breaker) and pops the items.
     DropResources { pos: BlockPos, state: BlockStateId },
@@ -726,6 +730,12 @@ pub trait LevelAccess {
     /// moves it, as for a template that has one.
     fn has_mod_block_entity(&self, _pos: BlockPos) -> bool {
         false
+    }
+    /// `ShulkerBoxBlockEntity.isClosed` at `pos`: whether the box's lid is
+    /// still shut. None when no shulker box block entity lives there, or the
+    /// level keeps none: vanilla then reads the box as closed, a full cube.
+    fn shulker_is_closed(&self, _pos: BlockPos) -> Option<bool> {
+        None
     }
     /// Load saved block-entity data into the block entity of the block just
     /// placed at `pos` (`BlockEntity.loadWithComponents`): a bee nest a grown

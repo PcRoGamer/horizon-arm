@@ -4,10 +4,14 @@
 //! and renumbers what goes through it. [`ids`] renumbers the registry ids inside packets as the shared
 //! readers decode them, and `translate` rewrites the packets whose layout changed. An older version is
 //! translated a release at a time (26.1 to 26.2, then 26.2 to 26.3), with its ids mapped straight to the
-//! pinned ones.
+//! pinned ones. A Horizon server runs the ids the other way for a client of an older release
+//! ([`ClientSession`], roadmap `older-clients`), when its owner lets such clients join.
+pub mod client_session;
 pub mod ids;
 pub mod session;
 mod translate;
+pub mod v1_21_10;
+mod v1_21_10_ids;
 pub mod v1_21_11;
 mod v1_21_11_ids;
 pub mod v26_1_2;
@@ -15,6 +19,7 @@ mod v26_1_2_ids;
 pub mod v26_2;
 mod v26_2_ids;
 
+pub use client_session::ClientSession;
 pub use session::Session;
 
 use crate::{
@@ -32,11 +37,19 @@ pub enum ServerVersion {
     /// 26.1, 26.1.1 and 26.1.2: one protocol.
     V26_1,
     V1_21_11,
+    /// 1.21.9 and 1.21.10: one protocol.
+    V1_21_10,
 }
 
 impl ServerVersion {
     /// Newest first.
-    pub const ALL: [Self; 4] = [Self::Current, Self::V26_2, Self::V26_1, Self::V1_21_11];
+    pub const ALL: [Self; 5] = [
+        Self::Current,
+        Self::V26_2,
+        Self::V26_1,
+        Self::V1_21_11,
+        Self::V1_21_10,
+    ];
 
     /// Whether this is `other` or an older release: the translation steps from `other` up apply.
     pub fn at_most(self, other: Self) -> bool {
@@ -51,6 +64,7 @@ impl ServerVersion {
             Self::V26_2 => v26_2::PROTOCOL,
             Self::V26_1 => v26_1_2::PROTOCOL,
             Self::V1_21_11 => v1_21_11::PROTOCOL,
+            Self::V1_21_10 => v1_21_10::PROTOCOL,
         }
     }
 
@@ -61,6 +75,7 @@ impl ServerVersion {
             Self::V26_2 => v26_2::NAME,
             Self::V26_1 => "26.1",
             Self::V1_21_11 => v1_21_11::NAME,
+            Self::V1_21_10 => "1.21.10",
         }
     }
 
@@ -84,9 +99,19 @@ impl ServerVersion {
     /// How this version numbers block states and registries, against the pinned one. `None` for the pinned
     /// version itself.
     pub fn ids(self) -> Option<&'static ids::Ids> {
-        // Before 26.3 a tag slot display was a bare tag id.
+        // Before 26.3 a tag slot display was a bare tag id, and pot decorations were item ids.
         const BEFORE_26_3: ids::Quirks = ids::Quirks {
             tag_slot_display_is_id: true,
+            pot_decorations_are_items: true,
+            either_holders_and_tag_resistance: false,
+            stacks_in_components: false,
+        };
+        // Before 26.1 registry entries in components (a jukebox song, an instrument, a trim material...)
+        // were EitherHolders, damage resistance a tag, and the items components hold ItemStacks.
+        const BEFORE_26_1: ids::Quirks = ids::Quirks {
+            either_holders_and_tag_resistance: true,
+            stacks_in_components: true,
+            ..BEFORE_26_3
         };
         static V26_2: ids::Ids = ids::Ids {
             quirks: BEFORE_26_3,
@@ -97,7 +122,7 @@ impl ServerVersion {
             ..v26_1_2_ids::IDS
         };
         static V1_21_11: ids::Ids = ids::Ids {
-            quirks: BEFORE_26_3,
+            quirks: BEFORE_26_1,
             // 26.1 registered the cat, cow, pig and chicken sound variants among the others.
             entity_data_serializer: ids::Remap::Runs {
                 up: &[
@@ -117,26 +142,81 @@ impl ServerVersion {
             },
             ..v1_21_11_ids::IDS
         };
+        static V1_21_10: ids::Ids = ids::Ids {
+            quirks: BEFORE_26_1,
+            // As 1.21.11's, without the zombie nautilus variant 1.21.11 added after the chicken's.
+            entity_data_serializer: ids::Remap::Runs {
+                up: &[
+                    (0, 0, 22),
+                    (22, 23, 1),
+                    (23, 25, 4),
+                    (27, 30, 1),
+                    (28, 33, 9),
+                ],
+                down: &[
+                    (0, 0, 22),
+                    (23, 22, 1),
+                    (25, 23, 4),
+                    (30, 27, 1),
+                    (33, 28, 9),
+                ],
+            },
+            ..v1_21_10_ids::IDS
+        };
         match self {
             Self::Current => None,
             Self::V26_2 => Some(&V26_2),
             Self::V26_1 => Some(&V26_1),
             Self::V1_21_11 => Some(&V1_21_11),
+            Self::V1_21_10 => Some(&V1_21_10),
         }
     }
 
+    /// The id a client of this version knows a packet a Horizon server sends as `id` by: the inverse of
+    /// [`Self::clientbound_id`]. `None` when that client has no such packet, so it must not be sent.
+    pub fn clientbound_id_down(self, state: State, id: i32) -> Option<i32> {
+        self.inverse(state, Direction::Clientbound, id)
+    }
+
+    /// The pinned version's id for a packet a client of this version sent as `id`: the inverse of
+    /// [`Self::serverbound_id`]. `None` when the pinned version has no such packet.
+    pub fn serverbound_id_up(self, state: State, id: i32) -> Option<i32> {
+        self.inverse(state, Direction::Serverbound, id)
+    }
+
+    fn inverse(self, state: State, direction: Direction, id: i32) -> Option<i32> {
+        if self == Self::Current {
+            return Some(id);
+        }
+        let at = self
+            .table(state, direction)
+            .iter()
+            .position(|&m| m.map(i32::from) == Some(id))?;
+        i32::try_from(at).ok()
+    }
+
     fn map(self, state: State, direction: Direction, id: i32) -> Option<i32> {
-        let table = match (self, direction) {
-            (Self::Current, _) => return Some(id),
+        if self == Self::Current {
+            return Some(id);
+        }
+        let mapped = *self
+            .table(state, direction)
+            .get(usize::try_from(id).ok()?)?;
+        mapped.map(i32::from)
+    }
+
+    fn table(self, state: State, direction: Direction) -> &'static [Option<u8>] {
+        match (self, direction) {
+            (Self::Current, _) => &[],
             (Self::V26_2, Direction::Clientbound) => v26_2::clientbound(state),
             (Self::V26_2, Direction::Serverbound) => v26_2::serverbound(state),
             (Self::V26_1, Direction::Clientbound) => v26_1_2::clientbound(state),
             (Self::V26_1, Direction::Serverbound) => v26_1_2::serverbound(state),
             (Self::V1_21_11, Direction::Clientbound) => v1_21_11::clientbound(state),
             (Self::V1_21_11, Direction::Serverbound) => v1_21_11::serverbound(state),
-        };
-        let mapped = *table.get(usize::try_from(id).ok()?)?;
-        mapped.map(i32::from)
+            (Self::V1_21_10, Direction::Clientbound) => v1_21_10::clientbound(state),
+            (Self::V1_21_10, Direction::Serverbound) => v1_21_10::serverbound(state),
+        }
     }
 
     /// A packet body (VarInt id + payload) Horizon sends, renumbered for this version's server. `None`
@@ -184,7 +264,11 @@ mod tests {
             ServerVersion::from_protocol(774),
             Some(ServerVersion::V1_21_11)
         );
-        assert_eq!(ServerVersion::from_protocol(773), None);
+        assert_eq!(
+            ServerVersion::from_protocol(773),
+            Some(ServerVersion::V1_21_10)
+        );
+        assert_eq!(ServerVersion::from_protocol(772), None);
         assert!(ServerVersion::V26_1.at_most(ServerVersion::V26_2));
         assert!(!ServerVersion::V26_2.at_most(ServerVersion::V26_1));
     }

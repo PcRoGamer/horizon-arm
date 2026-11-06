@@ -303,6 +303,24 @@ impl Launcher {
                 .into_any_element();
         }
         if self.installed.contains(&tag) {
+            if backend::needs_game_architecture_install(&tag, release) {
+                let b = ui::quiet(
+                    SharedString::from(format!("install-selected-architecture-{tag}")),
+                    tr("Install selected build"),
+                    36.,
+                    &t,
+                );
+                if self.installing.is_some() {
+                    return b.opacity(0.4).cursor_default().into_any_element();
+                }
+                let release = release.clone();
+                return b
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        this.install(&release);
+                        cx.notify();
+                    }))
+                    .into_any_element();
+            }
             return self.glass_version_actions(&tag, cx).into_any_element();
         }
         if release.asset.is_none() {
@@ -373,7 +391,7 @@ impl Launcher {
                         36.,
                         &t,
                     )
-                    .text_color(ui::color(horizon_theme::glass::DANGER))
+                    .text_color(ui::danger())
                     .on_click(cx.listener(
                         move |this, _: &ClickEvent, _, cx| {
                             this.remove(&t2);

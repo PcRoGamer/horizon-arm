@@ -68,13 +68,10 @@ pub(super) fn player_for(
     if m.extra.leash == Some(horizon_client::mobs::leash::Holder::Player)
         && let Some(holder) = m.extra.leash_player
     {
-        if host.is_some_and(|v| v.alive && !v.spectator && v.uuid == holder) {
+        if host.is_some_and(|v| v.uuid == holder) {
             return None;
         }
-        if let Some((conn, _)) = guests
-            .iter()
-            .find(|(_, v)| v.alive && !v.spectator && v.uuid == holder)
-        {
+        if let Some((conn, _)) = guests.iter().find(|(_, v)| v.uuid == holder) {
             return Some(*conn);
         }
     }
@@ -476,6 +473,9 @@ mod tests {
             main_hand: None,
             off_hand: None,
             head: None,
+            chest: None,
+            legs: None,
+            feet: None,
             armor_cover: 0.0,
             invisible: false,
             spectator: false,
@@ -494,6 +494,7 @@ mod tests {
             sleeping: false,
             sleep_timer: 0,
             passenger: false,
+            riding_vehicle: None,
             vehicle: None,
         }
     }

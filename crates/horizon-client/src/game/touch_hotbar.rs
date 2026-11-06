@@ -8,12 +8,29 @@ pub(super) const BOTTOM_GAP: f32 = 15.0;
 pub(super) const STAT_LIFT: f32 = 20.0;
 pub(super) const INVENTORY_CAP: f32 = 27.0;
 
+#[cfg(target_os = "android")]
+#[inline]
 pub(super) fn enabled() -> bool {
-    cfg!(target_os = "android")
-        || (cfg!(debug_assertions)
-            && std::env::var("HORIZON_TOUCH_PREVIEW")
-                .ok()
-                .is_some_and(|s| matches!(s.as_str(), "1" | "true" | "yes")))
+    true
+}
+
+#[cfg(all(not(target_os = "android"), not(debug_assertions)))]
+#[inline]
+pub(super) fn enabled() -> bool {
+    false
+}
+
+#[cfg(all(not(target_os = "android"), debug_assertions))]
+#[inline]
+pub(super) fn enabled() -> bool {
+    // Read the opt-in once. This check runs several times per HUD frame.
+    // Environment access is unnecessary on the render hot path.
+    static PREVIEW: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *PREVIEW.get_or_init(|| {
+        std::env::var("HORIZON_TOUCH_PREVIEW")
+            .ok()
+            .is_some_and(|s| matches!(s.as_str(), "1" | "true" | "yes"))
+    })
 }
 
 /// Apply the same affine transform to *sprites, selection and item vertices*.
