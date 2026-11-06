@@ -464,7 +464,7 @@ fn handle_game_touch(t: winit_real::event::Touch) {
         // fractions of screen height so phones and tablets keep square controls.
         let scale = android_touch_scale();
         let dpad = android_touch_dpad();
-        let (dpad_x, dpad_y, dpad_offset, dpad_r) = android_dpad_geometry(width, height, scale);
+        let (dpad_x, dpad_y, _dpad_offset, _dpad_r) = android_dpad_geometry(width, height, scale);
         let move_x = if dpad { dpad_x / width } else { 0.11 };
         let move_y = if dpad {
             dpad_y / height
@@ -473,8 +473,8 @@ fn handle_game_touch(t: winit_real::event::Touch) {
         };
         let sprint_at = if dpad {
             [
-                (dpad_x + 1.55 * dpad_offset) / width,
-                (dpad_y - 1.45 * dpad_offset) / height,
+                1.0 - (if android_touch_crosshair() { 0.40 } else { 0.29 }) / aspect,
+                if android_touch_crosshair() { 0.45 } else { 0.55 },
             ]
         } else {
             [0.11 + 0.190 / aspect, 0.57]
@@ -516,8 +516,6 @@ fn handle_game_touch(t: winit_real::event::Touch) {
                 sync_sprint(&mut touch);
             }
             TouchRole::SprintToggle
-        } else if dpad && near_square(p, [move_x, move_y], dpad_r / height, aspect) {
-            TouchRole::Button(11) // Bedrock D-pad's centre sneak key
         } else if near(
             p,
             [move_x, move_y],
@@ -531,7 +529,7 @@ fn handle_game_touch(t: winit_real::event::Touch) {
             }
         } else if near_square(p, [1.0 - 0.133 / aspect, 0.72], 0.066 * scale, aspect) {
             TouchRole::Button(0) // South: jump
-        } else if !dpad && near_square(p, [1.0 - 0.290 / aspect, 0.73], 0.040 * scale, aspect) {
+        } else if near_square(p, [1.0 - 0.290 / aspect, 0.73], 0.040 * scale, aspect) {
             TouchRole::Button(11) // Right stick: sneak
         } else if android_touch_crosshair()
             && near_square(p, [1.0 - 0.270 / aspect, 0.56], 0.042 * scale, aspect)

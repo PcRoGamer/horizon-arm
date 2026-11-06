@@ -36,9 +36,9 @@ fn config() -> Option<Config> {
                 .clamp(min, max)
         };
         Some(Config {
-            scheme: number("HORIZON_TOUCH_PREVIEW_SCHEME", 1, 0, 3) as u8,
+            scheme: number("HORIZON_TOUCH_PREVIEW_SCHEME", 2, 0, 3) as u8,
             scale: number("HORIZON_TOUCH_PREVIEW_SCALE", 100, 80, 120) as f32 / 100.0,
-            opacity: number("HORIZON_TOUCH_PREVIEW_OPACITY", 35, 35, 100) as f32 / 100.0,
+            opacity: number("HORIZON_TOUCH_PREVIEW_OPACITY", 72, 35, 100) as f32 / 100.0,
             title: std::env::var("HORIZON_TOUCH_PREVIEW_TITLE").ok().as_deref() == Some("1"),
             always_sprint: std::env::var("HORIZON_TOUCH_PREVIEW_ALWAYS_SPRINT")
                 .ok()
@@ -121,13 +121,14 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
                 Symbol::Arrow(direction),
             );
         }
-        draw.control(cx, cy, r, Symbol::Sneak);
+        // Four-way D-pad stays uncluttered; actions are on the right.
         draw.control(
-            cx + 1.55 * offset,
-            cy - 1.45 * offset,
+            w - (if cfg.scheme & 1 == 1 { 0.40 } else { 0.29 }) * h,
+            (if cfg.scheme & 1 == 1 { 0.45 } else { 0.55 }) * h,
             0.035 * h * cfg.scale,
             Symbol::Sprint,
         );
+        draw.control(w - 0.290 * h, 0.73 * h, 0.040 * h * cfg.scale, Symbol::Sneak);
     }
     draw.control(w - 0.133 * h, 0.72 * h, 0.066 * h * cfg.scale, Symbol::Jump);
     if cfg.scheme & 1 == 1 {
@@ -351,108 +352,151 @@ impl Painter<'_> {
         }
     }
 
-    /// Draw the entire GUI button surface from the existing Mojang HUD atlas,
-    /// including its centre, without stretching its three-pixel corners.
-    fn vanilla_button_surface(&mut self, x: f32, y: f32, radius: f32, pressed: bool) -> bool {
-        let regular = "gui/sprites/widget/button";
-        let highlighted = "gui/sprites/widget/button_highlighted";
-        let name = if pressed && self.atlas.sprites.contains_key(highlighted) {
-            highlighted
-        } else {
-            regular
-        };
-        let Some(sprite) = self.atlas.sprites.get(name).copied() else {
-            return false;
-        };
-        let sw = sprite.w as f32;
-        let sh = sprite.h.min(20) as f32;
-        if sw < 16.0 || sh < 12.0 {
-            return false;
+    // Deterministic rounded-rect gradient, emitted as ordinary HUD triangles.
+    // This retains GUI-pixel geometry in the actual game renderer.
+    fn chrome_gradient(
+        &mut self,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        radius: f32,
+        top: u32,
+        bottom: u32,
+        opacity: f32,
+    ) {
+        let steps = 32;
+        for i in 0..steps {
+            let v = (i as f32 + 0.5) / steps as f32;
+            let dy = v * h;
+            let corner_y = if dy < radius {
+                radius - dy
+            } else if dy > h - radius {
+                dy - (h - radius)
+            } else {
+                0.0
+            };
+            let cut = if corner_y > 0.0 {
+                radius - (radius * radius - corner_y * corner_y).max(0.0).sqrt()
+            } else {
+                0.0
+            };
+            let channel = |shift: u32| {
+                let a = ((top >> shift) & 0xff) as f32;
+                let b = ((bottom >> shift) & 0xff) as f32;
+                (a + (b - a) * v).round() as u32
+            };
+            let rgb = (channel(16) << 16) | (channel(8) << 8) | channel(0);
+            let ink = self.color(rgb, opacity);
+            self.rect(
+                x + cut,
+                y + i as f32 * h / steps as f32,
+                (w - 2.0 * cut).max(0.0),
+                h / steps as f32 + 0.015,
+                ink,
+            );
         }
-        let border = 3.0f32;
-        let dst_border = (radius * 0.10).round().max(2.0);
-        let sx = [0.0, border, sw - border, sw];
-        let sy = [0.0, border, sh - border, sh];
-        let dx = [
-            x - radius,
-            x - radius + dst_border,
-            x + radius - dst_border,
-            x + radius,
-        ];
-        let dy = [
-            y - radius,
-            y - radius + dst_border,
-            y + radius - dst_border,
-            y + radius,
-        ];
-        let du = sprite.u1 - sprite.u0;
-        let dv = sprite.v1 - sprite.v0;
-        let tint = self.color(0xFFFFFF, 1.0);
-        for row in 0..3 {
-            for col in 0..3 {
-                let mut crop = sprite;
-                crop.u0 = sprite.u0 + du * sx[col] / sw;
-                crop.u1 = sprite.u0 + du * sx[col + 1] / sw;
-                crop.v0 = sprite.v0 + dv * sy[row] / sprite.h as f32;
-                crop.v1 = sprite.v0 + dv * sy[row + 1] / sprite.h as f32;
-                self.batch.rect_uv(
-                    dx[col],
-                    dy[row],
-                    dx[col + 1] - dx[col],
-                    dy[row + 1] - dy[row],
-                    crop,
-                    tint,
-                );
-            }
-        }
-        true
+    }
+
+    fn chrome_button(&mut self, x: f32, y: f32, r: f32, pressed: bool) {
+        let bezel = (r * 0.054).max(1.2);
+        let corner = (r * 0.255).max(3.0);
+        let shift = if pressed { (r * 0.025).max(1.0) } else { 0.0 };
+        let cy = y + shift;
+        let shadow = self.color(0x111A24, 1.15);
+        let outline = self.color(0x293746, 1.25);
+        let rim = self.color(0xDCE7F1, 1.12);
+        self.round_rect(x - r, cy - r + bezel * 0.66, 2.0 * r, 2.0 * r, corner, shadow);
+        self.round_rect(x - r, cy - r, 2.0 * r, 2.0 * r, corner, outline);
+        let inner = (corner - bezel).max(2.0);
+        self.round_rect(
+            x - r + bezel,
+            cy - r + bezel * 0.82,
+            2.0 * (r - bezel),
+            2.0 * r - bezel * 1.84,
+            inner,
+            rim,
+        );
+        let face = bezel * 1.75;
+        let face_corner = (corner - face).max(2.0);
+        self.chrome_gradient(
+            x - r + face,
+            cy - r + face,
+            2.0 * (r - face),
+            2.0 * (r - face),
+            face_corner,
+            if pressed { 0xA2B1BE } else { 0xDDE9F4 },
+            if pressed { 0x778999 } else { 0x9EADC2 },
+            0.99,
+        );
+        // Fine light specular rim and lower inner seat. Unlike a block
+        // texture, every pixel here describes a control surface.
+        let glow = self.color(0xF6FCFF, if pressed { 0.28 } else { 0.95 });
+        let seat = self.color(0x405062, 0.68);
+        let e = face + bezel * 0.37;
+        self.round_rect(
+            x - r + e,
+            cy - r + e,
+            2.0 * (r - e),
+            2.0 * (r - e),
+            (face_corner - bezel * 0.3).max(1.0),
+            glow,
+        );
+        // Clear the middle of the rim with a smaller gradient so the highlight
+        // is a hairline rather than an opaque white slab.
+        let clear = e + (bezel * 0.42).max(0.8);
+        self.chrome_gradient(
+            x - r + clear,
+            cy - r + clear,
+            2.0 * (r - clear),
+            2.0 * (r - clear),
+            (face_corner - bezel * 0.8).max(1.0),
+            if pressed { 0xA2B1BE } else { 0xDDE9F4 },
+            if pressed { 0x778999 } else { 0x9EADC2 },
+            0.99,
+        );
+        // The dark perimeter seam is intentionally subtle.
+        let seam = bezel * 0.65;
+        let seam_w = (bezel * 0.38).max(0.5);
+        self.round_rect(
+            x - r + seam,
+            cy - r + seam,
+            2.0 * (r - seam),
+            2.0 * (r - seam),
+            (corner - seam).max(1.0),
+            seat,
+        );
+        self.chrome_gradient(
+            x - r + seam + seam_w,
+            cy - r + seam + seam_w,
+            2.0 * (r - seam - seam_w),
+            2.0 * (r - seam - seam_w),
+            (corner - seam - seam_w).max(1.0),
+            if pressed { 0xA2B1BE } else { 0xDDE9F4 },
+            if pressed { 0x778999 } else { 0x9EADC2 },
+            0.99,
+        );
     }
 
     fn control(&mut self, x: f32, y: f32, r: f32, sym: Symbol) {
-        // UI artwork owns the entire control surface. World blocks are never
-        // reused as interface materials; pressed state uses the GUI highlight.
         let pressed = matches!(sym, Symbol::Sprint) && self.cfg.always_sprint;
-        if !self.vanilla_button_surface(x, y, r, pressed) {
-            // Keep a compact, neutral fallback before Mojang bootstrap finishes.
-            let edge = (r * 0.047).round().max(1.25);
-            let face = if pressed {
-                self.color(0x94B29C, 1.0)
-            } else {
-                self.color(0xC5C5C2, 1.0)
-            };
-            let outline = self.color(0x222629, 1.08);
-            let highlight = self.color(0xECF0EA, 0.74);
-            let bottom = self.color(0x4B5050, 0.90);
-            let lip = (r * 0.024).round().max(1.0);
-            self.rect(
-                x - r + edge,
-                y - r + edge,
-                2.0 * (r - edge),
-                2.0 * (r - edge),
-                face,
-            );
-            self.stroke_box(x, y, r, edge, outline);
-            self.rect(x - r + edge, y - r + edge, 2.0 * (r - edge), lip, highlight);
-            self.rect(
-                x - r + edge,
-                y + r - edge - lip,
-                2.0 * (r - edge),
-                lip,
-                bottom,
-            );
-        }
-        self.glyph(x, y, r, sym);
+        self.chrome_button(x, y, r, pressed);
+        self.glyph(x, y + if pressed { (r * 0.025).max(1.0) } else { 0.0 }, r, sym);
     }
 
     fn joystick(&mut self, x: f32, y: f32, r: f32) {
-        let disc = self.color(0x13171B, 0.22);
-        let ring = self.color(0xF4F7F8, 2.45);
-        let dark = self.color(0x0C0F11, 1.80);
-        let face = self.color(0xE4E9EB, 2.15);
+        let disc = self.color(0x1B2B39, 0.54);
+        let ring = self.color(0xB8C9D8, 1.15);
+        let groove = self.color(0x6D8398, 0.65);
+        let dark = self.color(0x1C2B3B, 1.20);
+        let face = self.color(0xDAE5EF, 1.22);
+        let trim = self.color(0x8193A8, 0.80);
         self.disc(x, y, r, disc);
-        self.ring(x, y, r * 0.95, r * 0.041, ring);
-        self.disc(x, y + r * 0.032, r * 0.42, dark);
-        self.disc(x, y, r * 0.36, face);
+        self.ring(x, y, r * 0.91, r * 0.055, ring);
+        self.ring(x, y, r * 0.78, r * 0.016, groove);
+        self.disc(x, y + r * 0.04, r * 0.40, dark);
+        self.disc(x, y, r * 0.34, face);
+        self.ring(x, y, r * 0.33, r * 0.035, trim);
     }
 
     // Original 24px glyphs using the exact Java Canvas bitmap masks.
