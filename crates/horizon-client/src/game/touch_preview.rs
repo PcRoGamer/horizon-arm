@@ -352,6 +352,56 @@ impl Painter<'_> {
     }
 
 
+    /// Vanilla menu button border from the same WGPU HUD atlas, preserving
+    /// the 3px nine-slice corners instead of stretching a 200x20 UI image.
+    fn vanilla_button_frame(&mut self, x: f32, y: f32, radius: f32, pressed: bool) -> bool {
+        let regular = "gui/sprites/widget/button";
+        let highlighted = "gui/sprites/widget/button_highlighted";
+        let name = if pressed && self.atlas.sprites.contains_key(highlighted) {
+            highlighted
+        } else {
+            regular
+        };
+        let Some(sprite) = self.atlas.sprites.get(name).copied() else {
+            return false;
+        };
+        let sw = sprite.w as f32;
+        let sh = sprite.h.min(20) as f32;
+        if sw < 16.0 || sh < 12.0 {
+            return false;
+        }
+        let border = 3.0f32;
+        let dst_border = (radius * 0.10).round().max(2.0);
+        let sx = [0.0, border, sw - border, sw];
+        let sy = [0.0, border, sh - border, sh];
+        let dx = [x - radius, x - radius + dst_border, x + radius - dst_border, x + radius];
+        let dy = [y - radius, y - radius + dst_border, y + radius - dst_border, y + radius];
+        let du = sprite.u1 - sprite.u0;
+        let dv = sprite.v1 - sprite.v0;
+        let tint = self.color(0xFFFFFF, 1.0);
+        for row in 0..3 {
+            for col in 0..3 {
+                if row == 1 && col == 1 {
+                    continue;
+                }
+                let mut crop = sprite;
+                crop.u0 = sprite.u0 + du * sx[col] / sw;
+                crop.u1 = sprite.u0 + du * sx[col + 1] / sw;
+                crop.v0 = sprite.v0 + dv * sy[row] / sprite.h as f32;
+                crop.v1 = sprite.v0 + dv * sy[row + 1] / sprite.h as f32;
+                self.batch.rect_uv(
+                    dx[col],
+                    dy[row],
+                    dx[col + 1] - dx[col],
+                    dy[row + 1] - dy[row],
+                    crop,
+                    tint,
+                );
+            }
+        }
+        true
+    }
+
     fn control(&mut self, x: f32, y: f32, r: f32, sym: Symbol) {
         // Texture-backed stone material from Horizon's existing packed Mojang
         // atlas, matching the production Android Canvas resource lookup.
@@ -367,7 +417,6 @@ impl Painter<'_> {
         let lip = (r * 0.024).round().max(1.0);
         // Same prepared Mojang "block/stone" texture already in HudAtlas.
         // Texture-pack overrides naturally apply because the atlas is shared.
-        self.stroke_box(x, y, r, edge, outline);
         let left = x - r + edge;
         let top = y - r + edge;
         let width = 2.0 * (r - edge);
@@ -385,15 +434,20 @@ impl Painter<'_> {
             let light = if matches!(sym, Symbol::Sprint) && self.cfg.always_sprint {
                 self.color(0x303838, 0.28)
             } else {
-                self.color(0xDDDDDA, 0.18)
+                self.color(0xDDDDDA, 0.40)
             };
             self.rect(left, top, width, width, light);
         } else {
             // Before Mojang's first-run bootstrap finishes.
             self.rect(left, top, width, width, face);
         }
-        self.rect(x-r+edge, y-r+edge, 2.0*(r-edge), lip, highlight);
-        self.rect(x-r+edge, y+r-edge-lip, 2.0*(r-edge), lip, bottom);
+        let pressed = matches!(sym, Symbol::Sprint) && self.cfg.always_sprint;
+        if !self.vanilla_button_frame(x, y, r, pressed) {
+            // Temporary fallback before the first vanilla asset bootstrap.
+            self.stroke_box(x, y, r, edge, outline);
+            self.rect(x-r+edge, y-r+edge, 2.0*(r-edge), lip, highlight);
+            self.rect(x-r+edge, y+r-edge-lip, 2.0*(r-edge), lip, bottom);
+        }
         self.glyph(x, y, r, sym);
     }
 
