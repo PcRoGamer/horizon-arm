@@ -535,8 +535,8 @@ public final class HorizonActivity extends GameActivity {
         // raised Rust hotbar. Shared constants are validated in Python and Rust.
         private float[] dpadGeometry() {
             float w = getWidth(), h = getHeight();
-            float r = .068f * h * scale;
-            float off = .147f * h * scale;
+            float r = .052f * h * scale;
+            float off = .112f * h * scale;
             float cx = Math.max(.11f * w, .23f * h * scale);
             float cy = .72f * h;
             int gui = 1;
@@ -584,10 +584,10 @@ public final class HorizonActivity extends GameActivity {
                 control(canvas, 1f - .145f / aspect, .52f, .042f, "use");
             }
             // Inventory is the genuine Rust hotbar end-cap, not a floating key.
-            float topStep = .067f * scale;
-            control(canvas, .5f + (.050f - topStep) / aspect, .045f, .028f, "perspective");
-            control(canvas, .5f + .050f / aspect, .045f, .028f, "chat");
-            control(canvas, .5f + (.050f + topStep) / aspect, .045f, .028f, "pause");
+            float topStep = .084f * scale;
+            control(canvas, .5f + (.050f - topStep) / aspect, .058f, .036f, "perspective");
+            control(canvas, .5f + .050f / aspect, .058f, .036f, "chat");
+            control(canvas, .5f + (.050f + topStep) / aspect, .058f, .036f, "pause");
         }
     }
 }

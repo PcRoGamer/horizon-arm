@@ -191,8 +191,8 @@ fn android_dpad_geometry(width: f64, height: f64, scale: f64) -> (f64, f64, f64,
     let hotbar_scale = 1.36_f64.min((gw * 0.5 - 10.0) / (91.0 + 20.0));
     let bar_left = (gw * 0.5 - 91.0 * hotbar_scale) * f64::from(gui);
     let bar_top = (gh - 15.0 - 22.0 * hotbar_scale) * f64::from(gui);
-    let r = 0.068 * height * scale;
-    let offset = 0.147 * height * scale;
+    let r = 0.052 * height * scale;
+    let offset = 0.112 * height * scale;
     let cx = (0.11 * width).max(0.23 * height * scale);
     let mut cy = 0.72 * height;
     if cx + offset + r > bar_left - 9.0 {
@@ -500,17 +500,17 @@ fn handle_game_touch(t: winit_real::event::Touch) {
             TouchRole::Button(3) // Native hotbar inventory end-cap.
         } else if near_square(
             p,
-            [0.5 + (0.050 - 0.067 * scale) / aspect, 0.045],
-            0.028 * scale,
+            [0.5 + (0.050 - 0.084 * scale) / aspect, 0.058],
+            0.036 * scale,
             aspect,
         ) {
             TouchRole::Perspective
-        } else if near_square(p, [0.5 + 0.050 / aspect, 0.045], 0.028 * scale, aspect) {
+        } else if near_square(p, [0.5 + 0.050 / aspect, 0.058], 0.036 * scale, aspect) {
             TouchRole::Chat
         } else if near_square(
             p,
-            [0.5 + (0.050 + 0.067 * scale) / aspect, 0.045],
-            0.028 * scale,
+            [0.5 + (0.050 + 0.084 * scale) / aspect, 0.058],
+            0.036 * scale,
             aspect,
         ) {
             TouchRole::Button(9) // Top-bound pause button.
@@ -527,7 +527,7 @@ fn handle_game_touch(t: winit_real::event::Touch) {
         } else if near(
             p,
             [move_x, move_y],
-            (if dpad { 0.206 } else { 0.112 }) * scale,
+            (if dpad { 0.180 } else { 0.112 }) * scale,
             aspect,
         ) {
             if movement_owned {

@@ -60,8 +60,8 @@ fn dpad_geometry(w: f32, h: f32, scale: f32) -> (f32, f32, f32, f32) {
     let hotbar_scale = super::touch_hotbar::magnification(w);
     let bar_left = w * 0.5 - 91.0 * hotbar_scale;
     let bar_top = h - 15.0 - 22.0 * hotbar_scale;
-    let r = 0.068 * h * scale;
-    let off = 0.147 * h * scale;
+    let r = 0.052 * h * scale;
+    let off = 0.112 * h * scale;
     let cx = (0.11 * w).max(0.23 * h * scale);
     let mut cy = 0.72 * h;
     if cx + off + r > bar_left - 9.0 {
@@ -144,20 +144,20 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
     // Native hotbar end-cap is painted by touch_hotbar, not this overlay.
     draw.control(
         0.50 * w + 0.050 * h,
-        0.045 * h,
-        0.028 * h * cfg.scale,
+        0.058 * h,
+        0.036 * h * cfg.scale,
         Symbol::Chat,
     );
     draw.control(
-        0.50 * w + (0.050 + 0.067 * cfg.scale) * h,
-        0.045 * h,
-        0.028 * h * cfg.scale,
+        0.50 * w + (0.050 + 0.084 * cfg.scale) * h,
+        0.058 * h,
+        0.036 * h * cfg.scale,
         Symbol::Pause,
     );
     draw.control(
-        0.50 * w + (0.050 - 0.067 * cfg.scale) * h,
-        0.045 * h,
-        0.028 * h * cfg.scale,
+        0.50 * w + (0.050 - 0.084 * cfg.scale) * h,
+        0.058 * h,
+        0.036 * h * cfg.scale,
         Symbol::Perspective,
     );
 }

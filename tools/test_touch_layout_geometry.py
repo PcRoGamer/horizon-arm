@@ -47,9 +47,9 @@ for code,expected in (
               "pub fn hotbar_inventory", "pub fn hotbar_slot")),
     (GAME,("touch_hotbar::transform_hotbar","touch_hotbar::inventory_cap",
            "touch_hotbar::lift_stats")),
-    (JAVA,('control(canvas, .5f + (.050f - topStep) / aspect, .045f, .028f, "perspective")',
-           'control(canvas, .5f + .050f / aspect, .045f, .028f, "chat")',
-           'control(canvas, .5f + (.050f + topStep) / aspect, .045f, .028f, "pause")',
+    (JAVA,('control(canvas, .5f + (.050f - topStep) / aspect, .058f, .036f, "perspective")',
+           'control(canvas, .5f + .050f / aspect, .058f, .036f, "chat")',
+           'control(canvas, .5f + (.050f + topStep) / aspect, .058f, .036f, "pause")',
            'nativeSetControls(scheme, controlScale, alwaysSprint)',
            'sprint.setText("Always sprint when moving forward")')),
     (PREVIEW,("Symbol::Chat", "Symbol::Sprint", "HORIZON_TOUCH_PREVIEW_ALWAYS_SPRINT")),
@@ -109,9 +109,9 @@ def layout(w,h,scheme,scale):
     controls={
         "jump":box(w-.133*h,.72*h,.066*h*scale),
         "sneak":box(w-.290*h,.73*h,.040*h*scale),
-        "pause":box(.5*w+(.05+.067*scale)*h,.045*h,.028*h*scale),
-        "chat":box(.5*w+.050*h,.045*h,.028*h*scale),
-        "perspective":box(.5*w+(.05-.067*scale)*h,.045*h,.028*h*scale),
+        "pause":box(.5*w+(.05+.084*scale)*h,.058*h,.036*h*scale),
+        "chat":box(.5*w+.050*h,.058*h,.036*h*scale),
+        "perspective":box(.5*w+(.05-.084*scale)*h,.058*h,.036*h*scale),
     }
     if scheme & 1:
         controls.update({
@@ -128,8 +128,8 @@ def layout(w,h,scheme,scale):
             "joystick":box(.11*w,joystick_y,joystick_r),
         })
     else:
-        off=.147*h*scale
-        r=.068*h*scale
+        off=.112*h*scale
+        r=.052*h*scale
         cx=max(.11*w,.23*h*scale)
         cy=.72*h
         if cx+off+r > rect_bar[0]-9:
