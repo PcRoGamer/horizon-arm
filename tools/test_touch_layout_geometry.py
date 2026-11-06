@@ -67,6 +67,14 @@ assert 'control(canvas, inventoryX' not in JAVA, "Floating inventory button resu
 assert "TouchRole::Button(3) // Native hotbar inventory" in INPUT
 assert "android_dpad_geometry" in INPUT and "dpadGeometry()" in JAVA
 assert "centre sneak key" in INPUT
+# The actual textured face must read the game assets Horizon already prepares.
+# Android uses the private game-home path, Rust uses its existing HudAtlas.
+assert 'getContext().getFilesDir()' in JAVA
+assert 'assets/minecraft/textures/block/stone.png' in JAVA
+assert 'refreshStoneTexture()' in JAVA
+assert 'self.atlas.sprites.contains_key("block/stone")' in PREVIEW
+assert 'self.batch.sprite_scaled(' in PREVIEW
+
 assert "((x-left)/(20.0*s))" in GESTURE.replace(" ",""), "Adaptive hotbar hit geometry changed"
 
 def box(x,y,r):
