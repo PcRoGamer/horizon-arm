@@ -93,7 +93,7 @@ def layout(w,h,scheme,scale):
         (gh-15)*gui,
     )
     controls={
-        "jump":box(w-.160*h,.72*h,.051*h*scale),
+        "jump":box(w-.133*h,.72*h,.066*h*scale),
         "pause":box(.5*w+.128*h,.045*h,.028*h*scale),
         "chat":box(.5*w+.050*h,.045*h,.028*h*scale),
         "perspective":box(.5*w-.028*h,.045*h,.028*h*scale),
