@@ -473,8 +473,16 @@ fn handle_game_touch(t: winit_real::event::Touch) {
         };
         let sprint_at = if dpad {
             [
-                1.0 - (if android_touch_crosshair() { 0.40 } else { 0.29 }) / aspect,
-                if android_touch_crosshair() { 0.45 } else { 0.55 },
+                1.0 - (if android_touch_crosshair() {
+                    0.40
+                } else {
+                    0.29
+                }) / aspect,
+                if android_touch_crosshair() {
+                    0.45
+                } else {
+                    0.55
+                },
             ]
         } else {
             [0.11 + 0.190 / aspect, 0.57]

@@ -120,8 +120,14 @@ pub(super) fn inventory_cap(batch: &mut HudBatch, atlas: &HudAtlas) {
     // this end cap, while its icon and material match the mobile controls.
     batch.fill(atlas, x, y + 0.8 * s, cap, side, rgba(17, 26, 36, 245));
     batch.fill(atlas, x, y, cap, side - 0.8 * s, rgba(42, 55, 70, 248));
-    batch.fill(atlas, x + 1.0 * s, y + 0.8 * s, cap - 2.0 * s, side - 2.4 * s,
-        rgba(204, 218, 232, 245));
+    batch.fill(
+        atlas,
+        x + 1.0 * s,
+        y + 0.8 * s,
+        cap - 2.0 * s,
+        side - 2.4 * s,
+        rgba(204, 218, 232, 245),
+    );
     let inner_x = x + 2.3 * s;
     let inner_y = y + 2.1 * s;
     let inner_w = cap - 4.6 * s;
@@ -131,8 +137,14 @@ pub(super) fn inventory_cap(batch: &mut HudBatch, atlas: &HudAtlas) {
         let r = (212.0 - 52.0 * t) as u8;
         let g = (224.0 - 52.0 * t) as u8;
         let b = (237.0 - 40.0 * t) as u8;
-        batch.fill(atlas, inner_x, inner_y + inner_h * t, inner_w, inner_h / 9.0 + 0.02,
-            rgba(r, g, b, 244));
+        batch.fill(
+            atlas,
+            inner_x,
+            inner_y + inner_h * t,
+            inner_w,
+            inner_h / 9.0 + 0.02,
+            rgba(r, g, b, 244),
+        );
     }
     // Compact backpack silhouette: outline, lid, clasp and carry handle.
     let bx = x + cap * 0.28;
@@ -143,20 +155,53 @@ pub(super) fn inventory_cap(batch: &mut HudBatch, atlas: &HudAtlas) {
     let white = rgba(235, 242, 247, 252);
     let dark = rgba(105, 121, 138, 252);
     batch.fill(atlas, bx, by, bw, bh, ink);
-    batch.fill(atlas, bx + 0.9 * s, by + 0.9 * s, bw - 1.8 * s, bh - 1.8 * s, white);
-    batch.fill(atlas, bx + 1.0 * s, by + bh * 0.45, bw - 2.0 * s, 1.0 * s, dark);
-    batch.fill(atlas, bx + bw * 0.40, by + bh * 0.36, bw * 0.20, bh * 0.29, ink);
+    batch.fill(
+        atlas,
+        bx + 0.9 * s,
+        by + 0.9 * s,
+        bw - 1.8 * s,
+        bh - 1.8 * s,
+        white,
+    );
+    batch.fill(
+        atlas,
+        bx + 1.0 * s,
+        by + bh * 0.45,
+        bw - 2.0 * s,
+        1.0 * s,
+        dark,
+    );
+    batch.fill(
+        atlas,
+        bx + bw * 0.40,
+        by + bh * 0.36,
+        bw * 0.20,
+        bh * 0.29,
+        ink,
+    );
     // Squared carry strap, drawn with the same 1px inventory icon grid.
     batch.fill(atlas, bx + bw * 0.25, by - 2.2 * s, bw * 0.50, 0.9 * s, ink);
     batch.fill(atlas, bx + bw * 0.25, by - 2.2 * s, 0.9 * s, 2.8 * s, ink);
-    batch.fill(atlas, bx + bw * 0.75 - 0.9 * s, by - 2.2 * s,
-        0.9 * s, 2.8 * s, ink);
+    batch.fill(
+        atlas,
+        bx + bw * 0.75 - 0.9 * s,
+        by - 2.2 * s,
+        0.9 * s,
+        2.8 * s,
+        ink,
+    );
     // One coherent hotbar rail: soft top reflection and lower shadow.
     let bar_x = batch.width * 0.5 - 91.0 * s;
     let bar_w = 182.0 * s;
     batch.fill(atlas, bar_x, y, bar_w, 0.52 * s, rgba(214, 226, 238, 174));
-    batch.fill(atlas, bar_x, y + side - 0.76 * s, bar_w, 0.76 * s,
-        rgba(25, 33, 42, 160));
+    batch.fill(
+        atlas,
+        bar_x,
+        y + side - 0.76 * s,
+        bar_w,
+        0.76 * s,
+        rgba(25, 33, 42, 160),
+    );
 }
 
 #[cfg(test)]

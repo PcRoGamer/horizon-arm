@@ -128,7 +128,12 @@ pub(super) fn draw(batch: &mut HudBatch, atlas: &HudAtlas) {
             0.035 * h * cfg.scale,
             Symbol::Sprint,
         );
-        draw.control(w - 0.290 * h, 0.73 * h, 0.040 * h * cfg.scale, Symbol::Sneak);
+        draw.control(
+            w - 0.290 * h,
+            0.73 * h,
+            0.040 * h * cfg.scale,
+            Symbol::Sneak,
+        );
     }
     draw.control(w - 0.133 * h, 0.72 * h, 0.066 * h * cfg.scale, Symbol::Jump);
     if cfg.scheme & 1 == 1 {
@@ -405,7 +410,14 @@ impl Painter<'_> {
         let shadow = self.color(0x111A24, 1.15);
         let outline = self.color(0x293746, 1.25);
         let rim = self.color(0xDCE7F1, 1.12);
-        self.round_rect(x - r, cy - r + bezel * 0.66, 2.0 * r, 2.0 * r, corner, shadow);
+        self.round_rect(
+            x - r,
+            cy - r + bezel * 0.66,
+            2.0 * r,
+            2.0 * r,
+            corner,
+            shadow,
+        );
         self.round_rect(x - r, cy - r, 2.0 * r, 2.0 * r, corner, outline);
         let inner = (corner - bezel).max(2.0);
         self.round_rect(
@@ -480,7 +492,12 @@ impl Painter<'_> {
     fn control(&mut self, x: f32, y: f32, r: f32, sym: Symbol) {
         let pressed = matches!(sym, Symbol::Sprint) && self.cfg.always_sprint;
         self.chrome_button(x, y, r, pressed);
-        self.glyph(x, y + if pressed { (r * 0.025).max(1.0) } else { 0.0 }, r, sym);
+        self.glyph(
+            x,
+            y + if pressed { (r * 0.025).max(1.0) } else { 0.0 },
+            r,
+            sym,
+        );
     }
 
     fn joystick(&mut self, x: f32, y: f32, r: f32) {
