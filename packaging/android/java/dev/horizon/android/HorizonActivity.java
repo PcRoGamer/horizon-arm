@@ -511,7 +511,7 @@ public final class HorizonActivity extends GameActivity {
                 control(canvas, (cx + 1.55f * off) / getWidth(),
                         (cy - 1.45f * off) / h, .035f, "sprint");
             }
-            control(canvas, 1f - .160f / aspect, .72f, .051f, "jump");
+            control(canvas, 1f - .133f / aspect, .72f, .066f, "jump");
             if ((scheme & 1) == 1) {
                 control(canvas, 1f - .270f / aspect, .56f, .042f, "hit");
                 control(canvas, 1f - .145f / aspect, .52f, .042f, "use");
