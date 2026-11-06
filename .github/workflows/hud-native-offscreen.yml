@@ -283,11 +283,7 @@ jobs:
             # script reported 'Profile screen not reached' after the app died
             # inside GameActivity's JNI bridge.
             adb logcat -d -v time > .local/android/emulator/startup-logcat.txt
-            if ! adb shell pidof dev.horizon.android; then
-              echo 'Horizon process died during native startup; diagnostic excerpts:' >&2
-              grep -E 'RustPanic|Expected an exception|Fatal signal|HorizonNative STAGE|FATAL EXCEPTION' .local/android/emulator/startup-logcat.txt | tail -35 >&2 || true
-              exit 1
-            fi
+            adb shell pidof dev.horizon.android || { echo 'Horizon exited during native startup' >&2; grep -E 'RustPanic|Expected an exception|Fatal signal|HorizonNative STAGE|FATAL EXCEPTION' .local/android/emulator/startup-logcat.txt | tail -35 >&2 || true; exit 1; }
             adb shell screencap -p /sdcard/horizon-shell.png
             adb pull /sdcard/horizon-shell.png .local/android/emulator/horizon-shell.png
             adb shell input tap 2220 105
@@ -306,8 +302,7 @@ jobs:
           name: horizon-arm64-emulator-smoke
           path: |
             .local/android/emulator/*.png
-            .local/android/emulator/logcat.txt
-            .local/android/emulator/activity.txt
+            .local/android/emulator/*.txt
           if-no-files-found: warn
   # Compare native x86_64 with ARM-translated Android to isolate JNI failures.
   android-x86-native-smoke:
@@ -395,10 +390,7 @@ jobs:
             adb shell screencap -p /sdcard/horizon-x86.png
             adb pull /sdcard/horizon-x86.png .local/android/x86-smoke/horizon-x86.png
             adb shell dumpsys activity activities > .local/android/x86-smoke/activity.txt
-            if grep -q 'Expected an exception after ExceptionCheck' .local/android/x86-smoke/logcat.txt; then
-              echo 'JNI exception-check panic reproduces on native x86_64'
-              exit 1
-            fi
+            ! grep -q 'Expected an exception after ExceptionCheck' .local/android/x86-smoke/logcat.txt || { echo 'JNI exception-check panic reproduces on native x86_64'; exit 1; }
             adb shell pidof dev.horizon.android || { echo 'App exited before runtime check'; exit 1; }
             grep -q 'HorizonNative STAGE 00' .local/android/x86-smoke/logcat.txt || { echo 'GameActivity never entered Horizon android_main'; exit 1; }
             echo 'NATIVE_X86_ANDROID_STARTUP_OK'
