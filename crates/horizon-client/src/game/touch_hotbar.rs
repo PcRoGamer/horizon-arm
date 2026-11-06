@@ -22,9 +22,83 @@ pub(super) fn enabled() -> bool {
                 .is_some_and(|s| matches!(s.as_str(), "1" | "true" | "yes")))
 }
 
-/// Apply the same affine transform to *sprites, selection and item vertices*.
-/// Coordinates are GUI pixels (the engine handles physical DPI separately).
-pub(super) fn transform_hotbar(batch: &mut HudBatch, first: usize) {
+/// Paint an original silver-slate nine-slot chrome tray into the actual HUD
+/// batch. Only the hotbar background is replaced: vanilla's selected-slot
+/// sprite, item sprites, offhand indicator and pop animation are left intact.
+fn chrome_hotbar_background(batch: &mut HudBatch, atlas: &HudAtlas) {
+    let s = magnification(batch.width);
+    let w = 182.0 * s;
+    let h = 22.0 * s;
+    let x = batch.width * 0.5 - 91.0 * s;
+    let y = batch.height - BOTTOM_GAP - h;
+    // One solid rounded-looking rail in GUI pixels; the beveled, individual
+    // slot panels supply depth. Does not sample a Minecraft block texture.
+    batch.fill(atlas, x, y + 0.8 * s, w, h, rgba(18, 27, 37, 242));
+    batch.fill(atlas, x, y, w, h - 0.8 * s, rgba(40, 53, 68, 252));
+    batch.fill(
+        atlas,
+        x + 0.75 * s,
+        y + 0.72 * s,
+        w - 1.5 * s,
+        h - 2.3 * s,
+        rgba(209, 221, 234, 248),
+    );
+    batch.fill(
+        atlas,
+        x + 1.6 * s,
+        y + 1.6 * s,
+        w - 3.2 * s,
+        h - 4.0 * s,
+        rgba(84, 99, 116, 250),
+    );
+    // The 20px cadence and 22px rail height are unchanged. Nine actual
+    // gameplay slots remain where vanilla selection and item vertices expect.
+    for slot in 0..9 {
+        let sx = x + (1.8 + slot as f32 * 20.0) * s;
+        let sy = y + 2.1 * s;
+        let sw = 18.3 * s;
+        let sh = 17.5 * s;
+        batch.fill(atlas, sx, sy, sw, sh, rgba(47, 62, 77, 244));
+        batch.fill(
+            atlas,
+            sx + 0.9 * s,
+            sy + 0.9 * s,
+            sw - 1.8 * s,
+            sh - 1.9 * s,
+            rgba(91, 107, 121, 240),
+        );
+        batch.fill(
+            atlas,
+            sx + 1.8 * s,
+            sy + 1.8 * s,
+            sw - 3.6 * s,
+            sh - 3.9 * s,
+            rgba(57, 68, 77, 228),
+        );
+        batch.fill(
+            atlas,
+            sx + 1.8 * s,
+            sy + 1.8 * s,
+            sw - 3.6 * s,
+            0.62 * s,
+            rgba(116, 131, 148, 195),
+        );
+        batch.fill(
+            atlas,
+            sx + 1.8 * s,
+            sy + sh - 2.5 * s,
+            sw - 3.6 * s,
+            0.62 * s,
+            rgba(29, 40, 52, 220),
+        );
+    }
+}
+
+/// Affine-transform the genuine hotbar draw call, then replace exactly the
+/// first six vertices (vanilla's 182x22 background quad) with a chrome tray.
+/// Rotate the new vertices *before* vanilla selection and items so z-order,
+/// icons, item counts and pop animations remain intact.
+pub(super) fn transform_hotbar(batch: &mut HudBatch, atlas: &HudAtlas, first: usize) {
     if !enabled() {
         return;
     }
@@ -34,6 +108,20 @@ pub(super) fn transform_hotbar(batch: &mut HudBatch, first: usize) {
         vertex.pos[0] = cx + (vertex.pos[0] - cx) * s;
         vertex.pos[1] = bottom + (vertex.pos[1] - batch.height) * s;
     }
+    // Hud.extractItemHotbar always emits the first Sprite as "hud/hotbar".
+    // Its two triangles are the only six vertices we hide. Everything after,
+    // including the selected slot and actual item stacks, remains unchanged.
+    if atlas.sprites.contains_key("gui/sprites/hud/hotbar")
+        && batch.vertices.len() >= first + 6
+    {
+        for vertex in &mut batch.vertices[first..first + 6] {
+            vertex.color = rgba(255, 255, 255, 0);
+        }
+    }
+    let start = batch.vertices.len();
+    chrome_hotbar_background(batch, atlas);
+    let count = batch.vertices.len() - start;
+    batch.vertices[first..].rotate_right(count);
 }
 
 pub(super) fn lift_stats(batch: &mut HudBatch, first: usize) {

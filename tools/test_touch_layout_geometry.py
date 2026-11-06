@@ -40,6 +40,7 @@ for code,expected in (
     (HOTBAR,("pub(super) const MAGNIFICATION: f32 = 1.36;",
              "pub(super) const BOTTOM_GAP: f32 = 15.0;",
              "pub(super) const INVENTORY_CAP: f32 = 20.0;",
+             "chrome_hotbar_background", "rotate_right(count)",
              "transform_hotbar", "inventory_cap")),
     (GESTURE,("pub const HOTBAR_SCALE: f32 = 1.36;",
               "pub const HOTBAR_BOTTOM: f32 = 15.0;",
@@ -79,6 +80,11 @@ assert '"block/stone"' not in JAVA and '"block/stone"' not in PREVIEW
 assert "refreshButtonSprites" not in JAVA
 assert "gui/sprites/widget/button" not in PREVIEW
 assert "inventory_cap" in HOTBAR and "backpack silhouette" in HOTBAR.lower()
+assert 'touch_hotbar::transform_hotbar(batch, &g.gui.atlas, first);' in GAME
+assert 'chrome_hotbar_background(batch, atlas);' in HOTBAR
+assert 'vertex.color = rgba(255, 255, 255, 0);' in HOTBAR
+assert 'chrome_hotbar_background' in read("crates/horizon-client/src/game/touch_hotbar.rs")
+assert 'transform_hotbar(&mut batch, &atlas, first)' in read("crates/horizon-client/src/bin/hud-offscreen.rs")
 assert 'prefs.getInt("scheme", 2)' in JAVA
 assert 'scheme: number("HORIZON_TOUCH_PREVIEW_SCHEME", 2, 0, 3)' in PREVIEW
 assert "((x-left)/(20.0*s))" in GESTURE.replace(" ",""), "Adaptive hotbar hit geometry changed"

@@ -149,7 +149,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         },
     );
     hud_layout::paint(&mut batch, &atlas, &draws);
-    touch_hotbar::transform_hotbar(&mut batch, first);
+    touch_hotbar::transform_hotbar(&mut batch, &atlas, first);
     touch_hotbar::inventory_cap(&mut batch, &atlas);
     let output = rasterize(&batch, &atlas, [width, height]);
     if output.chunks_exact(4).filter(|px| px[3] > 0).count() < 400 {
