@@ -20,7 +20,7 @@ jobs:
           set -euo pipefail
           mkdir -p .local/touchcontroller-audit
           git clone --depth=1 --filter=blob:none --sparse https://github.com/TouchController/TouchController.git .local/touchcontroller-audit/upstream
-          git -C .local/touchcontroller-audit/upstream sparse-checkout set             touchcontroller/common             touchcontroller/api             touchcontroller/resources/texture/control             touchcontroller/resources/texture/control_classic             touchcontroller/LICENSE             touchcontroller/README.md
+          git -C .local/touchcontroller-audit/upstream sparse-checkout set touchcontroller
           git -C .local/touchcontroller-audit/upstream rev-parse HEAD | tee .local/touchcontroller-audit/upstream-revision.txt
           cp .local/touchcontroller-audit/upstream/touchcontroller/LICENSE .local/touchcontroller-audit/COPYING-LGPL-3.0
           python3 - <<'PY'
