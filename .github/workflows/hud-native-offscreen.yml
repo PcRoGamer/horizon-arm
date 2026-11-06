@@ -274,8 +274,19 @@ jobs:
             adb shell settings put system accelerometer_rotation 0
             adb shell settings put system user_rotation 1
             adb logcat -c
+            adb shell getprop ro.product.cpu.abilist > .local/android/emulator/guest-abis.txt
+            adb shell getprop ro.dalvik.vm.native.bridge > .local/android/emulator/native-bridge.txt
             adb shell am start -n dev.horizon.android/.HorizonActivity
             sleep 12
+            # Diagnose crashes before attempting UI navigation; previously the
+            # script reported 'Profile screen not reached' after the app died
+            # inside GameActivity's JNI bridge.
+            adb logcat -d -v time > .local/android/emulator/startup-logcat.txt
+            if ! adb shell pidof dev.horizon.android; then
+              echo 'Horizon process died during native startup; diagnostic excerpts:' >&2
+              grep -E 'RustPanic|Expected an exception|Fatal signal|HorizonNative STAGE|FATAL EXCEPTION' .local/android/emulator/startup-logcat.txt | tail -35 >&2 || true
+              exit 1
+            fi
             adb shell screencap -p /sdcard/horizon-shell.png
             adb pull /sdcard/horizon-shell.png .local/android/emulator/horizon-shell.png
             adb shell input tap 2220 105
