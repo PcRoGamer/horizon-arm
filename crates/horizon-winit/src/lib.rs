@@ -490,11 +490,11 @@ fn handle_game_touch(t: winit_real::event::Touch) {
             ],
         ) {
             TouchRole::Button(3) // Native hotbar inventory end-cap.
-        } else if near_square(p, [0.5 - 0.017 / aspect, 0.045], 0.028 * scale, aspect) {
+        } else if near_square(p, [0.5 - 0.028 / aspect, 0.045], 0.028 * scale, aspect) {
             TouchRole::Perspective
         } else if near_square(p, [0.5 + 0.050 / aspect, 0.045], 0.028 * scale, aspect) {
             TouchRole::Chat
-        } else if near_square(p, [0.5 + 0.117 / aspect, 0.045], 0.028 * scale, aspect) {
+        } else if near_square(p, [0.5 + 0.128 / aspect, 0.045], 0.028 * scale, aspect) {
             TouchRole::Button(9) // Top-bound pause button.
         } else if near_square(p, sprint_at, 0.035 * scale, aspect) {
             if !touch
