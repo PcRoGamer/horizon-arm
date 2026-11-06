@@ -1,9 +1,11 @@
 name: Windows ARM64 touch preview
 on:
   push:
-    branches: [feat/bedrock-touch-polish]
+    branches: [feat/bedrock-touch-polish, tools/vanilla-asset-touch-material]
     paths:
       - crates/horizon-client/src/game/touch_preview.rs
+      - crates/horizon-client/src/game/touch_hotbar.rs
+      - packaging/android/java/dev/horizon/android/HorizonActivity.java
       - tools/check_android_control_layout.py
       - crates/horizon-client/src/game.rs
       - tools/windows_arm_debug_assets.py
@@ -33,7 +35,7 @@ jobs:
           Write-Output "CPU=$env:PROCESSOR_ARCHITECTURE"
       - name: Rust formatting
         shell: pwsh
-        run: cargo fmt --all
+        run: cargo fmt --all -- --check
       - name: Unit test touch preview geometry
         shell: pwsh
         run: cargo test -p horizon-client touch_preview::tests --lib --no-default-features --target aarch64-pc-windows-msvc
@@ -59,8 +61,16 @@ jobs:
         run: |
           $out='.local/downloaded-apk'
           New-Item -ItemType Directory -Force $out | Out-Null
-          gh run download 41697502144 -R "$env:GITHUB_REPOSITORY" -n horizon-clean-arm64-debug-apk -D $out
-          if ($LASTEXITCODE -ne 0) { throw "APK engine-data artifact download failed" }
+          # Use latest non-expired verified APK produced by this repository.
+          $ids=@(gh api "repos/$env:GITHUB_REPOSITORY/actions/artifacts?name=horizon-clean-arm64-debug-apk&per_page=30" --jq '.artifacts[] | select(.expired == false) | .workflow_run.id')
+          if ($LASTEXITCODE -ne 0 -or $ids.Count -eq 0) { throw "No verified APK engine-data artifacts found" }
+          $retrieved=$false
+          foreach ($id in $ids) {
+            if ([string]::IsNullOrWhiteSpace($id)) { continue }
+            gh run download "$id" -R "$env:GITHUB_REPOSITORY" -n horizon-clean-arm64-debug-apk -D $out
+            if ($LASTEXITCODE -eq 0) { $retrieved=$true; Write-Output "Engine data from run $id"; break }
+          }
+          if (-not $retrieved) { throw "APK engine-data artifact download failed" }
           $apk=Get-ChildItem $out -Filter '*.apk' | Select-Object -First 1
           if ($null -eq $apk) { throw "Missing artifact APK" }
           Add-Type -AssemblyName System.IO.Compression.FileSystem
