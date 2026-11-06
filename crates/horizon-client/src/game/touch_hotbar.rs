@@ -111,9 +111,7 @@ pub(super) fn transform_hotbar(batch: &mut HudBatch, atlas: &HudAtlas, first: us
     // Hud.extractItemHotbar always emits the first Sprite as "hud/hotbar".
     // Its two triangles are the only six vertices we hide. Everything after,
     // including the selected slot and actual item stacks, remains unchanged.
-    if atlas.sprites.contains_key("gui/sprites/hud/hotbar")
-        && batch.vertices.len() >= first + 6
-    {
+    if atlas.sprites.contains_key("gui/sprites/hud/hotbar") && batch.vertices.len() >= first + 6 {
         for vertex in &mut batch.vertices[first..first + 6] {
             vertex.color = rgba(255, 255, 255, 0);
         }
