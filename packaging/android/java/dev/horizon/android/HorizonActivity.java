@@ -429,8 +429,8 @@ public final class HorizonActivity extends GameActivity {
                     : pressed ? 0xFFA2B1BE : 0xFFDDE9F4, .99f);
             int base = alpha(sprintLocked ? 0xFF7CA68F
                     : pressed ? 0xFF778999 : 0xFF9EADC2, .99f);
-            paint.setShader(new LinearGradient(0f, t + faceInset, 0f, bottom - faceInset,
-                    top, base, Shader.TileMode.CLAMP));
+            paint.setShader(new android.graphics.LinearGradient(0f, t + faceInset, 0f, bottom - faceInset,
+                    top, base, android.graphics.Shader.TileMode.CLAMP));
             c.drawRoundRect(l + faceInset, t + faceInset,
                     right - faceInset, bottom - faceInset,
                     faceCorner, faceCorner, paint);
