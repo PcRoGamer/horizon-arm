@@ -18,17 +18,17 @@ INPUT=read("crates/horizon-winit/src/lib.rs")
 GESTURE=read("crates/horizon-winit/src/touch_gestures.rs")
 HOTBAR=read("crates/horizon-client/src/game/touch_hotbar.rs")
 # The native Skia Android overlay and Windows Rust preview MUST share exactly
-# the same 11 pixel icons. Geometry tests alone cannot catch icon drift.
+# the same 12 pixel icons. Geometry tests alone cannot catch icon drift.
 import re
 def icon_masks(code):
-    # Both files define exactly 11 rows of 24 pixel-mask values. Never
+    # Both files define exactly 12 rows of 24 pixel-mask values. Never
     # depend on Java/Rust bracket syntax when reading this contract.
     pos=code.index("PIXEL_GLYPHS")
     masks=re.findall(r"0x[0-9a-fA-F]{6}", code[pos:])
-    return masks[:11*24]
+    return masks[:12*24]
 java_masks=icon_masks(JAVA)
 rust_masks=icon_masks(PREVIEW)
-assert len(java_masks)==len(rust_masks)==264, "Expected 11 24x24 glyphs"
+assert len(java_masks)==len(rust_masks)==288, "Expected 12 24x24 glyphs"
 assert [m.lower() for m in java_masks]==[m.lower() for m in rust_masks], "Android/Rust pixel glyphs have diverged"
 # Distinctly recognisable Bedrock crouch: downward arrow above a floor bar.
 assert int(java_masks[4*24+20],16)!=0 and int(java_masks[4*24+21],16)!=0
@@ -47,8 +47,9 @@ for code,expected in (
               "pub fn hotbar_inventory", "pub fn hotbar_slot")),
     (GAME,("touch_hotbar::transform_hotbar","touch_hotbar::inventory_cap",
            "touch_hotbar::lift_stats")),
-    (JAVA,('control(canvas, .5f - .045f / aspect, .045f, .028f, "chat")',
-           'control(canvas, .5f + .045f / aspect, .045f, .028f, "pause")',
+    (JAVA,('control(canvas, .5f - .017f / aspect, .045f, .028f, "perspective")',
+           'control(canvas, .5f + .050f / aspect, .045f, .028f, "chat")',
+           'control(canvas, .5f + .117f / aspect, .045f, .028f, "pause")',
            'nativeSetControls(scheme, controlScale, alwaysSprint)',
            'sprint.setText("Always sprint when moving forward")')),
     (PREVIEW,("Symbol::Chat", "Symbol::Sprint", "HORIZON_TOUCH_PREVIEW_ALWAYS_SPRINT")),
@@ -56,7 +57,8 @@ for code,expected in (
             "touch_gestures::hotbar_inventory", "TOUCH_ALWAYS_SPRINT",
             "sync_sprint(&mut touch)")),
     (NATIVE,("always_sprint: u8", "always_sprint != 0")),
-    (PAD,('winit::AndroidGesture::Chat', 'self.open_chat_method("")')),
+    (PAD,('winit::AndroidGesture::Chat', 'self.open_chat_method("")',
+          'winit::AndroidGesture::Perspective', 'self.cycle_camera()')),
 ):
     for text in expected:
         assert text in code, f"Required implementation missing: {text}"
@@ -92,8 +94,9 @@ def layout(w,h,scheme,scale):
     )
     controls={
         "jump":box(w-.160*h,.72*h,.051*h*scale),
-        "pause":box(.5*w+.045*h,.045*h,.028*h*scale),
-        "chat":box(.5*w-.045*h,.045*h,.028*h*scale),
+        "pause":box(.5*w+.117*h,.045*h,.028*h*scale),
+        "chat":box(.5*w+.050*h,.045*h,.028*h*scale),
+        "perspective":box(.5*w-.017*h,.045*h,.028*h*scale),
     }
     if scheme & 1:
         controls.update({
