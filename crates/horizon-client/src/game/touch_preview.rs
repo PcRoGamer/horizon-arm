@@ -187,54 +187,71 @@ impl Painter<'_> {
     fn draw_sprite(&mut self, name: &str, x: f32, y: f32, w: f32, h: f32) {
         let alpha = (255.0 * self.cfg.opacity).round().clamp(0.0, 255.0) as u8;
         if self.atlas.sprites.contains_key(name) {
-            self.batch.sprite_scaled(
-                self.atlas,
-                name,
-                x,
-                y,
-                w,
-                h,
-                rgba(255, 255, 255, alpha),
-            );
+            self.batch
+                .sprite_scaled(self.atlas, name, x, y, w, h, rgba(255, 255, 255, alpha));
         } else {
             // A visible error surface is better than an invisible button,
             // but source contracts and GPU capture CI require the real sprite.
-            self.batch.fill(
-                self.atlas,
-                x,
-                y,
-                w,
-                h,
-                rgba(100, 100, 100, alpha),
-            );
+            self.batch
+                .fill(self.atlas, x, y, w, h, rgba(100, 100, 100, alpha));
         }
     }
     fn control(&mut self, x: f32, y: f32, radius: f32, sym: Symbol) {
         let (normal, highlighted) = match sym {
-            Symbol::Chat => ("horizon_touch:gui/classic/chat/chat", "horizon_touch:gui/classic/chat/chat_active"),
-            Symbol::Pause => ("horizon_touch:gui/classic/pause/pause", "horizon_touch:gui/classic/pause/pause_active"),
-            Symbol::Perspective => ("horizon_touch:gui/classic/perspective/perspective", "horizon_touch:gui/classic/perspective/perspective_active"),
-            Symbol::Sprint => ("horizon_touch:gui/classic/sprint/sprint", "horizon_touch:gui/classic/sprint/sprint_active"),
-            Symbol::Jump => ("horizon_touch:gui/classic/jump/jump", "horizon_touch:gui/classic/jump/jump_active"),
-            Symbol::Sneak => ("horizon_touch:gui/classic/sneak/sneak", "horizon_touch:gui/classic/sneak/sneak_active"),
-            Symbol::Hit => ("horizon_touch:gui/classic/attack/attack", "horizon_touch:gui/classic/attack/attack_active"),
-            Symbol::Use => ("horizon_touch:gui/classic/use/use", "horizon_touch:gui/classic/use/use_active"),
-            Symbol::Arrow(Direction::Up) => ("horizon_touch:gui/classic/dpad/up", "horizon_touch:gui/classic/dpad/up_active"),
-            Symbol::Arrow(Direction::Right) => ("horizon_touch:gui/classic/dpad/right", "horizon_touch:gui/classic/dpad/right_active"),
-            Symbol::Arrow(Direction::Down) => ("horizon_touch:gui/classic/dpad/down", "horizon_touch:gui/classic/dpad/down_active"),
-            Symbol::Arrow(Direction::Left) => ("horizon_touch:gui/classic/dpad/left", "horizon_touch:gui/classic/dpad/left_active"),
+            Symbol::Chat => (
+                "horizon_touch:gui/classic/chat/chat",
+                "horizon_touch:gui/classic/chat/chat_active",
+            ),
+            Symbol::Pause => (
+                "horizon_touch:gui/classic/pause/pause",
+                "horizon_touch:gui/classic/pause/pause_active",
+            ),
+            Symbol::Perspective => (
+                "horizon_touch:gui/classic/perspective/perspective",
+                "horizon_touch:gui/classic/perspective/perspective_active",
+            ),
+            Symbol::Sprint => (
+                "horizon_touch:gui/classic/sprint/sprint",
+                "horizon_touch:gui/classic/sprint/sprint_active",
+            ),
+            Symbol::Jump => (
+                "horizon_touch:gui/classic/jump/jump",
+                "horizon_touch:gui/classic/jump/jump_active",
+            ),
+            Symbol::Sneak => (
+                "horizon_touch:gui/classic/sneak/sneak",
+                "horizon_touch:gui/classic/sneak/sneak_active",
+            ),
+            Symbol::Hit => (
+                "horizon_touch:gui/classic/attack/attack",
+                "horizon_touch:gui/classic/attack/attack_active",
+            ),
+            Symbol::Use => (
+                "horizon_touch:gui/classic/use/use",
+                "horizon_touch:gui/classic/use/use_active",
+            ),
+            Symbol::Arrow(Direction::Up) => (
+                "horizon_touch:gui/classic/dpad/up",
+                "horizon_touch:gui/classic/dpad/up_active",
+            ),
+            Symbol::Arrow(Direction::Right) => (
+                "horizon_touch:gui/classic/dpad/right",
+                "horizon_touch:gui/classic/dpad/right_active",
+            ),
+            Symbol::Arrow(Direction::Down) => (
+                "horizon_touch:gui/classic/dpad/down",
+                "horizon_touch:gui/classic/dpad/down_active",
+            ),
+            Symbol::Arrow(Direction::Left) => (
+                "horizon_touch:gui/classic/dpad/left",
+                "horizon_touch:gui/classic/dpad/left_active",
+            ),
         };
         // Only the always-sprint debug state can be simulated in the native
         // desktop preview; Android reports held press bits for each action.
         let pressed = matches!(sym, Symbol::Sprint) && self.cfg.always_sprint;
         let sprite = if pressed { highlighted } else { normal };
-        self.draw_sprite(
-            sprite,
-            x - radius,
-            y - radius,
-            radius * 2.0,
-            radius * 2.0,
-        );
+        self.draw_sprite(sprite, x - radius, y - radius, radius * 2.0, radius * 2.0);
     }
     fn joystick(&mut self, x: f32, y: f32, radius: f32) {
         self.draw_sprite(

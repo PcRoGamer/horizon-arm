@@ -122,8 +122,15 @@ pub(super) fn inventory_cap(batch: &mut HudBatch, atlas: &HudAtlas) {
     // remain Horizon's genuine vanilla sprites.
     let name = "horizon_touch:gui/classic/inventory/inventory";
     if atlas.sprites.contains_key(name) {
-        batch.sprite_scaled(atlas, name, x, y + (side - cap) * 0.5, cap, cap,
-            rgba(255, 255, 255, 255));
+        batch.sprite_scaled(
+            atlas,
+            name,
+            x,
+            y + (side - cap) * 0.5,
+            cap,
+            cap,
+            rgba(255, 255, 255, 255),
+        );
     } else {
         batch.fill(atlas, x, y, cap, side, rgba(80, 80, 80, 244));
     }
