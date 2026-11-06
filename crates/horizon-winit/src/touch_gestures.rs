@@ -6,10 +6,19 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Action {
-    Tap { x: f32, y: f32 },
-    HoldBegin { x: f32, y: f32 },
+    Tap {
+        x: f32,
+        y: f32,
+    },
+    HoldBegin {
+        x: f32,
+        y: f32,
+    },
     HoldEnd,
-    Look { dx: f32, dy: f32 },
+    Look {
+        dx: f32,
+        dy: f32,
+    },
     // Android-only gestures are consumed by the game. Do not expose these to
     // desktop tests, where dead-code warnings are treated as errors.
     #[cfg(target_os = "android")]
