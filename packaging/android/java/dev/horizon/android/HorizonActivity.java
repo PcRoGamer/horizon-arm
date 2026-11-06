@@ -92,7 +92,7 @@ public final class HorizonActivity extends GameActivity {
         super.onCreate(state);
         immersive();
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        scheme = Math.max(0, Math.min(3, prefs.getInt("scheme", 0)));
+        scheme = Math.max(0, Math.min(3, prefs.getInt("scheme", 2)));
         controlScale = Math.max(80, Math.min(120, prefs.getInt("scale", 100)));
         opacity = Math.max(35, Math.min(100, prefs.getInt("opacity", 72)));
         alwaysSprint = prefs.getBoolean("always_sprint", false);
@@ -271,7 +271,6 @@ public final class HorizonActivity extends GameActivity {
             syncNative();
             // Horizon's native first-run bootstrap populates this cache. Reuse
             // the same verified Mojang asset tree, never a second downloader.
-            if (overlay.refreshButtonSprites()) overlay.invalidate();
             boolean menu = inMenu();
             int bits = 0;
             float x = 0f, y = 0f;
@@ -302,12 +301,11 @@ public final class HorizonActivity extends GameActivity {
     /** Non-intercepting, hardware-accelerated vector artwork. */
     private final class TouchOverlay extends View {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private Bitmap buttonFrame;
-        private Bitmap highlightedFrame;
-        // Reusable draw rectangles avoid dozens of allocations per touch frame.
-        private final Rect frameSource = new Rect();
-        private final RectF frameTarget = new RectF();
-        private long nextButtonProbeMs;
+        // Exact LGPL-licensed TouchController Classic PNG sprites, bundled in
+        // the APK as an attributed third-party asset component.
+        private final java.util.Map<String, Bitmap> sprites = new java.util.HashMap<>();
+        private final java.util.Set<String> missingSprites = new java.util.HashSet<>();
+        private final RectF spriteDest = new RectF();
         boolean menu = true;
         int scheme = 0;
         int opacity = 72;
@@ -321,81 +319,59 @@ public final class HorizonActivity extends GameActivity {
         }
 
         /**
-         * Read purpose-built GUI button sprites from Horizon's prepared Mojang
-         * resource tree. The entire button, including its centre and pressed
-         * state, comes from GUI artwork rather than a world-block texture.
-         * The APK contains no redistributed Minecraft-owned PNGs.
-         *
-         * Android Canvas and Rust HudAtlas consume the same prepared resources.
-         * Probe at most every three seconds during first-run bootstrap.
+         * The texture pixels here are from TouchController's Classic set,
+         * redistributed intact under LGPL-3.0-or-later with attribution.
+         * No Mojang block texture or generic GUI button is used as a face.
          */
-        private Bitmap decodeCachedTexture(File base, String path) {
-            File png = new File(base, "assets/minecraft/textures/" + path + ".png");
-            if (!png.isFile() || png.length() > 1024 * 1024) return null;
-            BitmapFactory.Options options = new BitmapFactory.Options();
-            options.inScaled = false;
-            Bitmap result = BitmapFactory.decodeFile(png.getAbsolutePath(), options);
-            if (result == null) return null;
-            if (result.getWidth() < 8 || result.getHeight() < 8
-                    || result.getWidth() > 512 || result.getHeight() > 512) {
-                result.recycle();
-                return null;
+        private Bitmap controlSprite(String key) {
+            Bitmap cached = sprites.get(key);
+            if (cached != null) return cached;
+            if (missingSprites.contains(key)) return null;
+            try (java.io.InputStream stream = getContext().getAssets().open(
+                    "horizon_touch/classic/" + key + ".png")) {
+                BitmapFactory.Options options = new BitmapFactory.Options();
+                options.inScaled = false;
+                Bitmap result = BitmapFactory.decodeStream(stream, null, options);
+                if (result != null && result.getWidth() >= 12 && result.getHeight() >= 12
+                        && result.getWidth() <= 128 && result.getHeight() <= 128) {
+                    sprites.put(key, result);
+                    return result;
+                }
+            } catch (java.io.IOException ignored) {
+                // The missing-asset list prevents repeated I/O every frame.
             }
-            return result;
+            missingSprites.add(key);
+            return null;
         }
 
-        boolean refreshButtonSprites() {
-            if (buttonFrame != null && highlightedFrame != null) return false;
-            long now = android.os.SystemClock.uptimeMillis();
-            if (now < nextButtonProbeMs) return false;
-            nextButtonProbeMs = now + 3000;
-            File cache = new File(getContext().getFilesDir(), ".local/horizon-client");
-            File[] versions = cache.listFiles(File::isDirectory);
-            if (versions == null) return false;
-            boolean changed = false;
-            for (File version : versions) {
-                if (buttonFrame == null) {
-                    buttonFrame = decodeCachedTexture(version, "gui/sprites/widget/button");
-                    changed |= buttonFrame != null;
-                }
-                if (highlightedFrame == null) {
-                    highlightedFrame = decodeCachedTexture(
-                            version, "gui/sprites/widget/button_highlighted");
-                    changed |= highlightedFrame != null;
-                }
-                if (buttonFrame != null && highlightedFrame != null) break;
-            }
-            return changed;
-        }
-
-        /**
-         * Nine-slice the complete vanilla GUI button sprite: four corners,
-         * four edges, and its original centre. Never paint a block texture
-         * under a border-only widget.
-         */
-        private boolean drawVanillaButton(Canvas canvas, Bitmap frame, float radius) {
-            if (frame == null || frame.getWidth() < 16 || frame.getHeight() < 12)
-                return false;
-            float target = Math.max(2f, Math.round(radius * .10f));
-            int width = frame.getWidth();
-            // Some versions contain animation frames vertically; use frame 0.
-            int height = Math.min(20, frame.getHeight());
-            int border = 3;
-            int[] sx = {0, border, width - border, width};
-            int[] sy = {0, border, height - border, height};
-            float[] dx = {-radius, -radius + target, radius - target, radius};
-            float[] dy = {-radius, -radius + target, radius - target, radius};
-            color(alpha(0xFFFFFFFF, 1.0f), Paint.Style.FILL, 0f);
+        /** Draw an actual action-specific pixel-art surface, with no separately
+         * rasterised glyph and no interpolated blur between source pixels. */
+        private boolean sprite(Canvas canvas, String key, float cx, float cy,
+                               float width, float height) {
+            Bitmap bitmap = controlSprite(key);
+            if (bitmap == null) return false;
+            paint.reset();
+            paint.setStyle(Paint.Style.FILL);
             paint.setAntiAlias(false);
             paint.setFilterBitmap(false);
-            for (int row = 0; row < 3; row++) {
-                for (int col = 0; col < 3; col++) {
-                    frameSource.set(sx[col], sy[row], sx[col + 1], sy[row + 1]);
-                    frameTarget.set(dx[col], dy[row], dx[col + 1], dy[row + 1]);
-                    canvas.drawBitmap(frame, frameSource, frameTarget, paint);
-                }
-            }
+            paint.setDither(false);
+            paint.setColor(0xFFFFFFFF);
+            paint.setAlpha(Math.min(255, Math.max(0, Math.round(255f * opacity / 100f))));
+            spriteDest.set(cx - width * .5f, cy - height * .5f,
+                    cx + width * .5f, cy + height * .5f);
+            canvas.drawBitmap(bitmap, null, spriteDest, paint);
             return true;
+        }
+
+        private String spritePath(String name, boolean pressed) {
+            String control;
+            switch (name) {
+                case "up": case "down": case "left": case "right":
+                    control = "dpad/" + name; break;
+                case "hit": control = "attack/attack"; break;
+                default: control = name + "/" + name; break;
+            }
+            return control + (pressed ? "_active" : "");
         }
 
         private void color(int argb, Paint.Style style, float stroke) {
@@ -413,76 +389,6 @@ public final class HorizonActivity extends GameActivity {
                     | (rgb & 0xFFFFFF);
         }
 
-        // Original 24px-grid icons rasterized once into reusable Canvas paths.
-        // Pixel masks are identical to the ARM64 Rust GPU preview.
-        // Glyph source: identical 12x24 masks in Android Canvas and Rust native preview
-        private final int[][] PIXEL_GLYPHS = {
-    {0x000000, 0x000000, 0x000000, 0x000000, 0x0FFFF0, 0x1FFFF0, 0x180030, 0x180030, 0x180030, 0x1999F0, 0x1BFFF0, 0x1BFFF0, 0x1999F0, 0x180030, 0x180030, 0x1C7FF0, 0x1DFFF0, 0x0FC000, 0x0F8000, 0x0F0000, 0x0C0000, 0x000000, 0x000000, 0x000000},
-    {0x000000, 0x000000, 0x000000, 0x000000, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x03C3C0, 0x000000, 0x000000, 0x000000, 0x000000},
-    {0x000000, 0x000000, 0x000380, 0x000380, 0x0007C0, 0x000380, 0x3F8700, 0x3F8F80, 0x003FC0, 0x7F39F0, 0x7F70FC, 0x00707C, 0x00E000, 0x07E000, 0x0FF800, 0x0FFC00, 0x071E00, 0x0F0E00, 0x0E0E00, 0x1C0E00, 0x180C00, 0x000C00, 0x000000, 0x000000},
-    {0x000000, 0x000000, 0x000000, 0x001800, 0x003C00, 0x007E00, 0x007E00, 0x00FF00, 0x01FF80, 0x03FFC0, 0x07FFE0, 0x007E00, 0x007E00, 0x007E00, 0x007E00, 0x007E00, 0x007E00, 0x007E00, 0x000000, 0x000000, 0x1FFFF8, 0x1FFFF8, 0x000000, 0x000000},
-    {0x000000, 0x000000, 0x000000, 0x003C00, 0x003C00, 0x003C00, 0x003C00, 0x003C00, 0x003C00, 0x00FF00, 0x03FFC0, 0x03FFC0, 0x01FF80, 0x00FF00, 0x007E00, 0x003C00, 0x001800, 0x000000, 0x000000, 0x000000, 0x07FFE0, 0x07FFE0, 0x000000, 0x000000},
-    {0x000000, 0x000000, 0x00000C, 0x00003C, 0x00007C, 0x00007C, 0x0000FC, 0x0001DC, 0x0003F8, 0x0007F8, 0x000FE0, 0x001C00, 0x183800, 0x1C7000, 0x0FE000, 0x07C000, 0x07C000, 0x07C000, 0x0FE000, 0x1C7000, 0x383000, 0x300000, 0x000000, 0x000000},
-    {0x000000, 0x000000, 0x003C00, 0x00FF00, 0x01FF80, 0x07C3E0, 0x1F00F8, 0x1E0078, 0x1F00F8, 0x1FC3F8, 0x19FF98, 0x18FF18, 0x183C18, 0x181818, 0x181818, 0x181818, 0x1E1878, 0x1F18F8, 0x07DBE0, 0x01FF80, 0x007F00, 0x003C00, 0x000000, 0x000000},
-    {0x000000, 0x000000, 0x000000, 0x001800, 0x003C00, 0x007E00, 0x007E00, 0x00FF00, 0x01FF80, 0x03FFC0, 0x07FFE0, 0x0FFFF0, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x000000, 0x000000, 0x000000},
-    {0x000000, 0x000000, 0x000000, 0x000000, 0x000800, 0x000C00, 0x000E00, 0x000F00, 0x1FFF80, 0x1FFFE0, 0x1FFFF0, 0x1FFFF8, 0x1FFFF8, 0x1FFFF0, 0x1FFFE0, 0x1FFF80, 0x000F00, 0x000E00, 0x000C00, 0x000800, 0x000000, 0x000000, 0x000000, 0x000000},
-    {0x000000, 0x000000, 0x000000, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x00FF00, 0x0FFFF0, 0x07FFE0, 0x03FFC0, 0x01FF80, 0x00FF00, 0x007E00, 0x007E00, 0x003C00, 0x001800, 0x000000, 0x000000, 0x000000},
-    {0x000000, 0x000000, 0x000000, 0x000000, 0x001000, 0x003000, 0x007000, 0x00F000, 0x01FFF8, 0x07FFF8, 0x0FFFF8, 0x1FFFF8, 0x1FFFF8, 0x0FFFF8, 0x07FFF8, 0x01FFF8, 0x00F000, 0x007000, 0x003000, 0x001000, 0x000000, 0x000000, 0x000000, 0x000000},
-    {0x000000, 0x000000, 0x000000, 0x1FFF00, 0x100100, 0x100100, 0x100100, 0x100100, 0x100100, 0x107FFC, 0x104104, 0x104104, 0x104944, 0x104944, 0x104104, 0x1FFF04, 0x004004, 0x004FC4, 0x004004, 0x004004, 0x004004, 0x007FFC, 0x000000, 0x000000}
-        };
-        private final Path[] pixelPaths = buildPixelPaths();
-
-        private Path[] buildPixelPaths() {
-            Path[] result = new Path[PIXEL_GLYPHS.length];
-            for (int icon = 0; icon < result.length; icon++) {
-                Path path = new Path();
-                for (int y = 0; y < 24; y++) {
-                    int bits = PIXEL_GLYPHS[icon][y];
-                    int x = 0;
-                    while (x < 24) {
-                        if ((bits & (1 << (23 - x))) == 0) { x++; continue; }
-                        int left = x;
-                        do { x++; } while (x < 24 && (bits & (1 << (23-x))) != 0);
-                        path.addRect(left, y, x, y + 1, Path.Direction.CW);
-                    }
-                }
-                result[icon] = path;
-            }
-            return result;
-        }
-
-        private int pixelIcon(String name) {
-            switch (name) {
-                case "chat": return 0;
-                case "perspective": return 11;
-                case "pause": return 1;
-                case "sprint": return 2;
-                case "jump": return 3;
-                case "sneak": return 4;
-                case "hit": return 5;
-                case "use": return 6;
-                case "up": return 7;
-                case "right": return 8;
-                case "down": return 9;
-                case "left": return 10;
-                default: return -1;
-            }
-        }
-
-        private void glyph(Canvas canvas, String name, float radius) {
-            int index = pixelIcon(name);
-            if (index < 0) return;
-            canvas.save();
-            // 24x24 pixel glyph fits inside the beveled key's face.
-            canvas.scale(radius * .056f, radius * .056f);
-            canvas.translate(-12f, -12f);
-            color(alpha(0xFF111516, 1.9f), Paint.Style.FILL, 0);
-            paint.setAntiAlias(false);
-            canvas.drawPath(pixelPaths[index], paint);
-            canvas.restore();
-        }
-
-
         private void control(Canvas c, float nx, float ny, float radius, String name) {
             float x = nx * getWidth();
             float y = ny * getHeight();
@@ -499,29 +405,12 @@ public final class HorizonActivity extends GameActivity {
                     || (name.equals("down") && joyY < -.28f)
                     || (name.equals("left") && joyX < -.28f);
             c.save();
-            c.translate(Math.round(x), Math.round(y) + (pressed ? Math.max(1f, r * .028f) : 0f));
-            // The same complete GUI sprite in both Android Canvas and Rust HUD.
-            Bitmap surface = pressed && highlightedFrame != null
-                    ? highlightedFrame : buttonFrame;
-            if (!drawVanillaButton(c, surface, r)) {
-                // First-run fallback: a restrained interface bevel. No block
-                // textures are ever repurposed as button artwork.
-                float edge = Math.max(1.25f, Math.round(r * .047f));
-                float inset = edge * .5f;
-                int face = pressed && name.equals("sprint") ? 0xFF94B29C
-                        : pressed ? 0xFF959A98 : 0xFFC5C5C2;
-                color(alpha(face, 1.0f), Paint.Style.FILL, 0f);
-                paint.setAntiAlias(false);
-                c.drawRect(-r + edge, -r + edge, r - edge, r - edge, paint);
-                color(alpha(0xFF222629, 1.08f), Paint.Style.STROKE, edge);
-                c.drawRect(-r + inset, -r + inset, r - inset, r - inset, paint);
-                float lip = Math.max(1f, Math.round(r * .024f));
-                color(alpha(0xFFECF0EA, .74f), Paint.Style.FILL, 0f);
-                c.drawRect(-r + edge, -r + edge, r - edge, -r + edge + lip, paint);
-                color(alpha(0xFF4B5050, .90f), Paint.Style.FILL, 0f);
-                c.drawRect(-r + edge, r - edge - lip, r - edge, r - edge, paint);
+            c.translate(Math.round(x), Math.round(y));
+            if (!sprite(c, spritePath(name, pressed), 0f, 0f, 2f * r, 2f * r)) {
+                // Defensive fallback if an APK has incomplete assets.
+                color(alpha(0xFF898989, 1f), Paint.Style.FILL, 0f);
+                c.drawRect(-r, -r, r, r, paint);
             }
-            glyph(c, name, r);
             c.restore();
         }
 
@@ -546,17 +435,16 @@ public final class HorizonActivity extends GameActivity {
             float x = .11f * getWidth();
             float y = joystickY();
             float r = .092f * h * scale;
-            // A clear movement ring, without the unnecessary nested circles.
-            color(alpha(0xFF13171B, .22f), Paint.Style.FILL, 0);
-            c.drawCircle(x, y, r, paint);
-            color(alpha(0xFFF4F7F8, 2.45f), Paint.Style.STROKE, Math.max(2f, r * .041f));
-            c.drawCircle(x, y, r * .95f, paint);
+            // TouchController's original joystick pad and stick match its
+            // square buttons; the active thumb follows Horizon's real axes.
+            boolean drewPad = sprite(c, "joystick/pad", x, y, r * 2f, r * 2f);
             float tx = x + joyX * r * .70f;
             float ty = y - joyY * r * .70f;
-            color(alpha(0xFF0C0F11, 1.80f), Paint.Style.FILL, 0);
-            c.drawCircle(tx, ty + r * .032f, r * .42f, paint);
-            color(alpha(0xFFE4E9EB, 2.15f), Paint.Style.FILL, 0);
-            c.drawCircle(tx, ty, r * .36f, paint);
+            boolean drewStick = sprite(c, "joystick/stick", tx, ty, r, r);
+            if (!drewPad || !drewStick) {
+                color(alpha(0xFF999999, .7f), Paint.Style.STROKE, Math.max(2f, r * .05f));
+                c.drawCircle(x, y, r * .90f, paint);
+            }
         }
 
         // The D-pad adapts to tablet widths without colliding with the genuine

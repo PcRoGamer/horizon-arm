@@ -1,8 +1,10 @@
 name: Windows ARM64 touch preview
 on:
   push:
-    branches: [feat/bedrock-touch-polish, tools/vanilla-asset-touch-material]
+    branches: [feat/bedrock-touch-polish, tools/vanilla-asset-touch-material, feat/touchcontroller-faithful-hud]
     paths:
+      - crates/horizon-client-render/src/hud.rs
+      - third_party/touchcontroller/**
       - crates/horizon-client/src/game/touch_preview.rs
       - crates/horizon-client/src/game/touch_hotbar.rs
       - packaging/android/java/dev/horizon/android/HorizonActivity.java
@@ -140,7 +142,7 @@ jobs:
           $env:HORIZON_HOME=$root
           $env:HORIZON_TOUCH_PREVIEW='1'
           $env:HORIZON_TOUCH_PREVIEW_TITLE='0'
-          $env:HORIZON_TOUCH_PREVIEW_SCHEME='1'
+          $env:HORIZON_TOUCH_PREVIEW_SCHEME='2'
           $env:HORIZON_TOUCH_PREVIEW_SCALE='100'
           $env:HORIZON_TOUCH_PREVIEW_OPACITY='72'
           # With --world-frames, --screenshot-after counts gameplay frames,
@@ -149,7 +151,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "In-world HUD render failed: exit $LASTEXITCODE" }
           $capture=Join-Path $root 'screenshots/horizon-arm64-debug-world.png'
           if (!(Test-Path $capture)) { throw 'Game failed to produce a genuine in-world screenshot' }
-          Move-Item -LiteralPath $capture -Destination (Join-Path $root 'world-touch-scheme-1.png') -Force
+          Move-Item -LiteralPath $capture -Destination (Join-Path $root 'world-touch-scheme-2.png') -Force
 
       - name: Upload GPU screenshots and failure logs
         if: always()

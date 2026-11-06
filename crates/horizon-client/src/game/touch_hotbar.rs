@@ -116,58 +116,23 @@ pub(super) fn inventory_cap(batch: &mut HudBatch, atlas: &HudAtlas) {
     let cap = INVENTORY_CAP * s;
     let x = batch.width * 0.5 + 91.0 * s - 1.0;
     let y = batch.height - BOTTOM_GAP - side;
-    // Bedrock-style ellipsis is a muted extension of the hotbar, not an
-    // independently raised 3x3 app-grid button.
-    // Bedrock's inventory tab uses a mid-grey *face*, not the dark,
-    // nearly black inset previously used here. The slot-compatible bevel
-    // and bottom shadow provide depth without swallowing the icon.
-    batch.fill(atlas, x, y, cap, side, rgba(19, 22, 23, 246));
-    batch.fill(
-        atlas,
-        x + 1.0 * s,
-        y + 1.0 * s,
-        cap - 2.0 * s,
-        side - 2.0 * s,
-        rgba(118, 126, 124, 248),
-    );
-    batch.fill(
-        atlas,
-        x + 2.5 * s,
-        y + 2.5 * s,
-        cap - 5.0 * s,
-        side - 5.0 * s,
-        rgba(149, 157, 153, 246),
-    );
-    batch.fill(
-        atlas,
-        x + 2.5 * s,
-        y + 2.5 * s,
-        cap - 5.0 * s,
-        1.0 * s,
-        rgba(198, 205, 200, 242),
-    );
-    batch.fill(
-        atlas,
-        x + 2.5 * s,
-        y + side - 3.5 * s,
-        cap - 5.0 * s,
-        1.0 * s,
-        rgba(75, 82, 80, 235),
-    );
-    let dot = 3.5 * s;
-    let gap = 2.5 * s;
-    let total = 3.0 * dot + 2.0 * gap;
-    let dx = x + (cap - total) * 0.5;
-    let dy = y + (side - dot) * 0.5;
-    for i in 0..3 {
-        batch.fill(
+    // Native LGPL TouchController inventory tab, exactly matching the other
+    // Classic sprite buttons and occupying the existing right-hand hitbox.
+    // The nine Minecraft hotbar slots, their items and selected-slot outline
+    // remain Horizon's genuine vanilla sprites.
+    let name = "horizon_touch:gui/classic/inventory/inventory";
+    if atlas.sprites.contains_key(name) {
+        batch.sprite_scaled(
             atlas,
-            dx + i as f32 * (dot + gap),
-            dy,
-            dot,
-            dot,
-            rgba(236, 243, 239, 252),
+            name,
+            x,
+            y + (side - cap) * 0.5,
+            cap,
+            cap,
+            rgba(255, 255, 255, 255),
         );
+    } else {
+        batch.fill(atlas, x, y, cap, side, rgba(80, 80, 80, 244));
     }
 }
 

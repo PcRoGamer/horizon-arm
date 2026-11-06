@@ -1,0 +1,14 @@
+Third-party textures: TouchController Classic control set
+
+Upstream: https://github.com/TouchController/TouchController
+Source revision: c3a3f9590a44aff3a3bf760772935187225bb514
+Source asset paths: touchcontroller/resources/texture/control/classic/
+Original copyright (C) 2026 fifth_light and TouchController contributors.
+License: LGPL-3.0-or-later; see COPYING.LGPL-3.0.
+
+The 28 PNGs under assets/horizon_touch/classic are unchanged source files from
+TouchController. They are a separately licensed asset component, not MIT-licensed
+Horizon code. Preserve this notice, original source files, and the GNU LGPL-3.0
+license when distributing them or an APK containing them. No TouchController
+Kotlin/Java implementation source has been copied. Other rightsholders retain
+their respective trademarks and third-party intellectual-property rights.

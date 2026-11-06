@@ -1,7 +1,7 @@
-name: Native GUI button surface, no world-block textures
+name: Upstream TouchController Classic asset fidelity
 on:
   push:
-    branches: [tools/vanilla-asset-touch-material]
+    branches: [tools/vanilla-asset-touch-material, feat/touchcontroller-faithful-hud]
   workflow_dispatch:
 
 jobs:
@@ -17,7 +17,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.14.3'
-      - name: Verify whole native GUI sprite renders in Android and Rust
+      - name: Verify source PNG hashes, licence and Android/Rust parity
         run: python3 tools/test_touch_layout_geometry.py
       - name: Build and capture genuine Android Canvas HUD
         run: |
@@ -32,7 +32,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: hud-native-gui-widget-fixture-png
+          name: hud-touchcontroller-classic-skia
           path: artifacts/hud-native-skia/*.png
           if-no-files-found: warn
 
@@ -44,6 +44,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: horizon-hud-vanilla-texture
+          shared-key: horizon-touchcontroller-classic-assets
       - name: Check existing-HudAtlas texture renderer builds
         run: cargo check --no-default-features -p horizon-client --bin hud-offscreen
