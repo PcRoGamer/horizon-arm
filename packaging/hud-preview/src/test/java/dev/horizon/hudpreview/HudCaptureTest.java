@@ -38,7 +38,7 @@ public class HudCaptureTest {
                 overlay.menu = false;
                 overlay.scheme = scheme;
                 overlay.scale = 1.0f;
-                overlay.opacity = 35;
+                overlay.opacity = 72; // Horizon's production first-launch default
                 overlay.buttons = 0;
                 overlay.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
                     View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
