@@ -63,3 +63,71 @@ processes were temporarily isolated and all restored with zero errors.
 The existing tools/perf_bench.py provides repeatable gameplay scenarios and
 statistics; reuse it for actual FPS testing rather than introducing a second
 gameplay benchmark suite.
+
+## Native ARM64 toolchain for the Windows benchmark
+
+The Snapdragon laptop's global Rust default was an x86-64 GNU host compiler;
+the native compiler avoids that emulation cost. Install native Rust without
+changing the user's default toolchain:
+
+    rustup toolchain install stable-aarch64-pc-windows-msvc --profile minimal
+
+The project also needs the Visual Studio ARM64 compiler environment and
+Clang for the ring crate. Verified portable native LLVM 23.1.5 is under:
+
+    artifacts/toolchains/llvm-23.1.5-win-arm64/clang+llvm-23.1.5-aarch64-pc-windows-msvc/bin
+
+Official release archive: llvm/llvm-project, llvmorg-23.1.5,
+clang+llvm-23.1.5-aarch64-pc-windows-msvc.tar.zst
+SHA-256: cb523582d9fe00862c5584ce5f7715f963037c11bba95181fa98425f48e06863
+
+The native compiler successfully compiled a C source including assert.h with
+Visual Studio vcvarsarm64.bat active. That smoke test alone does not certify
+a complete Horizon executable.
+
+The tools/Run-WindowsArmFast.ps1 script selects native ARM64 Rust and the
+portable verified LLVM when it needs to build. It does not change global
+Rust preferences. The project's fast profile is convenient for iteration;
+the fully optimized release profile must also be benchmarked before
+asserting maximum runtime performance.
+
+## Controlled gameplay runner
+
+    python tools/bench_snapdragon_arm.py --check
+    python tools/bench_snapdragon_arm.py --preset smoke
+    python tools/bench_snapdragon_arm.py --preset standard
+
+The --check preflight requires an actual built optimized ARM64 executable.
+The smoke preset runs one deterministic forest flight at 1280x720, render
+distance 8. The standard preset runs repeated village/forest/ocean/mountain
+flights at two render resolutions and render distances. Both enforce the
+eight-core Horizon / four-core desktop partition.
+
+The runner uses offscreen DX12 by default to avoid stealing window focus.
+This isolates many window-system effects but measures a distinct workload
+from fullscreen on-screen presentation. Keep an additional explicitly
+labelled visible gameplay benchmark for display-frame pacing. Never label a
+debug build as release-speed.
+
+Horizon itself produces frame-time reports in benchmarks/perf, including
+percentiles and low FPS values. The launcher saves an immutable binary hash
+and run settings under artifacts/benchmarks/<label>/manifest.json. The
+matching isolation.json, isolation.envelope.json, isolation.gpu.jsonl, and
+run.log retain the environmental evidence.
+
+tools/bench_gpu_activity.py uses native Windows PDH counters to record 3D
+GPU activity by process every second. It reports Horizon, desktop compositor,
+and other applications separately. This is a contamination monitor, NOT
+dedicated GPU capacity or a precise GPU reservation. The monitor keeps raw
+JSONL samples for correlation with Horizon's flight-time windows.
+
+The benchmark's Windows control socket must be a localhost TCP JSON endpoint
+even though modern Windows Python has AF_UNIX. A regression test enforces
+this distinction against crates/horizon-client/src/control.rs.
+
+Validation commands:
+
+    python tools/test_bench_desktop_isolation.py -v
+    python tools/test_bench_gpu_activity.py -v
+    python tools/test_bench_snapdragon_arm.py -v
+    python tools/test_perf_bench_control_path.py -v

@@ -367,7 +367,10 @@ def yaw(start, end):
 def control_path():
     """Where the game opens its control endpoint (crates/horizon-client/src/control.rs): a Unix socket, or,
     where Python has none (Windows), a JSON file in which the game names a localhost TCP port and a token."""
-    if hasattr(socket, "AF_UNIX"):
+    # Windows Python exposes AF_UNIX, but the Windows Horizon control
+    # server always uses a token-authenticated localhost TCP JSON endpoint.
+    # Match control.rs uses_tcp(), not Python's socket feature detection.
+    if sys.platform != "win32" and hasattr(socket, "AF_UNIX"):
         return Path("/tmp") / f"horizon-bench-{os.getpid()}.sock"
     return Path(tempfile.gettempdir()) / f"horizon-bench-{os.getpid()}.json"
 

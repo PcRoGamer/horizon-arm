@@ -33,9 +33,33 @@ if ($Build -or -not (Test-Path $exe)) {
     if (-not (Test-Path $vcvars)) {
         throw 'Missing native ARM64 MSVC build tools (vcvarsarm64.bat).'
     }
+    # Use native ARM64 Rust, not the machine's x86-64 default compiler.
+    $nativeToolchain = 'stable-aarch64-pc-windows-msvc'
+    $installedToolchains = & rustup toolchain list
+    if (-not ($installedToolchains | Select-String -SimpleMatch $nativeToolchain)) {
+        throw "Native Rust toolchain missing: rustup toolchain install $nativeToolchain --profile minimal"
+    }
+    # ring's ARM64 Windows build requires Clang. Find our verified portable LLVM
+    # (not the Android NDK's clang, which lacks the Windows SDK headers here).
+    $llvmRoot = Join-Path $repo 'artifacts\toolchains'
+    $llvmBin = Get-ChildItem -Path $llvmRoot -Directory -Filter 'llvm-*-win-arm64' -ErrorAction SilentlyContinue |
+        Sort-Object Name -Descending |
+        ForEach-Object { Get-ChildItem -Path $_.FullName -Directory -Filter 'clang+llvm-*' -ErrorAction SilentlyContinue } |
+        ForEach-Object { Join-Path $_.FullName 'bin' } |
+        Where-Object { Test-Path (Join-Path $_ 'clang.exe') } |
+        Select-Object -First 1
+    if (-not $llvmBin) {
+        throw 'Native Windows ARM64 LLVM/Clang not found under artifacts\toolchains. See docs/windows-arm-benchmark-isolation.md.'
+    }
+    $jobs = if ($env:CARGO_BUILD_JOBS) { $env:CARGO_BUILD_JOBS } else { '4' }
     Push-Location $repo
     try {
-        $buildCommand = 'call "' + $vcvars + '" >nul && cargo build --profile fast -p horizon-client --target ' + $target
+        $buildCommand = 'call "' + $vcvars + '" >nul' +
+            ' && set "PATH=' + $llvmBin + ';%PATH%"' +
+            ' && set "CC_aarch64_pc_windows_msvc=' + (Join-Path $llvmBin 'clang.exe') + '"' +
+            ' && set "RUSTUP_TOOLCHAIN=' + $nativeToolchain + '"' +
+            ' && set "CARGO_BUILD_JOBS=' + $jobs + '"' +
+            ' && cargo build --profile fast -p horizon-client --target ' + $target
         & cmd.exe /d /s /c $buildCommand
         if ($LASTEXITCODE -ne 0) { throw "Optimized build failed: cargo exit $LASTEXITCODE" }
     } finally {

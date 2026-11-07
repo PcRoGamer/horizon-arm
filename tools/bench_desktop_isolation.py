@@ -239,6 +239,7 @@ def main():
     p.add_argument("--timeout", type=float, default=120)
     p.add_argument("--report", type=Path)
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--no-gpu-monitor", action="store_true", help="Skip Windows PDH GPU sampling")
     p.add_argument("--watchdog", type=Path, help=argparse.SUPPRESS)
     p.add_argument("--parent-pid", type=int, help=argparse.SUPPRESS)
     p.add_argument("command", nargs=argparse.REMAINDER)
@@ -285,12 +286,30 @@ def main():
         stderr=subprocess.DEVNULL, close_fds=True,
         creationflags=0x00000008 | 0x00000200)  # DETACHED_PROCESS | NEW_PROCESS_GROUP
     child = None
+    gpu_monitor = None
+    gpu_log = path.with_suffix(".gpu.jsonl")
     exit_code = 1
     restoration = []
     started = time.monotonic()
     try:
         background_mask = ((1 << cores) - 1) ^ ((1 << args.horizon_cores) - 1)
         partition(k, allow, background_mask, records, errors, snapshot)
+        if not args.no_gpu_monitor:
+            gpu_monitor = subprocess.Popen(
+                [sys.executable, str(Path(__file__).with_name("bench_gpu_activity.py")),
+                 "--report", str(gpu_log), "--interval", "1",
+                 "--duration", str(args.timeout + 5),
+                 "--parent-pid", str(os.getpid())],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, creationflags=0x00004000)
+            k.SetProcessAffinityMask(gpu_monitor._handle, background_mask)
+        # Run controller bookkeeping only on the background cluster.
+        own = open_process(k, os.getpid())
+        if own:
+            try:
+                k.SetProcessAffinityMask(own, background_mask)
+            finally:
+                k.CloseHandle(own)
         wrapped = [
             sys.executable, str(Path(__file__).with_name("bench_resource_envelope.py")),
             "--affinity-count", str(args.horizon_cores),
@@ -317,9 +336,46 @@ def main():
         else:
             exit_code = child.returncode
     finally:
+        if gpu_monitor is not None and gpu_monitor.poll() is None:
+            gpu_monitor.terminate()
+            try:
+                gpu_monitor.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                gpu_monitor.kill()
+                gpu_monitor.wait()
         restoration = restore(k, records)
         write_snapshot(snapshot, {"completed": True, "records": records})
-        # Don't wait on a background watchdog after normal restoration.
+        # The PDH monitor samples GPU contention without pretending to reserve
+        # integrated GPU bandwidth. Keep raw per-second samples for review.
+        gpu_summary = {"samples": 0}
+        if gpu_log.exists():
+            samples = []
+            gpu_errors = []
+            for line in gpu_log.read_text(encoding="utf-8").splitlines():
+                try:
+                    entry = json.loads(line)
+                    if "error" in entry:
+                        gpu_errors.append(entry["error"])
+                    elif "other_gpu3d_percent" in entry:
+                        samples.append(entry)
+                except ValueError:
+                    gpu_errors.append("Malformed GPU sample")
+            def pct(field, fraction):
+                values = sorted(x[field] for x in samples)
+                if not values:
+                    return None
+                # Nearest-rank percentile, consistent with the frame harness.
+                import math
+                return round(values[max(0, min(len(values)-1, math.ceil(len(values) * fraction) - 1))], 3)
+            gpu_summary = {
+                "samples": len(samples),
+                "external_gpu3d_p50": pct("other_gpu3d_percent", 0.5),
+                "external_gpu3d_p95": pct("other_gpu3d_percent", 0.95),
+                "external_gpu3d_max": pct("other_gpu3d_percent", 1.0),
+                "compositor_gpu3d_p95": pct("compositor_gpu3d_percent", 0.95),
+                "horizon_gpu3d_p95": pct("horizon_gpu3d_percent", 0.95),
+                "errors": gpu_errors,
+            }
         report = {
             "schema": "horizon-desktop-isolation-v1",
             "horizon_cores": list(range(args.horizon_cores)),
@@ -327,6 +383,8 @@ def main():
             "background_allowlist": sorted(allow),
             "observed_background_processes": before,
             "modified_count": len(records),
+            "gpu_activity_jsonl": str(gpu_log) if not args.no_gpu_monitor else None,
+            "gpu_activity": gpu_summary,
             "errors": errors,
             "restoration": restoration,
             "elapsed_seconds": round(time.monotonic() - started, 3),
