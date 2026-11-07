@@ -40,7 +40,7 @@ PROCESS_SET_INFORMATION = 0x0200
 SYNCHRONIZE = 0x00100000
 BELOW_NORMAL_PRIORITY_CLASS = 0x00004000
 INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
-DEFAULT_BACKGROUND = "firefox.exe,chrome.exe,code.exe"
+DEFAULT_BACKGROUND = "firefox.exe,chrome.exe,code.exe,guardian.exe"
 # Refuse core Windows processes even if explicitly requested by an operator.
 NEVER_TOUCH = {
     "system", "registry", "idle", "smss.exe", "csrss.exe", "wininit.exe",
@@ -94,6 +94,29 @@ def k32():
     return k
 
 
+def gpu_scheduler():
+    """Use Windows' documented per-process WDDM GPU scheduling class API."""
+    g = ctypes.WinDLL("gdi32", use_last_error=True)
+    g.D3DKMTGetProcessSchedulingPriorityClass.argtypes = [
+        w.HANDLE, ctypes.POINTER(ctypes.c_int)]
+    g.D3DKMTGetProcessSchedulingPriorityClass.restype = ctypes.c_long
+    g.D3DKMTSetProcessSchedulingPriorityClass.argtypes = [w.HANDLE, ctypes.c_int]
+    g.D3DKMTSetProcessSchedulingPriorityClass.restype = ctypes.c_long
+    return g
+
+
+def current_gpu_class(g, handle):
+    if g is None:
+        return None
+    priority = ctypes.c_int(-1)
+    status = g.D3DKMTGetProcessSchedulingPriorityClass(handle, ctypes.byref(priority))
+    return priority.value if status == 0 and 0 <= priority.value <= 5 else None
+
+
+def set_gpu_class(g, handle, level):
+    return g is not None and g.D3DKMTSetProcessSchedulingPriorityClass(handle, level) == 0
+
+
 def enumerate_processes(k):
     snap = k.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
     if not snap or int(snap) == INVALID_HANDLE_VALUE:
@@ -136,7 +159,7 @@ def write_snapshot(path, payload):
     os.replace(tmp, path)
 
 
-def restore(k, records):
+def restore(k, records, g=None):
     outcomes = []
     for pidstr, info in records.items():
         pid = int(pidstr)
@@ -149,12 +172,23 @@ def restore(k, records):
             if born != info["created"]:
                 outcomes.append({"pid": pid, "status": "pid_reused"})
                 continue
-            ok_affinity = bool(k.SetProcessAffinityMask(h, info["affinity"]))
-            ok_priority = True
-            if info["changed_priority"]:
-                ok_priority = bool(k.SetPriorityClass(h, info["priority"]))
+            ok_affinity = (
+                bool(k.SetProcessAffinityMask(h, info["affinity"]))
+                if info.get("changed_affinity", True) else True
+            )
+            ok_priority = (
+                bool(k.SetPriorityClass(h, info["priority"]))
+                if info.get("changed_priority", False) else True
+            )
+            ok_gpu = (
+                set_gpu_class(g or gpu_scheduler(), h, info["gpu_priority"])
+                if info.get("changed_gpu_priority") and info.get("gpu_priority") is not None
+                else True
+            )
             outcomes.append({
-                "pid": pid, "status": "restored" if ok_affinity and ok_priority else "restore_failed"
+                "pid": pid,
+                "gpu_priority_restored": ok_gpu,
+                "status": "restored" if ok_affinity and ok_priority and ok_gpu else "restore_failed",
             })
         except OSError as e:
             outcomes.append({"pid": pid, "status": "restore_failed", "error": str(e)})
@@ -192,7 +226,7 @@ def watchdog(snapshot, parent_pid):
     return 0
 
 
-def partition(k, allow, background_mask, records, errors, snapshot):
+def partition(k, allow, background_mask, records, errors, snapshot, g=None, gpu_level=1):
     for pid, name in enumerate_processes(k):
         if name not in allow or name in NEVER_TOUCH or pid == os.getpid():
             continue
@@ -208,20 +242,32 @@ def partition(k, allow, background_mask, records, errors, snapshot):
             if not desired:
                 errors.setdefault(f"{name}:{pid}", "Original affinity has no background cores")
                 continue
-            if affinity == desired:
+            old_gpu = current_gpu_class(g, h)
+            change_gpu = old_gpu is not None and old_gpu > gpu_level
+            change_affinity = affinity != desired
+            if not change_affinity and not change_gpu:
                 continue
             records[str(pid)] = {
                 "name": name, "created": born,
                 "affinity": affinity, "priority": priority,
                 "changed_priority": False,
+                "changed_affinity": change_affinity,
+                "gpu_priority": old_gpu,
+                "changed_gpu_priority": change_gpu,
             }
-            # Record must be durable BEFORE any process is modified.
+            # Record intent BEFORE changing either CPU or GPU priority.
+            # A killed controller's watchdog can then restore both settings.
             write_snapshot(snapshot, {"completed": False, "records": records})
-            if not k.SetProcessAffinityMask(h, desired):
-                records.pop(str(pid), None)
-                write_snapshot(snapshot, {"completed": False, "records": records})
-                errors.setdefault(f"{name}:{pid}",
-                                  f"SetProcessAffinityMask failed: {ctypes.get_last_error()}")
+            if change_affinity and not k.SetProcessAffinityMask(h, desired):
+                errors.setdefault(
+                    f"{name}:{pid}:cpu",
+                    f"SetProcessAffinityMask failed: {ctypes.get_last_error()}",
+                )
+            if change_gpu and not set_gpu_class(g, h, gpu_level):
+                errors.setdefault(
+                    f"{name}:{pid}:gpu",
+                    "D3DKMTSetProcessSchedulingPriorityClass failed",
+                )
         except OSError as e:
             errors.setdefault(f"{name}:{pid}", str(e))
         finally:
@@ -240,6 +286,8 @@ def main():
     p.add_argument("--report", type=Path)
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--no-gpu-monitor", action="store_true", help="Skip Windows PDH GPU sampling")
+    p.add_argument("--gpu-background", choices=("below", "idle", "off"), default="below",
+                   help="Temporary WDDM GPU priority for allowlisted background applications")
     p.add_argument("--watchdog", type=Path, help=argparse.SUPPRESS)
     p.add_argument("--parent-pid", type=int, help=argparse.SUPPRESS)
     p.add_argument("command", nargs=argparse.REMAINDER)
@@ -257,6 +305,13 @@ def main():
     if any(n in NEVER_TOUCH for n in allow):
         p.error("Background list includes protected program names; refusing")
     k = k32()
+    g = None
+    if args.gpu_background != "off":
+        try:
+            g = gpu_scheduler()
+        except (AttributeError, OSError):
+            g = None
+    gpu_level = {"below": 1, "idle": 0, "off": 2}[args.gpu_background]
     before = []
     for pid, name in enumerate_processes(k):
         if name in allow:
@@ -265,6 +320,7 @@ def main():
         print(json.dumps({"mode": "dry_run", "logical_cores": cores,
                           "horizon_cores": list(range(args.horizon_cores)),
                           "background_cores": list(range(args.horizon_cores, cores)),
+                          "gpu_background_priority": args.gpu_background,
                           "background_processes": before}, indent=2))
         return 0
     command = args.command
@@ -293,7 +349,7 @@ def main():
     started = time.monotonic()
     try:
         background_mask = ((1 << cores) - 1) ^ ((1 << args.horizon_cores) - 1)
-        partition(k, allow, background_mask, records, errors, snapshot)
+        partition(k, allow, background_mask, records, errors, snapshot, g, gpu_level)
         if not args.no_gpu_monitor:
             gpu_monitor = subprocess.Popen(
                 [sys.executable, str(Path(__file__).with_name("bench_gpu_activity.py")),
@@ -332,7 +388,7 @@ def main():
                 exit_code = 124
                 break
             time.sleep(0.6)
-            partition(k, allow, background_mask, records, errors, snapshot)
+            partition(k, allow, background_mask, records, errors, snapshot, g, gpu_level)
         else:
             exit_code = child.returncode
     finally:
@@ -343,7 +399,7 @@ def main():
             except subprocess.TimeoutExpired:
                 gpu_monitor.kill()
                 gpu_monitor.wait()
-        restoration = restore(k, records)
+        restoration = restore(k, records, g)
         write_snapshot(snapshot, {"completed": True, "records": records})
         # The PDH monitor samples GPU contention without pretending to reserve
         # integrated GPU bandwidth. Keep raw per-second samples for review.
@@ -383,6 +439,10 @@ def main():
             "background_allowlist": sorted(allow),
             "observed_background_processes": before,
             "modified_count": len(records),
+            "gpu_priority_policy": args.gpu_background,
+            "gpu_priority_modified_count": sum(
+                1 for info in records.values() if info.get("changed_gpu_priority")
+            ),
             "gpu_activity_jsonl": str(gpu_log) if not args.no_gpu_monitor else None,
             "gpu_activity": gpu_summary,
             "errors": errors,
@@ -390,6 +450,7 @@ def main():
             "elapsed_seconds": round(time.monotonic() - started, 3),
             "exit_code": exit_code,
             "notes": [
+                "WDDM GPU priority is a scheduling preference, not a GPU utilization quota.",
                 "GPU, interrupt load and kernel activity are not partitioned.",
                 "A process that could not be modified remains a source of interference.",
                 "Review the matching .envelope.json and Horizon frame-time report.",

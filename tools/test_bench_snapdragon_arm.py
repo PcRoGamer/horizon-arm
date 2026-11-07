@@ -54,7 +54,25 @@ class PreflightTests(unittest.TestCase):
             self.assertTrue(conf["use_offscreen"])
             self.assertEqual(conf["horizon_cores"], 8)
             self.assertEqual(conf["backend"], "dx12")
+            self.assertEqual(conf["horizon_worker_threads"], 8)
+            self.assertEqual(conf["background_gpu_priority"], "below")
+            self.assertIn("--gpu-background", conf["command"])
             self.assertFalse((tmp / "benchmarks").exists())
+            override = subprocess.run(
+                cmd + ["--sizes", "1920x1080", "--distances", "8",
+                       "--scenes", "forest", "--repeats", "2",
+                       "--gpu-background", "idle", "--worker-threads", "6"],
+                capture_output=True, text=True, timeout=7)
+            self.assertEqual(override.returncode, 0, override.stderr)
+            adjusted = json.loads(override.stdout)["benchmark"]
+            self.assertEqual(adjusted["sizes"], "1920x1080")
+            self.assertEqual(adjusted["repeats"], 2)
+            self.assertEqual(json.loads(override.stdout)["horizon_worker_threads"], 6)
+            self.assertEqual(json.loads(override.stdout)["background_gpu_priority"], "idle")
+            invalid = subprocess.run(
+                cmd + ["--sizes", "1920x1080", "--repeats", "0"],
+                capture_output=True, text=True, timeout=7)
+            self.assertNotEqual(invalid.returncode, 0)
 
     @unittest.skipUnless(sys.platform == "win32", "Windows ARM64 only")
     def test_debug_binary_cannot_be_used_as_performance_baseline(self):

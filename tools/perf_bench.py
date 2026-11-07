@@ -72,7 +72,10 @@ except ImportError:
     import stress_scenes
 
 ROOT = lab.ROOT
-WORK = ROOT / ".local/perf-bench"
+# Each controlled run may supply its own world, cache and log workspace.
+# The original fixed directory caused concurrent benchmark runs to collide on
+# the same integrated-server world lock and could destroy each other's saves.
+WORK = Path(os.environ["HORIZON_PERF_WORK"]).resolve() if os.environ.get("HORIZON_PERF_WORK") else ROOT / ".local/perf-bench"
 VANILLA = lab.GAME
 SEED = 1234
 WORLD = "PerfBench"
@@ -81,6 +84,7 @@ WORLD = "PerfBench"
 SCENES = [
     ("village", (-960.0, 125.0, 80.0), (-960.0, 125.0, 272.0), 35.0),
     ("forest", (-1100.0, 120.0, -560.0), (-1100.0, 120.0, -368.0), 25.0),
+    ("forest-still", (-1100.0, 120.0, -560.0), (-1100.0, 120.0, -560.0), 25.0),
     ("ocean", (-300.0, 85.0, -420.0), (-300.0, 85.0, -228.0), 10.0),
     ("mountain", (560.0, 260.0, 860.0), (752.0, 260.0, 860.0), 30.0),
 ]
@@ -178,6 +182,33 @@ def frames(phase, repeat, frame_ms, cpu_ms=(), gpu_ms=()):
         if values:
             entry[key] = rnd(pct(sorted(values), 0.5))
     entry["histogram"] = histogram
+    # Preserve raw frame order for stutter attribution and temporal correlation
+    # with PDH GPU occupancy. Histograms alone cannot tell where a 100ms stall
+    # happened or whether it coincided with CPU/GPU work.
+    entry["raw_frame_ms"] = [rnd(t) if math.isfinite(t) else None for t in frame_ms]
+    entry["frames_over_16_67ms"] = sum(t > 1000 / 60 for t in times)
+    elapsed = 0.0
+    spike_rows = []
+    cpu_aligned = len(cpu_ms) == len(frame_ms)
+    gpu_aligned = len(gpu_ms) == len(frame_ms)
+    for index, frame_time in enumerate(frame_ms):
+        if not math.isfinite(frame_time):
+            continue
+        elapsed += frame_time / 1000.0
+        if frame_time >= 1000 / 60:
+            row = {"frame_index": index, "frame_ms": rnd(frame_time),
+                   "elapsed_s": rnd(elapsed)}
+            if cpu_aligned and math.isfinite(cpu_ms[index]):
+                row["cpu_ms"] = rnd(cpu_ms[index])
+            if gpu_aligned and math.isfinite(gpu_ms[index]):
+                row["gpu_ms"] = rnd(gpu_ms[index])
+            spike_rows.append(row)
+    entry["top_frame_spikes"] = sorted(
+        spike_rows, key=lambda row: row["frame_ms"], reverse=True)[:12]
+    entry["cpu_gpu_sample_alignment"] = {
+        "cpu_samples": len(cpu_ms), "gpu_samples": len(gpu_ms),
+        "frame_samples": len(frame_ms),
+    }
     return entry
 
 
@@ -299,9 +330,9 @@ def nvidia_memory_mb(pid):
     return None
 
 
-def write_options(game_dir, distance, version=None):
+def write_options(game_dir, distance, version=None, client_jar=None):
     game_dir.mkdir(parents=True, exist_ok=True)
-    data_version = lab.version_info()["world_version"]
+    data_version = lab.version_info(client_jar=client_jar)["world_version"]
     options = dict(OPTIONS, version=version) if version else OPTIONS
     text = "".join(f"{k}:{v.format(distance=distance, data_version=data_version)}\n" for k, v in options.items())
     (game_dir / "options.txt").write_text(text)
@@ -597,17 +628,44 @@ def scene_commands(args, control, start, pitch):
         control("tp {} {} {}".format(*start))
 
 
+
+def windows_dpi_scale_for_offscreen_benchmark():
+    """Read primary-monitor scale without permanently changing process DPI.
+
+    Winit LogicalSize becomes PhysicalSize on high-DPI Windows displays.
+    Requesting 1280x720 logical pixels on this laptop renders 2560x1440.
+    """
+    import ctypes
+    u = ctypes.WinDLL("user32", use_last_error=True)
+    u.GetDpiForSystem.restype = ctypes.c_uint
+    u.SetThreadDpiAwarenessContext.argtypes = [ctypes.c_void_p]
+    u.SetThreadDpiAwarenessContext.restype = ctypes.c_void_p
+    prior = u.SetThreadDpiAwarenessContext(ctypes.c_void_p(-4))
+    if not prior:
+        raise RuntimeError("Cannot enforce physical Windows benchmark size: DPI context unavailable")
+    try:
+        dpi = u.GetDpiForSystem()
+        if not 96 <= dpi <= 480:
+            raise ValueError(f"Unexpected Windows DPI {dpi}")
+        return dpi / 96.0
+    finally:
+        u.SetThreadDpiAwarenessContext(prior)
+
 def run_horizon(args, distance):
     game_dir = WORK / "horizon"
     shutil.rmtree(game_dir, ignore_errors=True)
-    options = write_options(game_dir, distance)
+    options = write_options(game_dir, distance, client_jar=getattr(args, "client_jar", None))
     sock = control_path()
     sock.unlink(missing_ok=True)
     client = Path(args.build).resolve() / ("horizon-client.exe" if sys.platform == "win32" else "horizon-client")
     command = [str(client), "--resources", str(Path(args.resources).resolve()),
                "--control-socket", str(sock), "--no-pause", "--weather", "clear", "--time", "6000"]
-    if (args.width, args.height) != SIZES[0]:
-        # 1280x720 is Horizon's own window; builds before --width open only that one.
+    if getattr(args, "physical_pixels", False) and sys.platform == "win32" and args.offscreen:
+        scale = windows_dpi_scale_for_offscreen_benchmark()
+        # The game's --width/--height are logical winit sizes.
+        command += ["--width", str(max(1, round(args.width / scale))),
+                    "--height", str(max(1, round(args.height / scale)))]
+    elif (args.width, args.height) != SIZES[0]:
         command += ["--width", str(args.width), "--height", str(args.height)]
     if args.offscreen:
         command.append("--offscreen")
@@ -675,6 +733,7 @@ def run_horizon(args, distance):
             summary = control("fly {} {} {} {} {} {} {} {} raw".format(*start, *end, args.seconds, pitch))
             windows.append((begin, time.time()))
             scene_windows[name] = windows[-1]
+            scene["measurement_window_unix"] = list(scene_windows[name])
             scene.update({k: summary.get(k) or [] for k in ("frame_ms", "cpu_ms", "gpu_ms")})
             status = control("status")
             # The client's own ticks: the frames' tick phase over the ticks the flight ran.
@@ -1072,6 +1131,9 @@ def report(args, distance, runs, app):
     for name in first["scenes"]:
         scenes = [r["scenes"][name] for r in runs if name in r["scenes"]]
         flights = [frames(name, i, s["frame_ms"], s.get("cpu_ms", ()), s.get("gpu_ms", ())) for i, s in enumerate(scenes)]
+        for flight, scene in zip(flights, scenes):
+            if flight is not None and scene.get("measurement_window_unix"):
+                flight["measurement_window_unix"] = scene["measurement_window_unix"]
         entries += [f for f in flights if f]
         metric(f"chunks.{name}.load_ms", [s["load_s"] * 1000 for s in scenes])
         metric(f"chunks.{name}.meshed_count", [s.get("meshes_load") for s in scenes])
@@ -1179,7 +1241,10 @@ def main():
     p.add_argument("--heap", default="2G", help="vanilla -Xmx (the official launcher's default is 2G)")
     p.add_argument("--offscreen", action="store_true",
                    help="Horizon renders into a texture and does not wait for the window (locked macOS sessions)")
+    p.add_argument("--physical-pixels", action="store_true",
+                   help="Windows offscreen: compensate display DPI to render the requested physical pixel size")
     p.add_argument("--resources", default=str(lab.RESOURCES))
+    p.add_argument("--client-jar", default=None, help="Owned pinned client JAR; allows a benchmark worktree to reuse another worktree's prepared game files")
     p.add_argument("--build", default=str(ROOT / "target/release"))
     p.add_argument("--repeats", type=int, default=3, help="games per render distance; the report gives means and 95%% CIs")
     p.add_argument("--port-work", help="horizon: also load the mods carried over in this horizon-port-pack work folder")
